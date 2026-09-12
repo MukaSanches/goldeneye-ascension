@@ -1,92 +1,93 @@
 /*
  * Ascension native-game localization bridge.
  *
- * The original ROM remains the source of truth. When PT-BR is active,
- * selected English strings are replaced immediately before rendering.
- * Anything not translated falls back to the original ROM text.
+ * GoldenEye identifies text as (bank << 10) | slot. PT-BR therefore uses the
+ * same stable identity instead of comparing English strings. This matters for
+ * repeated English text whose Portuguese wording can differ by context.
+ *
+ * The ROM remains the English source of truth and the fallback for languages
+ * other than PT-BR. A complete PT-BR release is gated by the localization
+ * coverage audit in tools/ascension_l10n_audit.py.
  */
 
-#include <string.h>
+#include <stddef.h>
 
 #include "ascension_locale.h"
 
+enum AscensionTextBank {
+    LAME = 1,
+    LARCH,
+    LARK,
+    LASH,
+    LAZT,
+    LCAT,
+    LCAVE,
+    LAREC,
+    LCRAD,
+    LCRYP,
+    LDAM,
+    LDEPO,
+    LDEST,
+    LDISH,
+    LEAR,
+    LELD,
+    LIMP,
+    LJUN,
+    LLEE,
+    LLEN,
+    LLIP,
+    LLUE,
+    LOAT,
+    LPAM,
+    LPETE,
+    LREF,
+    LRIT,
+    LRUN,
+    LSEVB,
+    LSEV,
+    LSEVX,
+    LSEVXB,
+    LSHO,
+    LSILO,
+    LSTAT,
+    LTRA,
+    LWAX,
+    LGUN,
+    LTITLE,
+    LMPMENU,
+    LPROPOBJ,
+    LMPWEAPONS,
+    LOPTIONS,
+    LMISC
+};
+
 struct AscensionGameString {
-    const char *en;
+    unsigned int id;
     const char *pt_br;
 };
 
+#define ASC_TEXT_ID(bank, slot) ((((unsigned int)(bank)) << 10) | ((unsigned int)(slot) & 0x3ffu))
+#define PT(bank, slot, text) { ASC_TEXT_ID((bank), (slot)), (text) },
+#define KEEP(bank, slot)
+
 static const struct AscensionGameString kPtBrGame[] = {
-    /* Front-end navigation */
-    { "START\n",              "INICIAR\n" },
-    { "NEXT\n",               "PROXIMO\n" },
-    { "PREVIOUS\n",           "ANTERIOR\n" },
-
-    /* Difficulty */
-    { "Agent",                "Agente" },
-    { "Secret Agent",         "Agente Secreto" },
-    { "00 Agent",             "Agente 00" },
-    { "Agent\n",              "Agente\n" },
-    { "Secret Agent\n",       "Agente Secreto\n" },
-    { "00 Agent\n",           "Agente 00\n" },
-
-    /* File select */
-    { "Erase file?\n",        "Apagar arquivo?\n" },
-    { "cancel\n",             "cancelar\n" },
-    { "confirm\n",            "confirmar\n" },
-    { "Mission ",             "Missao " },
-    { "Copy\n",               "Copiar\n" },
-    { "Erase\n",              "Apagar\n" },
-
-    /* Mode select */
-    { "SELECT MISSION\n",     "SELECIONAR MISSAO\n" },
-    { "MULTIPLAYER\n",        "MULTIJOGADOR\n" },
-    { "CHEAT OPTIONS\n",      "OPCOES DE TRAPACA\n" },
-
-    /* Common status */
-    { "Completed\n",          "Concluido\n" },
-    { "FAILED\n",             "FALHOU\n" },
-    { "PRIMARY OBJECTIVES:\n", "OBJETIVOS PRINCIPAIS:\n" },
-    { "BACKGROUND:\n",        "CONTEXTO:\n" },
-    { "M BRIEFING:\n",        "INSTRUCOES DE M:\n" },
-    { "Q BRANCH:\n",          "DIVISAO Q:\n" },
-    { "MONEYPENNY:\n",        "MONEYPENNY:\n" },
-    { "REPORT:\n",            "RELATORIO:\n" },
-    { "Mission status:\n",    "Status da missao:\n" },
-    { " ABORTED\n",           " ABORTADA\n" },
-    { " Completed\n",         " Concluida\n" },
-    { " FAILED\n",            " FALHOU\n" },
-
-    /* Statistics */
-    { "STATISTICS:\n",        "ESTATISTICAS:\n" },
-    { "Time:\n",              "Tempo:\n" },
-    { "Accuracy:\n",          "Precisao:\n" },
-    { "Weapon of choice:\n",  "Arma preferida:\n" },
-    { "Shot total:\n",        "Total de disparos:\n" },
-    { "Head hits:\n",         "Acertos na cabeca:\n" },
-    { "Body hits:\n",         "Acertos no corpo:\n" },
-    { "Limb hits:\n",         "Acertos nos membros:\n" },
-    { "Others:\n",            "Outros:\n" },
-    { "Kill total:\n",        "Total de eliminacoes:\n" },
-
-    /* Generic options */
-    { "ON\n",                 "LIGADO\n" },
-    { "OFF\n",                "DESLIGADO\n" },
+#include "localization/pt_br_title.inc"
 };
 
-#define NUM_PTBR_GAME \
-    ((int)(sizeof(kPtBrGame) / sizeof(kPtBrGame[0])))
+#undef KEEP
+#undef PT
+
+#define NUM_PTBR_GAME ((int)(sizeof(kPtBrGame) / sizeof(kPtBrGame[0])))
 
 const char *ascensionLocaleGameText(int slotID, const char *fallback)
 {
     int i;
 
-    (void)slotID;
-
     if (fallback == NULL || ascensionLocaleGet() != 1)
         return fallback;
 
     for (i = 0; i < NUM_PTBR_GAME; i++) {
-        if (strcmp(fallback, kPtBrGame[i].en) == 0)
+        if (kPtBrGame[i].id == (unsigned int)slotID)
             return kPtBrGame[i].pt_br;
     }
 
