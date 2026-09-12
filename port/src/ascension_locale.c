@@ -34,6 +34,7 @@ static const struct LocaleEntry kPtBr[] = {
     /* File-select discovery */
     { "F10 CONTROL", "F10 CONTROLE" },
     { "PRESS F10 TO CONFIGURE", "APERTE F10 PARA CONFIGURAR" },
+    { "SELECT FILE", "SELECIONAR ARQUIVO" },
 
     /* Categories */
     { "DISPLAY", "VIDEO" },
@@ -69,6 +70,8 @@ static const struct LocaleEntry kPtBr[] = {
     { "Choose how mouse lock activates.", "Escolhe como o mouse fica preso ao jogo." },
 
     /* Gameplay rows */
+    { "Language", "Idioma" },
+    { "Interface and in-game text language.", "Idioma da interface e dos textos do jogo." },
     { "Screen shake", "Tremor da tela" },
     { "Camera shake. Safe range 0-3.", "Tremor da camera. Faixa segura 0-3." },
     { "Skip intro", "Pular introducao" },
@@ -80,6 +83,8 @@ static const struct LocaleEntry kPtBr[] = {
     { "PC settings", "Opcoes do PC" },
 
     /* Values */
+    { "ENGLISH", "INGLES" },
+    { "PORTUGUESE (BRAZIL)", "PORTUGUES (BRASIL)" },
     { "OFF", "DESLIGADO" },
     { "ON", "LIGADO" },
     { "NEAREST", "PROXIMO" },

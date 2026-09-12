@@ -17,6 +17,12 @@ const char *ascensionLocaleText(const char *text);
 /* 0 = English, 1 = Portuguese (Brazil). */
 int ascensionLocaleGet(void);
 
+
+/*
+ * Translate a GoldenEye-native text slot while preserving the original
+ * English ROM string as automatic fallback.
+ */
+const char *ascensionLocaleGameText(int slotID, const char *fallback);
 #ifdef __cplusplus
 }
 #endif

@@ -34,7 +34,6 @@
 #include "video.h"
 #include "input.h"
 #include "optionsoverlay.h"
-#include "ascension_version.h"
 
 /* ---- game symbols used only for rendering/UI context ------------------- */
 struct font;
@@ -49,6 +48,9 @@ extern Gfx  *textRender(Gfx *gdl, s32 *x, s32 *y, char *text,
 extern void  textMeasure(s32 *textheight, s32 *textwidth, char *text,
                          struct fontchar *chars, struct font *font,
                          s32 lineheight);
+
+#include "ascension_version.h"
+#include "ascension_locale.h"
 extern s16   viGetX(void);
 extern s16   viGetY(void);
 extern int   current_menu;
@@ -87,6 +89,7 @@ enum RowAction {
 static const char *const kOnOff[]     = { "OFF", "ON", NULL };
 static const char *const kTexFilter[] = { "NEAREST", "BILINEAR", "3-POINT", NULL };
 static const char *const kCapture[]   = { "ALWAYS GRAB", "CLICK-TO-LOCK", NULL };
+static const char *const kLanguage[]  = { "ENGLISH", "PORTUGUESE (BRAZIL)", NULL };
 static const int kMsaaSeq[] = { 1, 2, 4, 8 };
 
 static const int kResList[][2] = {
@@ -177,6 +180,10 @@ static struct Row rows[] = {
       .kind=ROW_TOGGLE, .step=1, .names=kCapture, .resetValue=1 },
 
     /* GAMEPLAY */
+    { .key="Ascension.Language",   .label="Language",
+      .help="Interface and in-game text language.", .category=CAT_GAMEPLAY,
+      .kind=ROW_ENUM, .step=1, .names=kLanguage, .resetValue=0 },
+
     { .key="Game.ScreenShakeIntensity", .label="Screen shake",
       .help="Camera shake. Safe range 0-3.", .category=CAT_GAMEPLAY,
       .kind=ROW_SLIDER, .step=0.25, .uiMin=0, .uiMax=3, .resetValue=1 },
@@ -827,6 +834,7 @@ static Gfx *fillRect(Gfx *gdl, s32 x0, s32 y0, s32 x1, s32 y1,
 static Gfx *drawText(Gfx *gdl, s32 x, s32 y,
                      const char *str, u32 colour)
 {
+    str = ascensionLocaleText(str);
     s32 px = x, py = y;
     return textRender(gdl, &px, &py, (char *)str,
                       ptrFontBankGothicChars, ptrFontBankGothic,
@@ -835,6 +843,7 @@ static Gfx *drawText(Gfx *gdl, s32 x, s32 y,
 
 static s32 measureText(const char *str)
 {
+    str = ascensionLocaleText(str);
     s32 h = 0, w = 0;
     textMeasure(&h, &w, (char *)str,
                 ptrFontBankGothicChars, ptrFontBankGothic, 0);

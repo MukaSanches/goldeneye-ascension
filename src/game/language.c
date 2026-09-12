@@ -8,6 +8,7 @@
 /* D50: language banks carry a big-endian offset table; decode it in place
  * after each load (see romdataFixupLangBank). */
 #include "romdata.h"
+#include "ascension_locale.h"
 extern resource_lookup_data_entry resource_lookup_data_array[]; /* ob.c */
 
 static void langFixupLoadedBank(char *name, void *p)
@@ -444,8 +445,20 @@ u8 * langGet(s32 slotID)
 
     u32 output_slot = textslot_offset; /* add the text slot offset to the base ptr to get the ptr to text file's slot */
     output_slot += (u32)textbank_ptr;
+#ifdef PORT
+    if (textslot_offset != 0) {
+        const char *fallback = (const char *)(uintptr_t)output_slot;
+        return (u8 *)ascensionLocaleGameText(slotID, fallback);
+    }
+    #ifdef DEBUG
+    return (u8 *)"Sorry, string not loaded.";
+    #else
+    return NULL;
+    #endif
+#else
     #ifdef DEBUG
     return (textslot_offset != 0) ? (u8 *)output_slot : "Sorry, string not loaded.";
     #endif
     return (textslot_offset != 0) ? (u8*)output_slot : NULL;
+#endif
 }
