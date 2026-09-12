@@ -2,11 +2,20 @@
 """Import graphics from the user's community-patched GoldenEye ROM safely.
 
 The PC port cannot execute the patched ROM because the port's absolute ROM
-symbols are tied to the verified US layout. This tool instead reconstructs an
-image-segment shadow that has *the original slot layout*. A translated texture
-is transplanted only when its patched compressed payload fits inside the
-original slot. Oversize/ambiguous entries are never written over neighbouring
-assets and are reported for the next engineering pass.
+symbols are tied to the verified US layout. This tool reconstructs an
+image-segment shadow with the *original* slot layout and serves it only while
+PT-BR is selected.
+
+Important detail: g_Textures is not stored as a plain table in the retail ROM.
+It lives in GoldenEye's compressed csegment. We therefore discover the table
+inside decompressed RZ streams, validate it against assets/images.def, read the
+patched texture sizes from the translated ROM's corresponding compressed game
+data, then align the repacked image segment using many unchanged textures as
+independent anchors.
+
+A translated texture is transplanted only when its patched compressed payload
+fits inside the original slot. Oversize/ambiguous entries are never written
+over neighbouring assets and are reported for the next engineering pass.
 
 Output is local-only (data/ is gitignored):
   data/ascension_ptbr_images.bin
@@ -19,12 +28,26 @@ import argparse
 import collections
 import re
 import sys
+import zlib
+from dataclasses import dataclass
 from pathlib import Path
 
 from import_ptbr_patch import BASE_CRC32, crc32, find_rom
 
 CART_BASE = 0x10000000
 MAX_TEXTURE_SIZE = 0x100000
+MAX_RZ_DECOMPRESSED = 8 * 1024 * 1024
+
+
+@dataclass(frozen=True)
+class TextureTable:
+    rz_offset: int
+    table_offset: int
+    field: int
+    byteorder: str
+    blob_size: int
+    sizes: tuple[int, ...]
+    equal_count: int
 
 
 def parse_images_def(root: Path) -> tuple[list[str], list[int]]:
@@ -59,64 +82,187 @@ def image_segment_bounds(root: Path) -> tuple[int, int]:
     return start, end
 
 
-def locate_size_table(rom: bytes, expected: list[int]) -> tuple[int, int]:
-    """Find g_Textures and the byte position of its 24-bit size field.
+def inflate_rz(rom: bytes, offset: int) -> bytes | None:
+    """Inflate one GoldenEye 0x1172 raw-deflate stream with a generous cap."""
+    if rom[offset : offset + 2] != b"\x11\x72":
+        return None
+    try:
+        d = zlib.decompressobj(-15)
+        out = d.decompress(rom[offset + 2 :], MAX_RZ_DECOMPRESSED + 1)
+        if len(out) > MAX_RZ_DECOMPRESSED or not d.eof:
+            return None
+        return out
+    except zlib.error:
+        return None
 
-    The N64 table has 8-byte entries. We deliberately discover the bitfield
-    byte position from the verified ROM rather than hardcoding compiler layout.
-    """
-    probe_count = min(96, len(expected))
-    first = expected[0].to_bytes(3, "big")
-    candidates: list[tuple[int, int, int]] = []
-    pos = rom.find(first)
-    while pos >= 0:
-        for field in range(6):
-            start = pos - field
-            if start < 0 or start + probe_count * 8 > len(rom):
-                continue
-            score = 0
-            for i in range(probe_count):
-                p = start + i * 8 + field
-                if rom[p : p + 3] == expected[i].to_bytes(3, "big"):
-                    score += 1
-            if score >= probe_count - 1:
-                candidates.append((score, start, field))
-        pos = rom.find(first, pos + 1)
 
-    if not candidates:
-        raise RuntimeError("nao foi possivel localizar g_Textures na ROM original")
-    candidates.sort(reverse=True)
-    best = candidates[0]
-    tied = [x for x in candidates if x[0] == best[0] and (x[1], x[2]) != (best[1], best[2])]
-    if tied:
-        raise RuntimeError("g_Textures ficou ambiguo; importacao abortada por seguranca")
+def read24(blob: bytes, pos: int, byteorder: str) -> int:
+    return int.from_bytes(blob[pos : pos + 3], byteorder)
 
-    _, start, field = best
-    # Full-table verification against the source is our primary safety gate.
-    for i, size in enumerate(expected):
+
+def candidate_table_starts(blob: bytes, expected: list[int], field: int, byteorder: str) -> set[int]:
+    """Generate plausible starts from several distinctive source sizes."""
+    starts: set[int] = set()
+    # Multiple anchors make discovery resilient even if the community patch
+    # changes one of the first few images.
+    anchor_indexes = (0, 1, 2, 3, 4, 9, 23, 40, 85, 120)
+    for idx in anchor_indexes:
+        if idx >= len(expected):
+            continue
+        needle = expected[idx].to_bytes(3, byteorder)
+        pos = 0
+        seen = 0
+        while True:
+            pos = blob.find(needle, pos)
+            if pos < 0:
+                break
+            start = pos - field - idx * 8
+            if start >= 0 and start + len(expected) * 8 + field + 3 <= len(blob):
+                starts.add(start)
+            pos += 1
+            seen += 1
+            # Avoid pathological tiny-pattern explosions. Other anchors still
+            # contribute candidates, and real tables need agreement across all
+            # 2698 entries to score highly.
+            if seen >= 256:
+                break
+    return starts
+
+
+def score_table(blob: bytes, start: int, field: int, byteorder: str, expected: list[int]) -> tuple[int, tuple[int, ...]]:
+    sizes: list[int] = []
+    equal = 0
+    for i, want in enumerate(expected):
         p = start + i * 8 + field
-        got = int.from_bytes(rom[p : p + 3], "big")
-        if got != size:
-            raise RuntimeError(
-                f"g_Textures diverge de assets/images.def no indice {i}: {got:#x} != {size:#x}"
-            )
-    return start, field
+        if p < 0 or p + 3 > len(blob):
+            return -1, ()
+        got = read24(blob, p, byteorder)
+        if got <= 0 or got > MAX_TEXTURE_SIZE:
+            return -1, ()
+        sizes.append(got)
+        if got == want:
+            equal += 1
+    return equal, tuple(sizes)
 
 
-def read_patch_sizes(rom: bytes, table: int, field: int, count: int) -> list[int]:
-    out: list[int] = []
-    for i in range(count):
-        p = table + i * 8 + field
-        if p + 3 > len(rom):
-            raise RuntimeError("tabela de imagens PT-BR truncada")
-        size = int.from_bytes(rom[p : p + 3], "big")
-        if not (0 < size <= MAX_TEXTURE_SIZE):
-            raise RuntimeError(f"tamanho PT-BR impossivel no indice {i}: {size:#x}")
-        out.append(size)
-    return out
+def scan_texture_tables(
+    rom: bytes,
+    expected: list[int],
+    *,
+    required_equal_ratio: float,
+    fixed_layout: tuple[int, str] | None = None,
+) -> list[TextureTable]:
+    """Find g_Textures inside decompressed RZ game-data streams.
+
+    The N64 compiler's bitfield byte placement is discovered instead of assumed.
+    The table has an 8-byte entry stride (verified by the game code); the
+    24-bit pre-boot dataoffset field contains each compressed image size until
+    image_entries_load() converts sizes into cumulative offsets at runtime.
+    """
+    results: list[TextureTable] = []
+    min_equal = int(len(expected) * required_equal_ratio)
+    layouts = [fixed_layout] if fixed_layout else [
+        (field, byteorder)
+        for field in range(6)
+        for byteorder in ("big", "little")
+    ]
+
+    pos = 0
+    while True:
+        pos = rom.find(b"\x11\x72", pos)
+        if pos < 0:
+            break
+        blob = inflate_rz(rom, pos)
+        if blob is None or len(blob) < len(expected) * 8:
+            pos += 1
+            continue
+
+        for field, byteorder in layouts:
+            for start in candidate_table_starts(blob, expected, field, byteorder):
+                equal, sizes = score_table(blob, start, field, byteorder, expected)
+                if equal < min_equal:
+                    continue
+
+                # The source table is followed by the 0xFFFF sentinel entry.
+                # Treat it as a strong discriminator when present, but do not
+                # make patch import depend on the exact neighbouring bitfields.
+                sentinel_pos = start + len(expected) * 8 + field
+                if sentinel_pos + 3 <= len(blob):
+                    sentinel = read24(blob, sentinel_pos, byteorder)
+                    if sentinel not in (0xFFFF, 0xFFFFFF):
+                        # A near-perfect 2698-entry match is already decisive;
+                        # keep it only when it is overwhelmingly strong.
+                        if equal < len(expected) - 4:
+                            continue
+
+                results.append(
+                    TextureTable(
+                        rz_offset=pos,
+                        table_offset=start,
+                        field=field,
+                        byteorder=byteorder,
+                        blob_size=len(blob),
+                        sizes=sizes,
+                        equal_count=equal,
+                    )
+                )
+        pos += 1
+
+    # Remove duplicate discoveries of the same physical table, then rank by
+    # exact source-size matches and compactness of the containing stream.
+    unique: dict[tuple[int, int, int, str], TextureTable] = {}
+    for item in results:
+        key = (item.rz_offset, item.table_offset, item.field, item.byteorder)
+        prev = unique.get(key)
+        if prev is None or item.equal_count > prev.equal_count:
+            unique[key] = item
+    return sorted(unique.values(), key=lambda x: (x.equal_count, -x.blob_size), reverse=True)
 
 
-def cumulative(sizes: list[int]) -> list[int]:
+def locate_original_table(rom: bytes, expected: list[int]) -> TextureTable:
+    tables = scan_texture_tables(rom, expected, required_equal_ratio=1.0)
+    if not tables:
+        raise RuntimeError("nao foi possivel localizar g_Textures dentro do csegment RZ original")
+    best = tables[0]
+    equally_good = [t for t in tables if t.equal_count == best.equal_count]
+    if len(equally_good) > 1:
+        # If multiple byte-layout interpretations point at the exact same table,
+        # prefer the one whose sentinel is the canonical 0xFFFF. Otherwise stop.
+        locations = {(t.rz_offset, t.table_offset) for t in equally_good}
+        if len(locations) > 1:
+            raise RuntimeError("g_Textures original ficou ambiguo; importacao abortada por seguranca")
+    return best
+
+
+def locate_patch_table(rom: bytes, expected: list[int], original: TextureTable) -> TextureTable:
+    tables = scan_texture_tables(
+        rom,
+        expected,
+        required_equal_ratio=0.80,
+        fixed_layout=(original.field, original.byteorder),
+    )
+    if not tables:
+        raise RuntimeError("nao foi possivel localizar g_Textures dentro do csegment RZ PT-BR")
+
+    # Most images are untouched by a translation patch, so the correct table
+    # should dwarf false positives in exact-size agreement. Use decompressed
+    # csegment size only as a tie-breaker; Setup Editor may recompress/relocate it.
+    best = tables[0]
+    if best.equal_count < int(len(expected) * 0.90):
+        raise RuntimeError(
+            f"g_Textures PT-BR teve pouca concordancia estrutural ({best.equal_count}/{len(expected)})"
+        )
+    if len(tables) > 1 and tables[1].equal_count == best.equal_count:
+        a = abs(best.blob_size - original.blob_size)
+        b = abs(tables[1].blob_size - original.blob_size)
+        if b < a:
+            best = tables[1]
+        elif b == a and (tables[1].rz_offset, tables[1].table_offset) != (best.rz_offset, best.table_offset):
+            raise RuntimeError("g_Textures PT-BR ficou ambiguo; importacao abortada por seguranca")
+    return best
+
+
+def cumulative(sizes: list[int] | tuple[int, ...]) -> list[int]:
     out: list[int] = []
     n = 0
     for size in sizes:
@@ -131,7 +277,7 @@ def candidate_patch_start(
     orig_start: int,
     orig_end: int,
     orig_sizes: list[int],
-    patch_sizes: list[int],
+    patch_sizes: list[int] | tuple[int, ...],
 ) -> tuple[int, int, int]:
     ocum = cumulative(orig_sizes)
     pcum = cumulative(patch_sizes)
@@ -146,10 +292,12 @@ def candidate_patch_start(
     votes: collections.Counter[int] = collections.Counter()
 
     # Exact unchanged textures are excellent anchors. Derive the translated
-    # segment start from many independent anchors and let them vote.
-    step = max(1, len(orig_sizes) // 180)
-    search_lo = max(0, orig_start - 0x100000)
-    search_hi = min(len(patched), orig_end + 0x100000)
+    # segment start from many independent anchors and let them vote. Searching
+    # +/- 2 MiB is deliberately wider than typical Setup Editor relocations but
+    # still avoids accidental matches elsewhere in the ROM.
+    step = max(1, len(orig_sizes) // 220)
+    search_lo = max(0, orig_start - 0x200000)
+    search_hi = min(len(patched), orig_end + 0x200000)
     for i in range(0, len(orig_sizes), step):
         if orig_sizes[i] != patch_sizes[i] or orig_sizes[i] < 48:
             continue
@@ -161,7 +309,7 @@ def candidate_patch_start(
             continue
         votes[pos - pcum[i]] += 1
 
-    for start, _ in votes.most_common(12):
+    for start, _ in votes.most_common(20):
         candidates.add(start)
 
     def score(start: int) -> tuple[int, int]:
@@ -188,6 +336,8 @@ def candidate_patch_start(
         raise RuntimeError(
             f"segmento PT-BR nao passou na validacao de identidade ({exact}/{comparable} ancoras)"
         )
+    if len(ranked) > 1 and ranked[1][0] == ranked[0][0] and ranked[1][2] != start:
+        raise RuntimeError("segmento de imagens PT-BR ficou ambiguo; importacao abortada por seguranca")
     return start, exact, vote_count
 
 
@@ -225,10 +375,12 @@ def main() -> int:
     print(f"ROM original: {base_path.relative_to(root)} CRC32={crc32(base):08X}")
     print(f"ROM do patch: {patch_path.relative_to(root)} CRC32={crc32(patched):08X}")
     print(f"Texturas conhecidas: {len(names)}")
+    print("Localizando g_Textures dentro do csegment comprimido...")
 
     try:
-        table, field = locate_size_table(base, orig_sizes)
-        patch_sizes = read_patch_sizes(patched, table, field, len(names))
+        original_table = locate_original_table(base, orig_sizes)
+        patch_table = locate_patch_table(patched, orig_sizes, original_table)
+        patch_sizes = list(patch_table.sizes)
         patch_start, exact_anchors, votes = candidate_patch_start(
             base, patched, orig_start, orig_end, orig_sizes, patch_sizes
         )
@@ -237,7 +389,16 @@ def main() -> int:
         print("Nenhum sidecar grafico foi substituido.")
         return 3
 
-    print(f"g_Textures: 0x{table:08X} campo24=+{field}")
+    print(
+        "g_Textures original: "
+        f"RZ@0x{original_table.rz_offset:08X} +0x{original_table.table_offset:X} "
+        f"campo24=+{original_table.field} {original_table.byteorder}"
+    )
+    print(
+        "g_Textures PT-BR:   "
+        f"RZ@0x{patch_table.rz_offset:08X} +0x{patch_table.table_offset:X} "
+        f"iguais={patch_table.equal_count}/{len(orig_sizes)}"
+    )
     print(f"Images original: 0x{orig_start:08X}..0x{orig_end:08X}")
     print(f"Images PT-BR:   0x{patch_start:08X} (ancoras exatas={exact_anchors}, votos={votes})")
 
@@ -267,8 +428,10 @@ def main() -> int:
             oversize.append((name, osize, psize))
             continue
 
-        # Keep original tail bytes untouched. texLoad consumes the translated
-        # self-contained stream and stops at its own end marker/header data.
+        # Preserve the original slot boundary. The translated compressed stream
+        # is copied only into the bytes it owns; untouched tail bytes remain the
+        # original ROM data. This prevents one replacement from ever corrupting
+        # the next texture.
         rel = ocum[i]
         shadow[rel : rel + psize] = pblock
         imported.append(name)
@@ -277,7 +440,16 @@ def main() -> int:
         "Ascension PT-BR community graphics import",
         f"base={base_path.name} crc32={crc32(base):08X}",
         f"patched={patch_path.name} crc32={crc32(patched):08X}",
-        f"texture_table=0x{table:08X} field={field}",
+        (
+            "original_texture_table="
+            f"rz:0x{original_table.rz_offset:08X}+0x{original_table.table_offset:X} "
+            f"field={original_table.field} endian={original_table.byteorder}"
+        ),
+        (
+            "patched_texture_table="
+            f"rz:0x{patch_table.rz_offset:08X}+0x{patch_table.table_offset:X} "
+            f"equal={patch_table.equal_count}/{len(orig_sizes)}"
+        ),
         f"original_segment=0x{orig_start:08X}-0x{orig_end:08X}",
         f"patched_segment=0x{patch_start:08X}",
         f"known={len(names)} changed={len(changed)} imported={len(imported)} oversize={len(oversize)}",
