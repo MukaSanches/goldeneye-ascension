@@ -73,6 +73,11 @@ void sysCpuRelax(void);
 
 void sysExit(int code);
 
+/* Relaunch this executable with the same command line, then terminate the
+ * current process. Returns -1 only when the host could not start the new
+ * process, in which case the current game keeps running. */
+int sysRestart(void);
+
 /*
  * Start the cooperative thread kernel (green threads + vsync tick). Call
  * once from main() before running any game code; after this, blocking
