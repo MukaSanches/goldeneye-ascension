@@ -72,6 +72,8 @@ struct AscensionGameString {
 
 static const struct AscensionGameString kPtBrGame[] = {
 #include "localization/pt_br_title.inc"
+#include "localization/pt_br_global_ui.inc"
+#include "localization/pt_br_guns.inc"
 };
 
 #undef KEEP
