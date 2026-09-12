@@ -35,7 +35,7 @@ def main() -> int:
         'static const char *const kLanguage[]  = { "ENGLISH", "PORTUGUESE (BRAZIL)", NULL };\n'
         'static const char *const kFovPreset[] = { "ORIGINAL", "MODERN", "WIDE", "CUSTOM", NULL };\n'
         'static const char *const kMousePreset[] = { "CLASSIC", "SMOOTH", "MODERN", "RAW", "CUSTOM", NULL };\n'
-        'static const char *const kPadPreset[] = { "CLASSIC", "MODERN", "SOUTHPAW", "CUSTOM", NULL };\n',
+        'static const char *const kPadPreset[] = { "CLASSIC", "MODERN", "INVERT Y", "CUSTOM", NULL };\n',
         "preset names",
     )
 
@@ -44,7 +44,7 @@ def main() -> int:
     text = replace_once(text, anchor, repl, "FOV preset row")
 
     anchor = '''    { .key="Input.MouseCaptureMode", .label="Mouse capture",\n      .help="Choose how mouse lock activates.", .category=CAT_INPUT,\n      .kind=ROW_TOGGLE, .step=1, .names=kCapture, .resetValue=1 },\n'''
-    repl = anchor + '''\n    { .key="Ascension.MousePreset", .label="Mouse feel",\n      .help="Classic, Smooth, Modern or Raw PC mouse tuning.", .category=CAT_INPUT,\n      .kind=ROW_ENUM, .step=1, .names=kMousePreset, .resetValue=2 },\n\n    { .key="Ascension.GamepadPreset", .label="Gamepad preset",\n      .help="Conservative gamepad tuning presets; Custom preserves manual values.", .category=CAT_INPUT,\n      .kind=ROW_ENUM, .step=1, .names=kPadPreset, .resetValue=1 },\n'''
+    repl = anchor + '''\n    { .key="Ascension.MousePreset", .label="Mouse feel",\n      .help="Classic, Smooth, Modern or Raw PC mouse tuning.", .category=CAT_INPUT,\n      .kind=ROW_ENUM, .step=1, .names=kMousePreset, .resetValue=2 },\n\n    { .key="Ascension.GamepadPreset", .label="Gamepad preset",\n      .help="Classic, Modern, Invert Y or Custom gamepad tuning.", .category=CAT_INPUT,\n      .kind=ROW_ENUM, .step=1, .names=kPadPreset, .resetValue=1 },\n'''
     text = replace_once(text, anchor, repl, "mouse/gamepad preset rows")
 
     marker = '''static int  s_showFps;\nstatic int  s_controlHintSeen;\n'''
