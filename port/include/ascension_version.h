@@ -10,12 +10,29 @@
 
 #define ASCENSION_VERSION_MAJOR 0
 #define ASCENSION_VERSION_MINOR 0
-#define ASCENSION_VERSION_PATCH 2
-#define ASCENSION_VERSION "0.0.2"
+#define ASCENSION_VERSION_PATCH 3
+#define ASCENSION_VERSION "0.0.3"
 
 /* Restrained signature that fits both the SDL title bar and the low-resolution
  * in-game footer without decorative separators that compete with GoldenEye. */
 #define ASCENSION_SIGNATURE ASCENSION_NAME " " ASCENSION_VERSION
 #define ASCENSION_WINDOW_TITLE ASCENSION_SIGNATURE
+
+/*
+ * 0.0.3 localizes only Ascension-owned text. optionsoverlay.c declares the
+ * original GoldenEye text renderer before including this header, so these
+ * wrappers translate the string argument while preserving the renderer,
+ * font, layout and display-list behavior. Other game text is untouched.
+ */
+#include "ascension_locale.h"
+
+#define textRender(gdl, x, y, text, chars, font, colour, width, height, yOffset, lineheight) \
+    textRender((gdl), (x), (y), (char *)ascensionLocaleText((const char *)(text)), \
+               (chars), (font), (colour), (width), (height), (yOffset), (lineheight))
+
+#define textMeasure(textheight, textwidth, text, chars, font, lineheight) \
+    textMeasure((textheight), (textwidth), \
+                (char *)ascensionLocaleText((const char *)(text)), \
+                (chars), (font), (lineheight))
 
 #endif
