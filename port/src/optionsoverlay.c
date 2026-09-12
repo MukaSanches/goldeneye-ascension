@@ -60,6 +60,13 @@ extern int   current_menu;
  * is enum MENU value 5 in src/bondconstants.h (same ABI-int pattern as input.c). */
 #define GE_MENU_FILE_SELECT 5
 
+/* Ascension 0.0.2 UI palette. These packed text colours mirror the visual
+ * identity spec; original game assets/status colours remain untouched. */
+#define ASC_UI_GOLD   0xD2B65CFFu
+#define ASC_UI_IVORY 0xE8E2D3FFu
+#define ASC_UI_TEXT   0xC8C2B3FFu
+#define ASC_UI_SLATE  0x8D9396FFu
+
 /* ------------------------------------------------------------------------ */
 
 enum { ROW_TOGGLE, ROW_SLIDER, ROW_ENUM, ROW_MSAA, ROW_RES };
@@ -603,9 +610,14 @@ Gfx *optionsOverlayEmit(void)
         gDPSetCycleType(fgdl++, G_CYC_1CYCLE);
         gDPSetTexturePersp(fgdl++, G_TP_NONE);
         gDPSetScissor(fgdl++, G_SC_NON_INTERLACE, 0, 0, fw, fh);
+        if (showBrand) {
+            const s32 brandWidth = measureText(ASCENSION_SIGNATURE);
+            fgdl = fillRect(fgdl, 8, fh - 19, 8 + brandWidth, fh - 18,
+                            0xD2, 0xB6, 0x5C, 220);
+        }
         fgdl = microcode_constructor(fgdl);
         if (showBrand) {
-            fgdl = drawText(fgdl, 8, fh - 14, ASCENSION_WINDOW_TITLE, 0x909098ff);
+            fgdl = drawText(fgdl, 8, fh - 14, ASCENSION_SIGNATURE, ASC_UI_GOLD);
         }
         if (showFps) {
             fgdl = drawTextR(fgdl, fw - 6, 6, s_fpsText, 0x40ff60ff);
@@ -632,45 +644,45 @@ Gfx *optionsOverlayEmit(void)
     /* ---- pass 1: all fills (G_CC_PRIMITIVE) ---- */
     gdl = fillRect(gdl, 0, 0, W, H, 0, 0, 0, 150);                       /* dim */
     gdl = fillRect(gdl, OV_X0 - 8, panelTop, W - (OV_X0 - 8), panelBottom,
-                   8, 10, 24, 210);                                     /* panel */
+                   8, 10, 12, 218);                                     /* carbon panel */
     gdl = fillRect(gdl, OV_CB_X0, OV_CB_Y0, OV_CB_X1, OV_CB_Y1,
-                   150, 40, 40, 235);                                   /* close */
+                   120, 34, 34, 235);                                   /* close */
 
     for (int i = 0; i < NUM_ROWS; i++) {
         s32 rowY = OV_ROW_Y(i);
         if (i == s_sel) {
             gdl = fillRect(gdl, OV_X0 - 4, rowY - 3, W - (OV_X0 - 4),
-                           rowY + OV_LINE - 4, 40, 46, 96, 220);
+                           rowY + OV_LINE - 4, 78, 67, 28, 220);
         }
         if (rows[i].kind == ROW_SLIDER && rows[i].found) {
             double lo = rowLo(&rows[i]), hi = rowHi(&rows[i]);
             double f = (hi > lo) ? (rowGet(&rows[i]) - lo) / (hi - lo) : 0.0;
             if (f < 0) f = 0; if (f > 1) f = 1;
             s32 by = rowY + 3;
-            gdl = fillRect(gdl, bx0, by, bx1, by + 5, 60, 60, 70, 220);
+            gdl = fillRect(gdl, bx0, by, bx1, by + 5, 56, 55, 50, 220);
             gdl = fillRect(gdl, bx0, by, bx0 + (s32)((bx1 - bx0) * f), by + 5,
-                           210, 200, 90, 255);
+                           210, 182, 92, 255);
         }
     }
 
     /* ---- pass 2: text ---- */
     gdl = microcode_constructor(gdl);
 
-    gdl = drawText(gdl, OV_X0, OV_TOP, "PC OPTIONS", 0xffe040ff);
+    gdl = drawText(gdl, OV_X0, OV_TOP, ASCENSION_SIGNATURE, ASC_UI_GOLD);
     gdl = drawText(gdl, OV_X0, OV_TOP + OV_LINE, "click value / drag / arrows",
-                   0x8890a0ff);                                        /* hint line */
+                   ASC_UI_SLATE);                                        /* hint line */
     gdl = drawText(gdl, (OV_CB_X0 + OV_CB_X1) / 2 - measureText("X") / 2,
                    OV_TOP, "X", 0xffffffff);                            /* close glyph */
 
     for (int i = 0; i < NUM_ROWS; i++) {
         s32 rowY = OV_ROW_Y(i);
-        u32 col = (i == s_sel) ? 0xffffffff : 0xc0c0c8ff;
+        u32 col = (i == s_sel) ? ASC_UI_IVORY : ASC_UI_TEXT;
         char val[48];
 
         gdl = drawText(gdl, OV_LABEL_X, rowY, (char *)rows[i].label,
-                       rows[i].found ? col : 0x808080ff);
+                       rows[i].found ? col : ASC_UI_SLATE);
         if (!rows[i].found) {
-            gdl = drawTextR(gdl, right, rowY, "(n/a)", 0x808080ff);
+            gdl = drawTextR(gdl, right, rowY, "(n/a)", ASC_UI_SLATE);
             continue;
         }
 
@@ -678,7 +690,7 @@ Gfx *optionsOverlayEmit(void)
         if (rows[i].restart) {
             /* value left of the bar span, "(restart)" pinned to the edge */
             gdl = drawText(gdl, bx0, rowY, val, col);
-            gdl = drawTextR(gdl, right, rowY, "(restart)", 0x909090ff);
+            gdl = drawTextR(gdl, right, rowY, "(restart)", ASC_UI_SLATE);
         } else {
             gdl = drawTextR(gdl, right, rowY, val, col);
         }
