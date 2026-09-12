@@ -39,6 +39,7 @@
 #include "video.h"
 #include "input.h"
 #include "optionsoverlay.h"
+#include "ascension_version.h"
 
 /* ---- game symbols (rendering/UI only; see input.c for the same pattern) ---- */
 struct font;
@@ -53,6 +54,11 @@ extern void  textMeasure(s32 *textheight, s32 *textwidth, char *text,
                          struct fontchar *chars, struct font *font, s32 lineheight);
 extern s16   viGetX(void);
 extern s16   viGetY(void);
+extern int   current_menu;
+
+/* Keep this port TU independent of the large game headers. MENU_FILE_SELECT
+ * is enum MENU value 5 in src/bondconstants.h (same ABI-int pattern as input.c). */
+#define GE_MENU_FILE_SELECT 5
 
 /* ------------------------------------------------------------------------ */
 
@@ -583,10 +589,13 @@ Gfx *optionsOverlayEmit(void)
     fpsTick();
 
     if (!s_open) {
-        if (!s_showFps || !s_fpsText[0]) {
-            return NULL;   /* nothing appended -> golden dumps byte-identical */
+        const int showBrand = (current_menu == GE_MENU_FILE_SELECT);
+        const int showFps = s_showFps && s_fpsText[0];
+        if (!showBrand && !showFps) {
+            return NULL;   /* no port-layer UI to append */
         }
-        /* D213: FPS-only mini DL (top-right), panel closed. */
+
+        /* Lightweight mini DL: Ascension identity on file select and/or FPS. */
         const s32 fw = viGetX();
         const s32 fh = viGetY();
         Gfx *fgdl = s_buf;
@@ -595,7 +604,12 @@ Gfx *optionsOverlayEmit(void)
         gDPSetTexturePersp(fgdl++, G_TP_NONE);
         gDPSetScissor(fgdl++, G_SC_NON_INTERLACE, 0, 0, fw, fh);
         fgdl = microcode_constructor(fgdl);
-        fgdl = drawTextR(fgdl, fw - 6, 6, s_fpsText, 0x40ff60ff);
+        if (showBrand) {
+            fgdl = drawText(fgdl, 8, fh - 14, ASCENSION_WINDOW_TITLE, 0x909098ff);
+        }
+        if (showFps) {
+            fgdl = drawTextR(fgdl, fw - 6, 6, s_fpsText, 0x40ff60ff);
+        }
         gDPPipeSync(fgdl++);
         gSPEndDisplayList(fgdl++);
         return s_buf;
