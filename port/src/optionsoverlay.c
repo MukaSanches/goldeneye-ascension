@@ -3,12 +3,16 @@
  *
  * Port-layer only. No src/ menu code is touched: the overlay draws its own
  * fast3d 2D display list (appended after the game DL in gfx_run) and edits the
- * port-owned config.c variables directly. Live knobs apply immediately; the
- * two that need an FBO/window rebuild (MSAA, Fullscreen) are tagged "(restart)".
+ * port-owned config.c variables directly. Live knobs apply immediately; knobs
+ * that only make sense on the next launch are explicitly tagged "RESTART".
  *
  * Text + fill helpers are the game's own (textRender / microcode_constructor /
  * gDPFillRectangle) reached by extern -- same pattern input.c uses to read
  * current_menu / cursor_h_pos. This is a rendering/UI view, not a logic change.
+ *
+ * Ascension adds a deliberately small discovery layer on file select so a new
+ * PC player can find this panel without reading a README. The stronger prompt
+ * is shown until F10 is opened once; a compact F10 affordance remains.
  *
  * Diagnostic: set GE_OPTIONSOVERLAY=1 to auto-open at boot (headless layout
  * check). Env-gated, harmless when unset.
@@ -60,12 +64,13 @@ extern int   current_menu;
  * is enum MENU value 5 in src/bondconstants.h (same ABI-int pattern as input.c). */
 #define GE_MENU_FILE_SELECT 5
 
-/* Ascension 0.0.2 UI palette. These packed text colours mirror the visual
- * identity spec; original game assets/status colours remain untouched. */
-#define ASC_UI_GOLD   0xD2B65CFFu
-#define ASC_UI_IVORY 0xE8E2D3FFu
-#define ASC_UI_TEXT   0xC8C2B3FFu
-#define ASC_UI_SLATE  0x8D9396FFu
+/* Ascension 0.0.2 UI palette. Original game assets/status colours are not
+ * recoloured: these values are used only on port-owned surfaces. */
+#define ASC_UI_GOLD      0xD2B65CFFu
+#define ASC_UI_GOLD_DIM  0x9B8749FFu
+#define ASC_UI_IVORY     0xE8E2D3FFu
+#define ASC_UI_TEXT      0xC8C2B3FFu
+#define ASC_UI_SLATE     0x8D9396FFu
 
 /* ------------------------------------------------------------------------ */
 
@@ -93,10 +98,11 @@ static int s_resSel  = 0;       /* index into s_resFit */
 struct Row {
     const char        *key;
     const char        *label;
+    const char        *help;     /* short contextual explanation, not a manual */
     int                kind;
     double             step;
     const char *const *names;    /* ROW_TOGGLE / ROW_ENUM value names */
-    int                restart;  /* value change needs a restart      */
+    int                restart;  /* value only takes effect on next launch */
     double             uiMin, uiMax; /* 0,0 -> use the registered clamp */
 
     /* resolved from config.c at init */
@@ -106,20 +112,25 @@ struct Row {
     double             cfgMin, cfgMax;
 };
 
+/* Keep explanations compact: BankGothic is intentionally wide at the native
+ * 320x240 UI grid. The second header line changes with selection, so advanced
+ * terms never need a separate manual just to be understood. */
 static struct Row rows[] = {
-    { "Video.Fullscreen",         "Fullscreen",       ROW_TOGGLE, 1,    kOnOff,     0, 0, 0,   0,0,0,0,0 },
-    { "__Resolution",             "Resolution",       ROW_RES,    0,    NULL,       0, 0, 0,   0,0,0,0,0 },
-    { "Video.VSync",              "VSync",            ROW_TOGGLE, 1,    kOnOff,     0, 0, 0,   0,0,0,0,0 },
-    { "Video.FpsCap",             "Frame cap",        ROW_SLIDER, 10,   NULL,       0, 0, 360, 0,0,0,0,0 },
-    { "Video.MSAA",               "MSAA",             ROW_MSAA,   0,    NULL,       1, 0, 0,   0,0,0,0,0 },
-    { "Video.TextureFilter",      "Texture filter",   ROW_ENUM,   1,    kTexFilter, 0, 0, 0,   0,0,0,0,0 },
-    { "Video.Anisotropy",         "Anisotropic",      ROW_SLIDER, 1,    NULL,       0, 0, 0,   0,0,0,0,0 },
-    { "Video.FovScale",           "FOV scale %",      ROW_SLIDER, 5,    NULL,       0, 0, 0,   0,0,0,0,0 },
-    { "Input.MouseAimSpeed",      "Mouse aim speed",  ROW_SLIDER, 1,    NULL,       0, 0, 100, 0,0,0,0,0 },
-    { "Input.MouseTurnSpeed",     "Mouse turn speed", ROW_SLIDER, 1,    NULL,       0, 0, 100, 0,0,0,0,0 },
-    { "Input.MouseInvertY",       "Mouse invert Y",   ROW_TOGGLE, 1,    kOnOff,     0, 0, 0,   0,0,0,0,0 },
-    { "Input.MouseCaptureMode",   "Mouse capture",    ROW_TOGGLE, 1,    kCapture,   0, 0, 0,   0,0,0,0,0 },
-    { "Game.ScreenShakeIntensity","Screen shake",     ROW_SLIDER, 0.25, NULL,       0, 0, 3,   0,0,0,0,0 },
+    { .key="Video.Fullscreen",          .label="Fullscreen",       .help="Windowed / fullscreen display",  .kind=ROW_TOGGLE, .step=1,    .names=kOnOff },
+    { .key="__Resolution",              .label="Resolution",       .help="Window size (windowed only)",     .kind=ROW_RES },
+    { .key="Video.VSync",               .label="VSync",            .help="Reduces visible screen tearing",  .kind=ROW_TOGGLE, .step=1,    .names=kOnOff },
+    { .key="Video.FpsCap",              .label="Frame cap",        .help="0 = native game timing",           .kind=ROW_SLIDER, .step=10,   .uiMin=0, .uiMax=360 },
+    { .key="Video.DisplayFPS",          .label="Display FPS",      .help="Top-right performance counter",    .kind=ROW_TOGGLE, .step=1,    .names=kOnOff },
+    { .key="Video.MSAA",                .label="MSAA",             .help="Edge smoothing; restart to apply", .kind=ROW_MSAA,               .restart=1 },
+    { .key="Video.TextureFilter",       .label="Texture filter",   .help="Texture sharpness / smoothing",    .kind=ROW_ENUM,   .step=1,    .names=kTexFilter },
+    { .key="Video.Anisotropy",          .label="Anisotropic",      .help="Sharper distant angled textures",  .kind=ROW_SLIDER, .step=1 },
+    { .key="Video.FovScale",            .label="FOV scale %",      .help="Field of view without stretching", .kind=ROW_SLIDER, .step=5 },
+    { .key="Input.MouseAimSpeed",       .label="Mouse aim speed",  .help="Vertical aiming sensitivity",      .kind=ROW_SLIDER, .step=1,    .uiMin=0, .uiMax=100 },
+    { .key="Input.MouseTurnSpeed",      .label="Mouse turn speed", .help="Horizontal turning sensitivity",   .kind=ROW_SLIDER, .step=1,    .uiMin=0, .uiMax=100 },
+    { .key="Input.MouseInvertY",        .label="Mouse invert Y",   .help="Reverse the mouse vertical axis",  .kind=ROW_TOGGLE, .step=1,    .names=kOnOff },
+    { .key="Input.MouseCaptureMode",    .label="Mouse capture",    .help="Choose how mouse lock activates",  .kind=ROW_TOGGLE, .step=1,    .names=kCapture },
+    { .key="Game.ScreenShakeIntensity", .label="Screen shake",     .help="Camera shake intensity",           .kind=ROW_SLIDER, .step=0.25 },
+    { .key="Game.SkipIntro",            .label="Skip intro",       .help="Boot straight to file select",     .kind=ROW_TOGGLE, .step=1,    .names=kOnOff, .restart=1 },
 };
 #define NUM_ROWS ((int)(sizeof(rows) / sizeof(rows[0])))
 
@@ -127,17 +138,17 @@ static int  s_inited = 0;
 static volatile int s_open = 0;
 static int  s_sel = 0;
 
-/* D213: optional on-screen FPS readout (PD parity: Video.DisplayFPS). Drawn
- * top-right whenever enabled, independent of the F10 panel. Config-only knob
- * (kept off the 13-row panel, which is at its layout limit) -- matches PD,
- * whose DisplayFPS is also file-only. Default 0 => emit path unchanged =>
- * golden dumps byte-identical. */
+/* Port-owned presentation state. DisplayFPS is now surfaced in F10 instead of
+ * being an ini-only secret. The discovery bit is persisted so the stronger
+ * first-run prompt can retire itself after the player opens Ascension Control. */
 static int      s_showFps = 0;
+static int      s_controlHintSeen = 0;
 static char     s_fpsText[16] = "";
 
 PD_CONSTRUCTOR static void overlayConfigInit(void)
 {
     configRegisterInt("Video.DisplayFPS", &s_showFps, 0, 1);
+    configRegisterInt("Ascension.ControlHintSeen", &s_controlHintSeen, 0, 1);
 }
 
 /* Sampled once per emitted frame; recomputes the string every ~0.5 s. */
@@ -161,15 +172,14 @@ static void fpsTick(void)
     }
 }
 
-/* Layout (game 2D pixel space = viGetX() x viGetY(), ~320x240). Shared by the
- * emit path and the mouse hit-testing in optionsOverlayHandleInput().
- * BankGothic caps are ~9 units tall here, so rows need ~16 units of pitch and
- * values are right-aligned to the panel edge to survive the wide font. */
+/* Layout (game 2D pixel space = viGetX() x viGetY(), ~320x240). Fifteen rows
+ * fit without scrolling by tightening only the vertical rhythm; BankGothic's
+ * caps remain separated and the mouse hit target still spans a full row. */
 #define OV_X0        20
 #define OV_LABEL_X   28
-#define OV_TOP       12
-#define OV_LINE      15                       /* row pitch (13 rows must fit ~240) */
-#define OV_HDR       2                        /* header rows above row 0 (title+hint) */
+#define OV_TOP       10
+#define OV_LINE      13
+#define OV_HDR       2                        /* title + contextual help */
 #define OV_ROW_Y(i)  (OV_TOP + ((i) + OV_HDR) * OV_LINE)
 #define OV_RIGHT     (viGetX() - OV_X0)       /* right edge for right-aligned text */
 #define OV_NUM_W     36                       /* reserved width for a slider's number */
@@ -189,7 +199,7 @@ static void sliderBarSpan(s32 *x0, s32 *x1)
 static int overlayRowAtY(double oy)
 {
     for (int i = 0; i < NUM_ROWS; i++) {
-        double top = OV_ROW_Y(i) - 3;
+        double top = OV_ROW_Y(i) - 2;
         if (oy >= top && oy < top + OV_LINE) {
             return i;
         }
@@ -201,7 +211,7 @@ static int overlayRowAtY(double oy)
 #define OV_CB_X0   (OV_RIGHT - 14)
 #define OV_CB_X1   (OV_RIGHT + 7)
 #define OV_CB_Y0   (OV_TOP - 3)
-#define OV_CB_Y1   (OV_TOP + 12)
+#define OV_CB_Y1   (OV_TOP + 10)
 static int overlayInCloseBox(double ox, double oy)
 {
     return ox >= OV_CB_X0 && ox <= OV_CB_X1 &&
@@ -381,6 +391,15 @@ void optionsOverlayToggle(void)
 {
     overlayInit();
     s_open = !s_open;
+
+    /* Opening Ascension Control is the acknowledgement. Save immediately so
+     * the onboarding prompt cannot return just because the process was closed
+     * before the panel itself was closed. */
+    if (s_open && !s_controlHintSeen) {
+        s_controlHintSeen = 1;
+        configSave();
+    }
+
     sysLogPrintf(LOG_INFO, "optionsoverlay: %s", s_open ? "opened" : "closed");
     if (!s_open) {
         configSave();
@@ -602,7 +621,8 @@ Gfx *optionsOverlayEmit(void)
             return NULL;   /* no port-layer UI to append */
         }
 
-        /* Lightweight mini DL: Ascension identity on file select and/or FPS. */
+        /* Lightweight mini DL: Ascension identity + settings discovery on file
+         * select, and optional FPS anywhere. Nothing touches game menu logic. */
         const s32 fw = viGetX();
         const s32 fh = viGetY();
         Gfx *fgdl = s_buf;
@@ -614,10 +634,25 @@ Gfx *optionsOverlayEmit(void)
             const s32 brandWidth = measureText(ASCENSION_SIGNATURE);
             fgdl = fillRect(fgdl, 8, fh - 19, 8 + brandWidth, fh - 18,
                             0xD2, 0xB6, 0x5C, 220);
+
+            if (!s_controlHintSeen) {
+                const char *firstHint = "PRESS F10 // CONFIGURE";
+                const s32 hintWidth = measureText(firstHint);
+                const s32 hx0 = fw - hintWidth - 14;
+                fgdl = fillRect(fgdl, hx0, fh - 36, fw - 6, fh - 22,
+                                8, 10, 12, 225);
+                fgdl = fillRect(fgdl, hx0, fh - 36, hx0 + 2, fh - 22,
+                                0xD2, 0xB6, 0x5C, 255);
+            }
         }
         fgdl = microcode_constructor(fgdl);
         if (showBrand) {
             fgdl = drawText(fgdl, 8, fh - 14, ASCENSION_SIGNATURE, ASC_UI_GOLD);
+            fgdl = drawTextR(fgdl, fw - 8, fh - 14, "F10 // CONTROL", ASC_UI_SLATE);
+            if (!s_controlHintSeen) {
+                fgdl = drawTextR(fgdl, fw - 9, fh - 32, "PRESS F10 // CONFIGURE",
+                                 ASC_UI_IVORY);
+            }
         }
         if (showFps) {
             fgdl = drawTextR(fgdl, fw - 6, 6, s_fpsText, 0x40ff60ff);
@@ -630,7 +665,7 @@ Gfx *optionsOverlayEmit(void)
     const s32 W = viGetX();
     const s32 H = viGetY();
     const s32 right = OV_RIGHT;
-    const s32 panelTop = OV_TOP - 9;
+    const s32 panelTop = OV_TOP - 7;
     const s32 panelBottom = OV_ROW_Y(NUM_ROWS - 1) + OV_LINE / 2 + 3;
     s32 bx0, bx1;
     sliderBarSpan(&bx0, &bx1);
@@ -644,23 +679,27 @@ Gfx *optionsOverlayEmit(void)
     /* ---- pass 1: all fills (G_CC_PRIMITIVE) ---- */
     gdl = fillRect(gdl, 0, 0, W, H, 0, 0, 0, 150);                       /* dim */
     gdl = fillRect(gdl, OV_X0 - 8, panelTop, W - (OV_X0 - 8), panelBottom,
-                   8, 10, 12, 218);                                     /* carbon panel */
+                   8, 10, 12, 222);                                     /* carbon panel */
+    gdl = fillRect(gdl, OV_X0 - 8, panelTop, W - (OV_X0 - 8), panelTop + 1,
+                   0xD2, 0xB6, 0x5C, 235);                              /* identity rule */
     gdl = fillRect(gdl, OV_CB_X0, OV_CB_Y0, OV_CB_X1, OV_CB_Y1,
-                   120, 34, 34, 235);                                   /* close */
+                   104, 31, 31, 235);                                   /* close */
 
     for (int i = 0; i < NUM_ROWS; i++) {
         s32 rowY = OV_ROW_Y(i);
         if (i == s_sel) {
-            gdl = fillRect(gdl, OV_X0 - 4, rowY - 3, W - (OV_X0 - 4),
-                           rowY + OV_LINE - 4, 78, 67, 28, 220);
+            gdl = fillRect(gdl, OV_X0 - 4, rowY - 2, W - (OV_X0 - 4),
+                           rowY + OV_LINE - 3, 38, 34, 22, 220);
+            gdl = fillRect(gdl, OV_X0 - 6, rowY - 2, OV_X0 - 4,
+                           rowY + OV_LINE - 3, 0xD2, 0xB6, 0x5C, 255);
         }
         if (rows[i].kind == ROW_SLIDER && rows[i].found) {
             double lo = rowLo(&rows[i]), hi = rowHi(&rows[i]);
             double f = (hi > lo) ? (rowGet(&rows[i]) - lo) / (hi - lo) : 0.0;
             if (f < 0) f = 0; if (f > 1) f = 1;
             s32 by = rowY + 3;
-            gdl = fillRect(gdl, bx0, by, bx1, by + 5, 56, 55, 50, 220);
-            gdl = fillRect(gdl, bx0, by, bx0 + (s32)((bx1 - bx0) * f), by + 5,
+            gdl = fillRect(gdl, bx0, by, bx1, by + 4, 52, 52, 48, 220);
+            gdl = fillRect(gdl, bx0, by, bx0 + (s32)((bx1 - bx0) * f), by + 4,
                            210, 182, 92, 255);
         }
     }
@@ -669,10 +708,11 @@ Gfx *optionsOverlayEmit(void)
     gdl = microcode_constructor(gdl);
 
     gdl = drawText(gdl, OV_X0, OV_TOP, ASCENSION_SIGNATURE, ASC_UI_GOLD);
-    gdl = drawText(gdl, OV_X0, OV_TOP + OV_LINE, "click value / drag / arrows",
-                   ASC_UI_SLATE);                                        /* hint line */
+    gdl = drawText(gdl, OV_X0, OV_TOP + OV_LINE,
+                   rows[s_sel].help ? rows[s_sel].help : "PC options",
+                   ASC_UI_SLATE);
     gdl = drawText(gdl, (OV_CB_X0 + OV_CB_X1) / 2 - measureText("X") / 2,
-                   OV_TOP, "X", 0xffffffff);                            /* close glyph */
+                   OV_TOP, "X", ASC_UI_IVORY);                          /* close glyph */
 
     for (int i = 0; i < NUM_ROWS; i++) {
         s32 rowY = OV_ROW_Y(i);
@@ -688,9 +728,10 @@ Gfx *optionsOverlayEmit(void)
 
         valueText(&rows[i], val, sizeof(val));
         if (rows[i].restart) {
-            /* value left of the bar span, "(restart)" pinned to the edge */
+            /* Value remains readable; the lifecycle cue is deliberately gold
+             * so it cannot be mistaken for a disabled state. */
             gdl = drawText(gdl, bx0, rowY, val, col);
-            gdl = drawTextR(gdl, right, rowY, "(restart)", ASC_UI_SLATE);
+            gdl = drawTextR(gdl, right, rowY, "RESTART", ASC_UI_GOLD_DIM);
         } else {
             gdl = drawTextR(gdl, right, rowY, val, col);
         }
