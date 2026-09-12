@@ -13,9 +13,9 @@
 #define ASCENSION_VERSION_PATCH 2
 #define ASCENSION_VERSION "0.0.2"
 
-/* Short, restrained signature that fits both the SDL title bar and the
- * low-resolution in-game footer without introducing a new font or asset. */
-#define ASCENSION_SIGNATURE ASCENSION_NAME " // " ASCENSION_VERSION
+/* Restrained signature that fits both the SDL title bar and the low-resolution
+ * in-game footer without decorative separators that compete with GoldenEye. */
+#define ASCENSION_SIGNATURE ASCENSION_NAME " " ASCENSION_VERSION
 #define ASCENSION_WINDOW_TITLE ASCENSION_SIGNATURE
 
 #endif
