@@ -29,6 +29,7 @@
 #include "video.h"
 #include "input.h"
 #include "optionsoverlay.h"
+#include "ascension_version.h"
 
 #include "../fast3d/gfx_api.h"
 #include "../fast3d/gfx_sdl.h"
@@ -52,45 +53,24 @@ static int initDone = 0;
  * [Video] ge007.ini knobs. Every default reproduces the previously-hardcoded
  * behaviour, so a fresh config or a missing [Video] section changes nothing.
  */
-static int cfgVSync         = 1;   /* swap interval: 0 = off, 1 = on            */
-static int cfgFpsCap        = 0;   /* frame cap in fps; 0 = uncapped (vsync)    */
-static int cfgMSAA          = 1;   /* 1/2/4/8 samples; 1 = off                  */
-static int cfgTexFilter     = 1;   /* 0 = nearest, 1 = bilinear (default), 2 = N64 3-point + trilinear */
-static int cfgFixMipTex     = 1;   /* RC2: clip mip-contaminated texture uploads to base height */
-static int cfgWrapFix       = 0;   /* D74 sub-tile UV pre-wrap + RC3/D167 non-PoT mask-period wrap (opt-in; GE_WRAPFIX env overrides) */
-static int cfgFovScale      = 100; /* D211: percent of the original vertical FOV; 100 = unchanged (byte-identical) */
-static int cfgAniso         = 4;   /* D212: anisotropic filtering samples; 4 = the value fast3d already applied (no visual delta at default) */
-static int cfgFullscreen    = 0;   /* 0 = windowed, 1 = borderless fullscreen   */
+static int cfgVSync         = 1;
+static int cfgFpsCap        = 0;
+static int cfgMSAA          = 1;
+static int cfgTexFilter     = 1;
+static int cfgFixMipTex     = 1;
+static int cfgWrapFix       = 0;
+static int cfgFovScale      = 100;
+static int cfgAniso         = 4;
+static int cfgFullscreen    = 0;
 
-/*
- * [Window] persistence. W/H = 0 -> auto (gfx_sdl2 fits a 4:3 window into ~85%
- * of the desktop); X/Y = -1 -> let SDL centre the window.
- * videoSaveWindowState() writes the live geometry back into these on a clean
- * exit (see main.c's atexit handler), so after the first run the file pins
- * whatever size you left it at.
- */
 static int cfgWinW   = 0;
 static int cfgWinH   = 0;
 static int cfgWinX   = -1;
 static int cfgWinY   = -1;
 static int cfgWinMax = 0;
 
-/*
- * [Game] gameplay-cosmetic knobs (route-(b) hooks in src/, findings D181).
- * portScreenShakeScale multiplies every viShake() amplitude (src/fr.c).
- * 1.0f = original behaviour (headless golden dumps unaffected).
- */
 f32 portScreenShakeScale = 1.0f;
-
-/* D216: Game.SkipIntro — read once in src/game/lv.c at title-stage load.
- * 0 (default) = the legal screen + logo attract sequence plays as normal. */
 s32 portSkipIntro = 0;
-
-/* D211: Video.FovScale as a multiplier on the render FOV. Applied game-side
- * at the guPerspectiveF chokepoint (src/fr.c) so it lands BEFORE the CPU
- * pre-multiplies projection x view into the combined world matrix — the
- * fast3d-side matrix hack only caught the handful of pure-perspective loads
- * (pause/watch model, sky) and left the world untouched. 1.0f = original. */
 f32 portFovScale = 1.0f;
 
 PD_CONSTRUCTOR static void videoConfigInit(void)
@@ -113,12 +93,8 @@ PD_CONSTRUCTOR static void videoConfigInit(void)
     configRegisterInt("Window.Maximized",    &cfgWinMax,     0, 1);
 }
 
-/* Set by videoRequestLiveConfig() (F10 overlay, host thread); consumed on the
- * scheduler thread in videoStartFrame() where the GL context is bound. */
 static volatile int liveCfgDirty = 0;
 
-/* D211/D212: push the port-only image knobs where they apply. FovScale is a
- * plain float the game re-reads each frame; anisotropy goes to fast3d. */
 static void videoApplyImageOptions(void)
 {
     portFovScale = (f32)cfgFovScale / 100.0f;
@@ -139,19 +115,12 @@ static void videoApplyTexFilter(void)
     }
 }
 
-/* Re-apply the live-tunable [Video] knobs (VSync / FpsCap / TextureFilter).
- * MSAA and Fullscreen are FBO/window rebuilds -> "(restart)" in the overlay. */
 void videoRequestLiveConfig(void)
 {
     liveCfgDirty = 1;
 }
 
-/* --- F10 overlay: window / fullscreen changes, deferred to the host thread ---
- * optionsOverlayHandleInput() runs on the scheduler thread; SDL_SetWindowSize /
- * SDL_SetWindowFullscreen pump the Win32 message loop and must run on the
- * window's creating thread. The overlay posts a request here; the host-thread
- * event pump drains it in videoDrainWindowRequests(). */
-static volatile int winReqKind = 0;          /* 0 none, 1 resize, 2 fullscreen */
+static volatile int winReqKind = 0;
 static volatile int winReqA = 0, winReqB = 0;
 
 void videoRequestWindowSize(int w, int h)
@@ -226,11 +195,7 @@ static void videoDrainWindowRequests(void)
 }
 
 static u32 frames = 0;
-/* Set by the host event pump (F12), consumed on the render thread in
- * videoEndFrame where a GL context is current. */
 static volatile int screenshotReq = 0;
-
-/* Pre-swap capture hook (defined below, registered in videoInit). */
 static void videoPreSwapCapture(void);
 extern void (*gfx_pre_swap_hook)(void);
 static double fpsWindowStart = 0.0;
@@ -248,10 +213,9 @@ int videoInit(void)
     gfx_framebuffers_enabled = true;
     gfx_detail_textures_enabled = false;
 
-    /* MSAA: snap the requested sample count down to a supported power of two. */
     gfx_msaa_level = cfgMSAA >= 8 ? 8 : cfgMSAA >= 4 ? 4 : cfgMSAA >= 2 ? 2 : 1;
 
-    int winW = cfgWinW > 0 ? cfgWinW : 0;   /* 0 -> gfx_sdl2 auto-fits to the desktop */
+    int winW = cfgWinW > 0 ? cfgWinW : 0;
     int winH = cfgWinH > 0 ? cfgWinH : 0;
     int havePos = (cfgWinX >= 0 && cfgWinY >= 0);
 
@@ -259,7 +223,7 @@ int videoInit(void)
         .wapi = wmAPI,
         .rapi = renderingAPI,
         .window_settings = {
-            .title = "GoldenEye 007",
+            .title = ASCENSION_WINDOW_TITLE,
             .width = winW,
             .height = winH,
             .x = havePos ? cfgWinX : 100,
@@ -274,37 +238,20 @@ int videoInit(void)
 
     gfx_init(&set);
 
-    /* VSync + optional fps cap; fast3d paces the window itself. */
     wmAPI->set_swap_interval(cfgVSync ? 1 : 0);
-    /* D186: a low cap does not just drop frames -- the pacing wait blocks the
-     * scheduler thread and throttles the sim with it. Normalise a bad
-     * ge007.ini value (e.g. dinged to 10 via the options overlay) to uncapped
-     * so it persists sane on the next configSave(). */
     if (cfgFpsCap > 0 && cfgFpsCap < 30) {
         sysLogPrintf(LOG_WARNING, "video: Video.FpsCap=%d too low (throttles the sim); using 0 (uncapped)", cfgFpsCap);
         cfgFpsCap = 0;
     }
-    gfx_set_target_fps(cfgFpsCap);   /* 0 = uncapped */
+    gfx_set_target_fps(cfgFpsCap);
 
-    /* Texture filtering. 1 = bilinear (default, matches prior behaviour),
-     * 0 = crisp nearest, 2 = N64 3-point emulation + trilinear mips (opt-in;
-     * more console-authentic but softens textures at normal distance -- did
-     * NOT fix the Depot roof, see docs/BRIEF-B2-depot-textures.md). All keep
-     * point-sampled tiles (HUD, G_TF_POINT) crisp via the per-tile flag. */
     gfx_set_fix_mip_textures(cfgFixMipTex);
     gfx_set_wrap_fix(cfgWrapFix);
 
     videoApplyTexFilter();
     videoApplyImageOptions();
 
-    /* The GL context is currently current on this (host main) thread, but all
-     * rendering happens on the game's scheduler thread. WGL only allows a
-     * context to be current on one thread at a time, so release it here; the
-     * scheduler thread re-binds it per frame via gfx_sdl_make_context_current()
-     * (see videoStartFrame). Must come after set_swap_interval above, which
-     * still needs a current context on this thread. */
     gfx_sdl_release_context();
-
     gfx_pre_swap_hook = videoPreSwapCapture;
 
     initDone = 1;
@@ -327,14 +274,12 @@ void videoStartFrame(void)
     if (!initDone) {
         return;
     }
-    /* Rendering runs on the game's scheduler thread; the GL context was
-     * created on the host main thread. */
     gfx_sdl_make_context_current();
 
     if (liveCfgDirty) {
         liveCfgDirty = 0;
         wmAPI->set_swap_interval(cfgVSync ? 1 : 0);
-        gfx_set_target_fps(cfgFpsCap);   /* 0 = uncapped */
+        gfx_set_target_fps(cfgFpsCap);
         videoApplyTexFilter();
         videoApplyImageOptions();
         sysLogPrintf(LOG_INFO, "video: live config applied "
@@ -345,24 +290,12 @@ void videoStartFrame(void)
     gfx_start_frame();
 }
 
-/*
- * Host-thread SDL event pump.
- *
- * On Windows, window messages are only dispatched when the thread that
- * CREATED the window pumps them — and every game thread can be blocked on a
- * message queue at any time. So the host main thread (which created the
- * window in videoInit) must keep pumping; otherwise the window goes
- * "Not Responding" and ESC/close never arrive. fast3d's own handle_events
- * (which runs during rendering) remains as a backstop.
- */
 void videoPumpEvents(void)
 {
     if (!initDone) {
         return;
     }
 
-    /* Apply any window/fullscreen change the F10 overlay posted from the
-     * scheduler thread (must run here, on the window's creating thread). */
     videoDrainWindowRequests();
 
     SDL_Event ev;
@@ -373,24 +306,14 @@ void videoPumpEvents(void)
             exit(0);
             break;
         case SDL_KEYDOWN:
-            /* D145: bare ESC used to exit(0). On the front-end / debrief
-             * screens ESC is the natural "back" key, so a player pressing it
-             * to page back instead quit the whole game (looked like a crash --
-             * clean exit, no crash log). ESC now feeds the N64 B button
-             * (back / cancel) via input.c; quitting is window-close (the X) or
-             * Alt+F4 only. */
             if ((ev.key.keysym.sym == SDLK_F4) && (ev.key.keysym.mod & KMOD_ALT)) {
                 sysLogPrintf(LOG_INFO, "video: Alt+F4 -> quit");
                 exit(0);
             } else if (ev.key.keysym.sym == SDLK_F12 && !ev.key.repeat) {
                 screenshotReq = 1;
             } else if (ev.key.keysym.sym == SDLK_F10 && !ev.key.repeat) {
-                optionsOverlayToggle();   /* F10: port-layer options overlay */
+                optionsOverlayToggle();
             } else if (ev.key.keysym.sym == SDLK_ESCAPE && !ev.key.repeat) {
-                /* Overlay open: ESC closes it (and is swallowed). Otherwise
-                 * WI-1: in click-to-lock mode ESC frees the captured cursor
-                 * (and is swallowed); else it falls through to input.c where
-                 * it feeds the N64 B button (D145). */
                 if (optionsOverlayIsOpen()) {
                     optionsOverlayToggle();
                 } else {
@@ -399,17 +322,15 @@ void videoPumpEvents(void)
             }
             break;
         case SDL_MOUSEBUTTONDOWN:
-            /* WI-1: a click in the window (re)locks the cursor in
-             * click-to-lock mode; a no-op otherwise. */
             if (!optionsOverlayIsOpen()) {
                 inputNotifyClick();
             }
             break;
         case SDL_MOUSEWHEEL:
             if (optionsOverlayIsOpen()) {
-                optionsOverlayScroll(ev.wheel.y);   /* move the selection */
+                optionsOverlayScroll(ev.wheel.y);
             } else {
-                inputPostWheel(ev.wheel.y);   /* weapon cycle */
+                inputPostWheel(ev.wheel.y);
             }
             break;
         case SDL_CONTROLLERDEVICEADDED:
@@ -423,7 +344,7 @@ void videoPumpEvents(void)
             } else if (ev.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
                 gfx_sdl_update_cached_size();
             } else if (ev.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
-                inputSetMouseGrab(0);   /* free the cursor when alt-tabbed away */
+                inputSetMouseGrab(0);
             } else if (ev.window.event == SDL_WINDOWEVENT_FOCUS_GAINED) {
                 inputSetMouseGrab(1);
             }
@@ -433,14 +354,13 @@ void videoPumpEvents(void)
         }
     }
 
-    /* Refresh the window title with the live FPS about once a second. */
     if (wmAPI && wmAPI->set_window_title) {
         static double lastTitle = 0.0;
         double now = wmAPI->get_time();
         if (now - lastTitle >= 1.0) {
             lastTitle = now;
             char title[64];
-            snprintf(title, sizeof(title), "GoldenEye 007  -  %.0f fps", vidAvgFPS);
+            snprintf(title, sizeof(title), ASCENSION_WINDOW_TITLE "  -  %.0f fps", vidAvgFPS);
             wmAPI->set_window_title(title);
         }
     }
@@ -454,13 +374,8 @@ void videoSubmitCommands(Gfx *cmds)
     gfx_run(cmds);
 }
 
-/* Runs from gfx_sdl_swap_buffers_begin with the composited frame still in the
- * back buffer, just before SDL_GL_SwapWindow. Reading the back buffer after
- * the swap is undefined on buffer-exchange drivers (Mesa/WSLg) -> black. */
 static void videoPreSwapCapture(void)
 {
-    /* GE_PCDUMP="first-last" / "first-last:step" -> ./ppm/frame_NNNNNN.ppm.
-     * Also honours [Debug] FrameDump in ge007.ini (env var wins). */
     const char *pcdump = configGetFrameDump();
     if (pcdump) {
         static int lo = -1, hi = 0, step = 1;
@@ -523,13 +438,6 @@ float videoGetFPS(void)
     return vidAvgFPS;
 }
 
-/*
- * Snapshot the current window geometry into the [Window] / [Video] config
- * vars so the next configSave() persists it. Called from main.c's atexit
- * handler (runs on the host thread, which owns the window). A maximized or
- * fullscreen window keeps its last restored size/pos on disk; only the
- * flag is updated.
- */
 void videoSaveWindowState(void)
 {
     if (!initDone || !wmAPI) {
@@ -574,7 +482,6 @@ s32 videoCreateFramebuffer(u32 w, u32 h, s32 upscale, s32 autoresize)
 
 void videoCopyFramebuffer(s32 dst, s32 src, s32 left, s32 top)
 {
-    /* assume immediate copies always read the front buffer */
     gfx_copy_framebuffer(dst, src, left, top, false);
 }
 
