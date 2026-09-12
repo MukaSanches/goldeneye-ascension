@@ -10,6 +10,7 @@ Order:
   6. Safe F10 video quality presets
   7. F12 screenshot organization
   8. Subtle F10/front-end visual polish
+  9. Conservative PC-polish presets (FOV/mouse/gamepad)
 
 Every child patcher is idempotent and anchor-validated. This wrapper aborts on
 the first failure, making local test setup reproducible and easy to audit.
@@ -28,6 +29,7 @@ SCRIPTS = [
     ROOT / "tools_pc" / "apply_quality_presets_f10.py",
     ROOT / "tools_pc" / "apply_screenshot_ux.py",
     ROOT / "tools_pc" / "apply_overlay_visual_polish.py",
+    ROOT / "tools_pc" / "apply_pc_polish_presets.py",
 ]
 
 
