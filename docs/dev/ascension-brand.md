@@ -10,7 +10,7 @@ Ascension should feel like a precise PC-native layer built around the original g
 
 The canonical short signature is:
 
-`Ascension // 0.0.x`
+`Ascension 0.0.x`
 
 The version is never typed independently into runtime surfaces. It comes from `port/include/ascension_version.h` so the window title, menu footer and future overlays cannot drift apart.
 
@@ -42,13 +42,18 @@ This keeps the identity lightweight, legally cleaner and consistent with the por
 
 ### 0.0.2
 
-1. Windows/SDL title: `Ascension // 0.0.2`.
+1. Windows/SDL title: `Ascension 0.0.2`.
 2. File-select footer: the same centralized signature, rendered through the existing port-layer overlay.
-3. File-select discovery affordance: `F10 // CONTROL` remains visible as a compact PC-native cue.
-4. First-use discovery prompt: `PRESS F10 // CONFIGURE` appears on file select until the player opens Ascension Control once. The acknowledgement is persisted in `ge007.ini` and the stronger prompt then retires permanently.
+3. File-select discovery affordance: `F10 CONTROL` remains visible as a compact PC-native cue.
+4. First-use discovery prompt: `PRESS F10 TO CONFIGURE` appears on file select until the player opens Ascension Control once. The acknowledgement is persisted in `ge007.ini` and the stronger prompt then retires permanently.
 5. F10 Ascension Control: carbon panel, restrained gold rule, gold focus marker, ivory active text and slate secondary text.
-6. Contextual help: the second header line explains the currently selected option in plain language instead of relying on unexplained PC graphics terminology.
-7. Previously hidden PC options `Display FPS` and `Skip intro` are exposed in the panel. Restart-only choices are labelled `RESTART` instead of being silently delayed.
+6. Categories: `DISPLAY`, `INPUT` and `GAMEPLAY` keep a growing settings surface understandable without turning it into a wall of options.
+7. Real scrolling: arrow keys and mouse wheel move selection while the visible window follows it. A small gold scroll thumb shows when additional rows exist above or below.
+8. Contextual help: the selected option gets one short plain-language explanation at the top of the panel.
+9. Safe ranges: risky port-owned values are constrained before they can produce unusable views. Current 0.0.2 limits include FOV 70-120, frame cap OFF/30/60/90/120 and screen shake 0-3.
+10. Visible feedback: live changes say `APPLIED`; delayed changes say `RESTART REQUIRED`.
+11. Destructive/session actions require confirmation: `Reset PC settings` restores only Ascension PC options and never touches save data; `Restart game` saves and relaunches the current executable with the same command line.
+12. Previously hidden PC options `Display FPS` and `Skip intro` remain exposed in the panel.
 
 Branding remains outside gameplay HUD surfaces in 0.0.2. The discovery cue lives on file select, where a new player is already making a setup decision, rather than interrupting a mission.
 
@@ -63,10 +68,25 @@ Ascension Control follows a few rules deliberately:
 - delayed changes must say so before the player leaves the menu;
 - technical labels stay concise, while the selected row provides a plain-language explanation;
 - settings remain keyboard- and mouse-operable;
+- `Tab` moves quickly between categories while arrows and mouse wheel handle normal navigation;
 - configuration is saved through the existing `ge007.ini` system rather than a parallel store;
-- defaults remain conservative and preserve the port's established behaviour unless a change has been explicitly tested.
+- defaults remain conservative and preserve the port's established behaviour unless a change has been explicitly tested;
+- reset and restart actions require a second activation so an accidental click cannot wipe preferences or relaunch the game.
 
 The control panel should help a first-time player without slowing down an experienced one.
+
+## Safe-range policy
+
+A port setting is not considered good UX merely because the underlying variable accepts a large numeric range. Ascension exposes a narrower range when testing shows that extreme values can create broken framing, uncomfortable camera motion or timing behaviour that does not represent the intended PC experience.
+
+For 0.0.2:
+
+- FOV scale is exposed as 70-120 percent. Existing out-of-range values are normalized when the overlay initializes.
+- Frame cap is exposed as OFF, 30, 60, 90 or 120 FPS. Values below 30 are not offered because the port's own video layer warns that they throttle the simulation.
+- Screen shake is exposed as 0-3 instead of the much wider internal registration range.
+- MSAA remains 1x/off, 2x, 4x or 8x and is clearly marked as restart-required.
+
+These are UX guardrails, not changes to mission logic or game physics.
 
 ## Readability rules
 
@@ -75,12 +95,17 @@ The control panel should help a first-time player without slowing down an experi
 - Avoid flashing, blinking or animated branding.
 - Keep the signature and settings legible at the native low-resolution game viewport before judging them at modern upscaled resolutions.
 - Avoid long prose inside the panel. Context help should explain one concept in one short line.
+- At lower virtual heights the menu must scroll instead of shrinking text or allowing rows to fall outside the panel.
 
 ## Accessibility direction
 
 0.0.2 does not attempt to become a complete accessibility layer. It makes the controls already present easier to discover and understand. In particular, screen-shake intensity, FOV, mouse inversion and mouse-capture behaviour are surfaced with contextual explanations.
 
 Future work should add accessibility features only when they can be tested as real player-facing behaviour. Do not add decorative toggles that do not materially change the experience.
+
+## Performance notes
+
+The FPS shown by the host title bar measures submitted/rendered frames. Some original presentation sequences can intentionally submit frames at a lower cadence than normal gameplay. A short low reading during an intro is therefore not, by itself, proof of a GPU performance regression. Ascension must not hide or fabricate the measured value; performance work should change code only after a reproducible gameplay bottleneck is identified.
 
 ## Versioning
 
@@ -101,5 +126,6 @@ For the current exploratory cadence:
 - Keep each milestone small enough that a failed playtest has an obvious rollback point.
 - Preserve upstream coding style and keep Ascension-specific constants centralized.
 - A new setting must either reuse the existing config system or justify why it cannot.
+- Do not mask an observed FPS value or a visual fault just to make a build look healthier; diagnose the cause first.
 
 The objective is not to make every screen say Ascension. The objective is to make every Ascension-owned surface look and behave deliberately.
