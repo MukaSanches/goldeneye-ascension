@@ -33,6 +33,7 @@
 #include "mixer.h"
 #include "crash.h"
 #include "thread_config.h"
+#include "ascension_defaults.h"
 
 /* Defined in the game (src/init.c). The port calls into the real game entry. */
 extern void mainproc(void *args);
@@ -121,6 +122,14 @@ int main(int argc, char **argv)
 
     /* 1. Platform + config + filesystem. */
     configLoad();
+
+    /* Keep every Ascension-owned UX surface, but start 0.0.2 from the
+     * upstream port's original visual/window baseline. This one-time
+     * migration runs before videoInit so FOV, MSAA, fullscreen and geometry
+     * all agree from the first rendered frame. Audio, input and saves are not
+     * touched, and later player changes are never overwritten. */
+    ascensionRestoreOriginalVisualDefaultsOnce();
+
     atexit(portAtExit);   /* persist config + window geometry on clean exit */
 
     /* 2. Load the ROM and map segments. */
