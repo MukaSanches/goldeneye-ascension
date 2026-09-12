@@ -260,12 +260,26 @@ const char *sysResolvePath(const char *path)
 
 /* --- Lifecycle ---------------------------------------------------------- */
 
+static volatile int g_restartRequested = 0;
+
 void sysExit(int code)
 {
     exit(code);
 }
 
 int sysRestart(void)
+{
+    g_restartRequested = 1;
+    sysLogPrintf(LOG_INFO, "restart: requested");
+    return 0;
+}
+
+int sysRestartRequested(void)
+{
+    return g_restartRequested != 0;
+}
+
+int sysRelaunch(void)
 {
 #if defined(PLATFORM_WINDOWS)
     /* Reuse the exact host command line so direct-level/debug launches restart
@@ -295,7 +309,7 @@ int sysRestart(void)
     CloseHandle(pi.hThread);
     CloseHandle(pi.hProcess);
     sysLogPrintf(LOG_INFO, "restart: relaunched process");
-    exit(0);
+    return 0;
 #else
     if (!g_argv || !g_argv[0]) {
         sysLogPrintf(LOG_ERROR, "restart: argv unavailable");
