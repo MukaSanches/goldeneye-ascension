@@ -20,6 +20,22 @@ rules there are non-negotiable.
 - [ ] If `CMakeLists.txt` `REGION_DEFS` changed, it still matches the N64
       `Makefile` per-region macro set exactly.
 
+## Provenance / third-party work
+
+<!-- Keep this explicit whenever the change was inspired by another port,
+     mod, patch, tool, forum post, issue, or codebase. -->
+
+- [ ] External implementations or research used by this PR are linked below,
+      including the exact project / commit / issue when practical.
+- [ ] Any reused or adapted code is license-compatible with this repository
+      and attribution / NOTICE requirements are satisfied.
+- [ ] No ROM, extracted game assets, proprietary SDK files, or other
+      redistributable game content are included.
+- [ ] If no third-party implementation or material was used, write `None`
+      below rather than leaving provenance ambiguous.
+
+Sources / provenance: <!-- URLs + short note, or None -->
+
 ## Verification
 
 <!-- What you actually ran. Delete lines that don't apply. -->
