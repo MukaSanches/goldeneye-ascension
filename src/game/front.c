@@ -41,7 +41,6 @@
 #ifdef PORT
 #include <stdio.h>
 #include "romdata.h" /* D178: briefing-segment byte-order fixup */
-#include "ascension_locale.h"
 #endif
 #include "chrai.h"
 #include "title.h"
@@ -2802,30 +2801,8 @@ Gfx *constructor_menu05_fileselect(Gfx *DL)
         selecthalfsize.f[0] = (mainfolderimages + IMG_SEL)->width * 0.5f;
         selecthalfsize.f[1] = (mainfolderimages + IMG_SEL)->height * 0.5f;
 
-#ifdef PORT
-        /* IMAGE_SELECTFILE contains baked English pixels. In PT-BR, replace
-         * only that label with live text; all other wallet art stays intact. */
-        if (ascensionLocaleGet() == 1) {
-            const char *selectlabel = ascensionLocaleText("SELECT FILE");
-            s32 selectw = 0;
-            s32 selecth = 0;
-            s32 selectx;
-            s32 selecty;
-
-            textMeasure(&selecth, &selectw, (char *)selectlabel,
-                        ptrFontBankGothicChars, ptrFontBankGothic, 0);
-            selectx = (s32)selectpos.f[0] - selectw / 2;
-            selecty = (s32)selectpos.f[1] - selecth / 2;
-
-            DL = textRender(DL, &selectx, &selecty, (char *)selectlabel,
-                            ptrFontBankGothicChars, ptrFontBankGothic,
-                            0xFFFFFFFFu, viGetX(), viGetY(), 0, 0);
-        } else
-#endif
-        {
-            texSelect(&DL, mainfolderimages + IMG_SEL, 4, 0, 0);
-            display_image_at_position(&DL, &selectpos.f[0], &selecthalfsize.f[0], (mainfolderimages + IMG_SEL)->width, (mainfolderimages + IMG_SEL)->height, 0, 0, 1, 0xFF, 0xFF, 0xFF, 0xFF, (s32) (mainfolderimages + IMG_SEL)->level > 0, 0);
-        }
+        texSelect(&DL, mainfolderimages + IMG_SEL, 4, 0, 0);
+        display_image_at_position(&DL, &selectpos.f[0], &selecthalfsize.f[0], (mainfolderimages + IMG_SEL)->width, (mainfolderimages + IMG_SEL)->height, 0, 0, 1, 0xFF, 0xFF, 0xFF, 0xFF, (s32) (mainfolderimages + IMG_SEL)->level > 0, 0);
     }
 
     if (folder_selected_for_deletion < 0)

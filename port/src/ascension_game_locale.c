@@ -1,93 +1,140 @@
 /*
- * Ascension native-game localization bridge.
+ * Ascension community-patch localization bridge.
  *
- * The original ROM remains the source of truth. When PT-BR is active,
- * selected English strings are replaced immediately before rendering.
- * Anything not translated falls back to the original ROM text.
+ * No GoldenEye game text is translated here. PT-BR strings are imported from
+ * the user's own community-patched ROM by tools_pc/import_ptbr_patch.py and
+ * written to data/ascension_ptbr.bin. English always falls back to the
+ * original, verified ROM loaded by the PC port.
  */
 
+#include <stdlib.h>
 #include <string.h>
 
 #include "ascension_locale.h"
+#include "fs.h"
+#include "system.h"
 
-struct AscensionGameString {
-    const char *en;
-    const char *pt_br;
-};
+#define PTBR_MAGIC "ASPTBR1"
+#define PTBR_MAGIC_LEN 7
+#define PTBR_HEADER_SIZE 12u
+#define PTBR_RECORD_SIZE 8u
 
-static const struct AscensionGameString kPtBrGame[] = {
-    /* Front-end navigation */
-    { "START\n",              "INICIAR\n" },
-    { "NEXT\n",               "PROXIMO\n" },
-    { "PREVIOUS\n",           "ANTERIOR\n" },
+static unsigned char *s_catalog;
+static unsigned int s_catalog_size;
+static unsigned int s_record_count;
+static int s_load_attempted;
 
-    /* Difficulty */
-    { "Agent",                "Agente" },
-    { "Secret Agent",         "Agente Secreto" },
-    { "00 Agent",             "Agente 00" },
-    { "Agent\n",              "Agente\n" },
-    { "Secret Agent\n",       "Agente Secreto\n" },
-    { "00 Agent\n",           "Agente 00\n" },
+static unsigned int read_le32(const unsigned char *p)
+{
+    return ((unsigned int)p[0]) |
+           ((unsigned int)p[1] << 8) |
+           ((unsigned int)p[2] << 16) |
+           ((unsigned int)p[3] << 24);
+}
 
-    /* File select */
-    { "Erase file?\n",        "Apagar arquivo?\n" },
-    { "cancel\n",             "cancelar\n" },
-    { "confirm\n",            "confirmar\n" },
-    { "Mission ",             "Missao " },
-    { "Copy\n",               "Copiar\n" },
-    { "Erase\n",              "Apagar\n" },
+static int catalog_string_valid(unsigned int off)
+{
+    unsigned int i;
 
-    /* Mode select */
-    { "SELECT MISSION\n",     "SELECIONAR MISSAO\n" },
-    { "MULTIPLAYER\n",        "MULTIJOGADOR\n" },
-    { "CHEAT OPTIONS\n",      "OPCOES DE TRAPACA\n" },
+    if (!s_catalog || off >= s_catalog_size)
+        return 0;
 
-    /* Common status */
-    { "Completed\n",          "Concluido\n" },
-    { "FAILED\n",             "FALHOU\n" },
-    { "PRIMARY OBJECTIVES:\n", "OBJETIVOS PRINCIPAIS:\n" },
-    { "BACKGROUND:\n",        "CONTEXTO:\n" },
-    { "M BRIEFING:\n",        "INSTRUCOES DE M:\n" },
-    { "Q BRANCH:\n",          "DIVISAO Q:\n" },
-    { "MONEYPENNY:\n",        "MONEYPENNY:\n" },
-    { "REPORT:\n",            "RELATORIO:\n" },
-    { "Mission status:\n",    "Status da missao:\n" },
-    { " ABORTED\n",           " ABORTADA\n" },
-    { " Completed\n",         " Concluida\n" },
-    { " FAILED\n",            " FALHOU\n" },
+    for (i = off; i < s_catalog_size; i++) {
+        if (s_catalog[i] == 0)
+            return 1;
+    }
 
-    /* Statistics */
-    { "STATISTICS:\n",        "ESTATISTICAS:\n" },
-    { "Time:\n",              "Tempo:\n" },
-    { "Accuracy:\n",          "Precisao:\n" },
-    { "Weapon of choice:\n",  "Arma preferida:\n" },
-    { "Shot total:\n",        "Total de disparos:\n" },
-    { "Head hits:\n",         "Acertos na cabeca:\n" },
-    { "Body hits:\n",         "Acertos no corpo:\n" },
-    { "Limb hits:\n",         "Acertos nos membros:\n" },
-    { "Others:\n",            "Outros:\n" },
-    { "Kill total:\n",        "Total de eliminacoes:\n" },
+    return 0;
+}
 
-    /* Generic options */
-    { "ON\n",                 "LIGADO\n" },
-    { "OFF\n",                "DESLIGADO\n" },
-};
+static void load_catalog_once(void)
+{
+    FSFile *f;
+    int32_t size;
+    unsigned int count;
 
-#define NUM_PTBR_GAME \
-    ((int)(sizeof(kPtBrGame) / sizeof(kPtBrGame[0])))
+    if (s_load_attempted)
+        return;
+    s_load_attempted = 1;
+
+    f = fsOpen(sysResolvePath("$S/ascension_ptbr.bin"), "rb");
+    if (!f) {
+        sysLogPrintf(LOG_WARNING,
+                     "PT-BR: data/ascension_ptbr.bin not found; using original English text");
+        return;
+    }
+
+    size = fsSize(f);
+    if (size < (int32_t)PTBR_HEADER_SIZE) {
+        fsClose(f);
+        sysLogPrintf(LOG_WARNING, "PT-BR: localization catalog is truncated");
+        return;
+    }
+
+    s_catalog = (unsigned char *)malloc((size_t)size);
+    if (!s_catalog || fsRead(f, s_catalog, size) != size) {
+        fsClose(f);
+        free(s_catalog);
+        s_catalog = NULL;
+        sysLogPrintf(LOG_WARNING, "PT-BR: failed to read localization catalog");
+        return;
+    }
+    fsClose(f);
+
+    s_catalog_size = (unsigned int)size;
+
+    if (memcmp(s_catalog, PTBR_MAGIC, PTBR_MAGIC_LEN) != 0 || s_catalog[7] != 0) {
+        free(s_catalog);
+        s_catalog = NULL;
+        s_catalog_size = 0;
+        sysLogPrintf(LOG_WARNING, "PT-BR: invalid localization catalog magic");
+        return;
+    }
+
+    count = read_le32(s_catalog + 8);
+    if (count == 0 || count > (s_catalog_size - PTBR_HEADER_SIZE) / PTBR_RECORD_SIZE) {
+        free(s_catalog);
+        s_catalog = NULL;
+        s_catalog_size = 0;
+        sysLogPrintf(LOG_WARNING, "PT-BR: invalid localization catalog index");
+        return;
+    }
+
+    s_record_count = count;
+    sysLogPrintf(LOG_INFO, "PT-BR: loaded community patch catalog (%u strings)", count);
+}
 
 const char *ascensionLocaleGameText(int slotID, const char *fallback)
 {
-    int i;
+    unsigned int lo;
+    unsigned int hi;
+    unsigned int key = (unsigned int)slotID;
 
-    (void)slotID;
-
-    if (fallback == NULL || ascensionLocaleGet() != 1)
+    if (!fallback || ascensionLocaleGet() != 1)
         return fallback;
 
-    for (i = 0; i < NUM_PTBR_GAME; i++) {
-        if (strcmp(fallback, kPtBrGame[i].en) == 0)
-            return kPtBrGame[i].pt_br;
+    load_catalog_once();
+    if (!s_catalog)
+        return fallback;
+
+    lo = 0;
+    hi = s_record_count;
+
+    while (lo < hi) {
+        unsigned int mid = lo + (hi - lo) / 2;
+        const unsigned char *rec = s_catalog + PTBR_HEADER_SIZE + mid * PTBR_RECORD_SIZE;
+        unsigned int rec_id = read_le32(rec);
+
+        if (rec_id < key) {
+            lo = mid + 1;
+        } else if (rec_id > key) {
+            hi = mid;
+        } else {
+            unsigned int off = read_le32(rec + 4);
+            if (catalog_string_valid(off))
+                return (const char *)(s_catalog + off);
+            return fallback;
+        }
     }
 
     return fallback;
