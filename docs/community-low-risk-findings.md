@@ -7,6 +7,9 @@ This note records small PC-quality improvements that are safe enough to consider
 - `jkdansereau/goldeneye-pc-port` — current native-port baseline and PC input/config architecture.
 - `SegfaultEvan/goldeneye-native` — native controls, launcher/configuration, crouch key and documented timing/widescreen limitations.
 - `martin2844/DesktopGoldenEye` — modern FPS profile, Hybrid/Classic profiles, predictable capture and conventional desktop shortcuts.
+- The GoldenEye Depot archive of Martin Hollis's 1995 design document — historical design intent, including the strong Virtua Cop influence.
+- Historical development/postmortem material — GoldenEye's analog aiming grew out of an uncertain N64-controller design process, while environmental shot feedback, hit reactions and mission objectives were deliberate parts of the game's identity.
+- Speedrun community documentation — control style 1.2 became a staple because it preserves analogue camera control with sharp digital movement; movement/control quirks can materially affect established play.
 - Recent GoldenEye community discussions — recurring interest in mouse/keyboard, controller support, centered reticle, FOV choices and retaining an authentic control option.
 
 ## Accepted low-risk principles
@@ -17,6 +20,17 @@ This note records small PC-quality improvements that are safe enough to consider
 4. **Desktop conventions are welcome when they do not affect simulation.** Example: Alt+Enter fullscreen.
 5. **Defaults stay conservative.** New tuning rows keep the port's current values unless the player changes them.
 6. **Every experimental integration is idempotent and anchor-validated until gameplay-tested.**
+
+## Authenticity guardrails from GoldenEye's history
+
+GoldenEye's unusual feel is not just an obsolete control scheme. Several traits are historically central to the game and should be treated as compatibility contracts unless an explicit Ascension option says otherwise:
+
+- **Preserve environmental feedback.** Bullet marks, impact reactions, ejected cases, destructible props and positional hit reactions are part of the deliberate shooting feedback loop; visual modernization must not suppress them for performance by default.
+- **Preserve objective-driven exploration.** Do not add navigation arrows, objective auto-completion or forced routes as defaults. The original levels were built as spaces first and objectives were layered into them later, which contributes to their exploratory/non-linear character.
+- **Preserve movement math in Classic.** Do not normalize diagonal/strafe movement or silently alter turning acceleration. Long-standing players and speedrunners depend on the original movement characteristics.
+- **Preserve aiming behavior in Classic.** Centered reticle, aim lock or FPS-style permanent crosshair must remain opt-in if implemented; the original R-button aiming model was a deliberate Virtua Cop-influenced mechanic.
+- **Preserve multiplayer quirks by default.** Character dimensions and other imperfect balance choices are part of the shipped game's behavior. Competitive rebalance belongs in an explicit ruleset, never the Classic baseline.
+- **Prefer presentation improvements over simulation changes.** Better configuration, capture behavior, screenshots, scaling, diagnostics and optional visual polish are safer than changing AI cadence, weapon cadence, timers or movement.
 
 ## Safe input/UI improvements currently exposed
 
@@ -65,4 +79,5 @@ A change can enter the safe pack only if all are true:
 - the change is reversible;
 - expected anchors/state are validated before modification;
 - Dam smoke test passes for movement, aim, fire, crouch, interaction, weapon cycling and F10;
-- multiplayer/controller paths are not silently removed.
+- multiplayer/controller paths are not silently removed;
+- original movement, aiming, objective and combat-feedback semantics remain unchanged unless the feature is explicitly opt-in.
