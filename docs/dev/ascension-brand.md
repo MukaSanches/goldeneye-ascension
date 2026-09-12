@@ -44,22 +44,43 @@ This keeps the identity lightweight, legally cleaner and consistent with the por
 
 1. Windows/SDL title: `Ascension // 0.0.2`.
 2. File-select footer: the same centralized signature, rendered through the existing port-layer overlay.
+3. File-select discovery affordance: `F10 // CONTROL` remains visible as a compact PC-native cue.
+4. First-use discovery prompt: `PRESS F10 // CONFIGURE` appears on file select until the player opens Ascension Control once. The acknowledgement is persisted in `ge007.ini` and the stronger prompt then retires permanently.
+5. F10 Ascension Control: carbon panel, restrained gold rule, gold focus marker, ivory active text and slate secondary text.
+6. Contextual help: the second header line explains the currently selected option in plain language instead of relying on unexplained PC graphics terminology.
+7. Previously hidden PC options `Display FPS` and `Skip intro` are exposed in the panel. Restart-only choices are labelled `RESTART` instead of being silently delayed.
 
-### Next safe surfaces
+Branding remains outside gameplay HUD surfaces in 0.0.2. The discovery cue lives on file select, where a new player is already making a setup decision, rather than interrupting a mission.
 
-1. F10 options header and version metadata.
-2. A restrained accent rule or small brand mark on port-owned menus only.
-3. Language selector and localized port-owned UI strings.
-4. Optional accessibility/readability settings.
+## Settings UX principles
 
-Branding should remain outside gameplay unless a future HUD redesign is explicitly being tested.
+Ascension Control follows a few rules deliberately:
+
+- discovery should happen inside the game, not in a README;
+- the stronger onboarding message appears only until it has done its job;
+- a small persistent entry-point cue remains for recall;
+- option changes that can apply live should do so immediately;
+- delayed changes must say so before the player leaves the menu;
+- technical labels stay concise, while the selected row provides a plain-language explanation;
+- settings remain keyboard- and mouse-operable;
+- configuration is saved through the existing `ge007.ini` system rather than a parallel store;
+- defaults remain conservative and preserve the port's established behaviour unless a change has been explicitly tested.
+
+The control panel should help a first-time player without slowing down an experienced one.
 
 ## Readability rules
 
 - Small functional text should target strong luminance contrast; a 4.5:1 ratio is a useful minimum reference for normal-size text.
-- Do not communicate a state by color alone; selection/focus should also have a shape, position or text cue.
+- Do not communicate a state by color alone; selection/focus uses both a darker row background and a gold position marker.
 - Avoid flashing, blinking or animated branding.
-- Keep the signature clear at the native low-resolution game viewport before judging it at modern upscaled resolutions.
+- Keep the signature and settings legible at the native low-resolution game viewport before judging them at modern upscaled resolutions.
+- Avoid long prose inside the panel. Context help should explain one concept in one short line.
+
+## Accessibility direction
+
+0.0.2 does not attempt to become a complete accessibility layer. It makes the controls already present easier to discover and understand. In particular, screen-shake intensity, FOV, mouse inversion and mouse-capture behaviour are surfaced with contextual explanations.
+
+Future work should add accessibility features only when they can be tested as real player-facing behaviour. Do not add decorative toggles that do not materially change the experience.
 
 ## Versioning
 
@@ -74,10 +95,11 @@ For the current exploratory cadence:
 ## Engineering guardrails
 
 - Prefer port-layer additions over invasive edits to original game logic.
-- Branding changes must be reversible and individually testable.
+- Branding and UX changes must be reversible and individually testable.
 - Do not modify ROM bytes for branding.
 - Do not alter save format, AI, physics, mission scripts or level data as a side effect of visual work.
-- Keep each visual milestone small enough that a failed playtest has an obvious rollback point.
+- Keep each milestone small enough that a failed playtest has an obvious rollback point.
 - Preserve upstream coding style and keep Ascension-specific constants centralized.
+- A new setting must either reuse the existing config system or justify why it cannot.
 
-The objective is not to make every screen say Ascension. The objective is to make every Ascension-owned surface look deliberate.
+The objective is not to make every screen say Ascension. The objective is to make every Ascension-owned surface look and behave deliberately.
