@@ -6,16 +6,17 @@ asset symbols depend on the original layout. A traditional IPS ROM hack can
 relocate compressed resources, so mapping the entire patched ROM (or copying
 fixed byte ranges from it) is unsafe.
 
-This tool instead scans the patched ROM for GoldenEye RZ streams, identifies
-translated language banks by their slot-table shape, and writes a compact
-runtime catalog to data/ascension_ptbr.bin. No ROM or community patch is
-committed to this repository.
+This tool scans the patched ROM for GoldenEye RZ streams, identifies translated
+language banks by globally aligning their slot-table structure and ROM order,
+and writes a compact runtime catalog to data/ascension_ptbr.bin. No ROM or
+community patch is committed to this repository.
 """
 
 from __future__ import annotations
 
 import binascii
 import csv
+import math
 import struct
 import sys
 import zlib
@@ -26,7 +27,6 @@ BASE_CRC32 = 0xB6330846
 MAGIC = b"ASPTBR1\0"
 MAX_DECOMPRESSED = 2 * 1024 * 1024
 
-# Exact bank order used by src/game/language.c. Bank 0 is unused.
 BANK_IDS = {
     "LameE": 1, "LarchE": 2, "LarkE": 3, "LashE": 4, "LaztE": 5,
     "LcatE": 6, "LcaveE": 7, "LarecE": 8, "LcradE": 9, "LcrypE": 10,
@@ -40,8 +40,6 @@ BANK_IDS = {
     "LoptionsE": 43, "LmiscE": 44,
 }
 
-# Banks that must map before we accept the catalog. Unused/debug-only banks are
-# deliberately not required.
 REQUIRED = {
     "LarchE", "LarkE", "LaztE", "LcaveE", "LarecE", "LcradE", "LcrypE",
     "LdamE", "LdepoE", "LdestE", "LjunE", "LlenE", "LpeteE", "LrunE",
@@ -111,9 +109,6 @@ def parse_language_bank(blob: bytes, offset: int) -> Bank | None:
         if end < 0:
             return None
         s = blob[v:end]
-        # Language strings can contain newlines/tabs. Japanese banks may use
-        # high bytes; keeping them valid here helps shape matching while the
-        # ASCII score later selects the translated E/PT-BR bank.
         total += len(s)
         printable += sum(c in (9, 10, 13) or 32 <= c <= 126 for c in s)
         nonzero += 1
@@ -189,44 +184,142 @@ def difference_ratio(a: Bank, b: Bank) -> float:
     return sum(x != y for x, y in pairs) / len(pairs)
 
 
+def structural_score(src: Bank, dst: Bank) -> float:
+    """Score a likely translation without requiring identical zero-slot layout.
+
+    Setup Editor/community patchers may rebuild a bank and represent empty slots
+    differently, so exact `(slot_count, zero_positions)` equality is too strict.
+    Slot count, punctuation/newline structure, readable text, similar expanded
+    size and ROM ordering are much more stable across translations.
+    """
+    ns = len(src.slots)
+    nd = len(dst.slots)
+    delta = abs(ns - nd)
+    if delta > 2 or dst.ascii_ratio < 0.68:
+        return -math.inf
+
+    score = 32.0 if delta == 0 else (17.0 if delta == 1 else 8.0)
+    score += dst.ascii_ratio * 8.0
+
+    # Translation changes words but normally preserves line structure and most
+    # punctuation. Only compare positions available in both banks.
+    pairs = [(a, b) for a, b in zip(src.slots, dst.slots) if a is not None and b is not None]
+    if pairs:
+        structural = 0.0
+        exact = 0
+        changed = 0
+        for a, b in pairs:
+            if a == b:
+                exact += 1
+            else:
+                changed += 1
+            structural += 1.0 if a.count(b"\n") == b.count(b"\n") else 0.0
+            structural += 0.5 if a.endswith(b"\n") == b.endswith(b"\n") else 0.0
+            structural += 0.5 if a.count(b":") == b.count(b":") else 0.0
+        score += (structural / (2.0 * len(pairs))) * 12.0
+        # A real translation should change something. Do not reward a stale
+        # byte-identical English copy, but allow proper names to remain equal.
+        diff = changed / len(pairs)
+        score += min(diff, 0.55) * 18.0
+        if diff < 0.02:
+            score -= 18.0
+
+    # Expanded sizes stay in the same ballpark even when Portuguese is longer.
+    size_ratio = len(dst.blob) / max(1, len(src.blob))
+    if 0.55 <= size_ratio <= 1.85:
+        score += 7.0 - abs(math.log(size_ratio)) * 3.0
+    else:
+        score -= 10.0
+
+    return score
+
+
 def choose_patch_banks(original: dict[str, Bank], candidates: list[Bank]) -> dict[str, Bank]:
-    by_shape: dict[tuple[int, tuple[int, ...]], list[Bank]] = {}
-    for c in candidates:
-        by_shape.setdefault(c.shape, []).append(c)
+    sources = sorted(original.items(), key=lambda kv: kv[1].offset)
+    if not sources:
+        return {}
 
-    used: set[int] = set()
+    # GoldenEye's text resources live in one compact ROM area. Community patch
+    # tools can move/repack that area, but not hundreds of kilobytes away. This
+    # eliminates unrelated RZ assets that happen to parse like a string table.
+    lo = min(b.offset for _, b in sources) - 0x60000
+    hi = max(b.offset for _, b in sources) + 0x60000
+    pool = sorted(
+        [c for c in candidates if lo <= c.offset <= hi and c.ascii_ratio >= 0.68],
+        key=lambda b: b.offset,
+    )
+    if not pool:
+        return {}
+
+    # Global monotonic alignment. The patch may rebuild every bank, so matching
+    # each bank independently is ambiguous. Their order in the resource segment
+    # is stable; dynamic programming uses that invariant and can skip J banks or
+    # unrelated false-positive RZ streams between translated E banks.
+    n = len(sources)
+    m = len(pool)
+    neg = -1.0e30
+    dp = [[neg] * (m + 1) for _ in range(n + 1)]
+    prev: list[list[tuple[int, int, bool] | None]] = [[None] * (m + 1) for _ in range(n + 1)]
+    for j in range(m + 1):
+        dp[0][j] = 0.0
+        if j:
+            prev[0][j] = (0, j - 1, False)
+
+    for i in range(1, n + 1):
+        src = sources[i - 1][1]
+        for j in range(1, m + 1):
+            # Skip candidate (J bank, duplicate, or false positive).
+            if dp[i][j - 1] > dp[i][j]:
+                dp[i][j] = dp[i][j - 1]
+                prev[i][j] = (i, j - 1, False)
+
+            s = structural_score(src, pool[j - 1])
+            if s != -math.inf and dp[i - 1][j - 1] > neg / 2:
+                v = dp[i - 1][j - 1] + s
+                if v > dp[i][j]:
+                    dp[i][j] = v
+                    prev[i][j] = (i - 1, j - 1, True)
+
+    # Backtrack best alignment. Missing sources are allowed here so diagnostics
+    # can report them; REQUIRED validation below still refuses unsafe catalogs.
+    best_j = max(range(m + 1), key=lambda j: dp[n][j])
+    i, j = n, best_j
+    matches: dict[int, Bank] = {}
+    while i > 0 and j >= 0:
+        p = prev[i][j]
+        if p is None:
+            break
+        pi, pj, matched = p
+        if matched:
+            matches[i - 1] = pool[j - 1]
+        i, j = pi, pj
+
     chosen: dict[str, Bank] = {}
-
-    # Process in original ROM order. Shape + high printable ratio + actual
-    # content difference reliably separates PT-BR E banks from their J twins
-    # and from stale/orphaned English copies left by old patching tools.
-    for name, src in sorted(original.items(), key=lambda kv: kv[1].offset):
-        pool = [c for c in by_shape.get(src.shape, []) if c.offset not in used]
-        if not pool:
+    shifts: list[int] = []
+    for idx, (name, src) in enumerate(sources):
+        dst = matches.get(idx)
+        if dst is None:
             continue
-
-        def score(c: Bank) -> tuple[float, float, float]:
-            diff = difference_ratio(src, c)
-            # Prefer a translated, ASCII-readable candidate. Distance is only
-            # a tie-breaker because Setup Editor is allowed to relocate files.
-            distance = abs(c.offset - src.offset)
-            return (diff, c.ascii_ratio, -distance)
-
-        best = max(pool, key=score)
-        diff = difference_ratio(src, best)
-
-        # E/PT-BR should be overwhelmingly readable ASCII (the 2012 patch does
-        # not use accented glyphs). Reject likely J/binary false positives.
-        if best.ascii_ratio < 0.70:
+        score = structural_score(src, dst)
+        diff = difference_ratio(src, dst)
+        if score < 28.0:
             continue
-
-        # For an unused/untranslated bank, an exact original match is fine;
-        # for real game banks we expect the community patch to differ.
         if name in REQUIRED and diff < 0.02:
             continue
+        chosen[name] = dst
+        shifts.append(dst.offset - src.offset)
 
-        chosen[name] = best
-        used.add(best.offset)
+    # Safety check: repacked text banks should move coherently. A single wildly
+    # displaced match is almost certainly a false positive; drop it instead of
+    # ever emitting a guessed translation.
+    if len(shifts) >= 5:
+        ordered = sorted(shifts)
+        median = ordered[len(ordered) // 2]
+        for name in list(chosen):
+            src = original[name]
+            dst = chosen[name]
+            if abs((dst.offset - src.offset) - median) > 0x30000:
+                del chosen[name]
 
     return chosen
 
