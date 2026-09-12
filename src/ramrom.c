@@ -1,6 +1,9 @@
 #include <ultra64.h>
 #include "ramrom.h"
 #include <macro.h>
+#ifdef PORT
+#include "ascension_ptbr_assets.h"
+#endif
 
 /**
  * @file ramrom.c
@@ -52,6 +55,17 @@ void romReceiveMesg(void)
  */
 void romCopy(void *target, void *source, u32 size)
 {
+#ifdef PORT
+    /*
+     * Ascension PT-BR keeps the verified original ROM mapped at the addresses
+     * expected by the PC port. When Portuguese is selected, only reads wholly
+     * inside the texture-image segment may be served from the validated
+     * community-patch sidecar. Missing/invalid sidecars return 0 here and the
+     * original synchronous PI path below remains completely unchanged.
+     */
+    if (ascensionPtbrImageCopy(target, source, size))
+        return;
+#endif
     doRomCopy(target, source, size);
     romReceiveMesg();
 }
