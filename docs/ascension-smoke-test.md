@@ -37,6 +37,21 @@ Run this after any input, F10, video, locale, or gameplay-facing change.
 - Trigger threshold returns to 23 cleanly.
 - Gamepad invert Y toggles correctly.
 
+## PC polish presets
+
+- F10 > DISPLAY > FOV preset shows ORIGINAL / MODERN / WIDE / CUSTOM.
+- ORIGINAL sets FOV scale to 100; MODERN sets 105; WIDE sets 115.
+- Choosing CUSTOM leaves the manually selected FOV value unchanged.
+- F10 > INPUT > Mouse feel shows CLASSIC / SMOOTH / MODERN / RAW / CUSTOM.
+- RAW enables raw mouse input and disables smoothing; SMOOTH applies smoothing without enabling raw input.
+- Choosing CUSTOM leaves manually tuned mouse options unchanged.
+- F10 > INPUT > Gamepad preset shows CLASSIC / MODERN / INVERT Y / CUSTOM.
+- CLASSIC restores deadzone 7000, trigger threshold 23 and normal look Y.
+- MODERN applies deadzone 5000, trigger threshold 18 and normal look Y.
+- INVERT Y keeps the modern deadzone/trigger values and only inverts the look Y axis.
+- Choosing CUSTOM leaves manually tuned gamepad options unchanged.
+- After a normal close/relaunch, the selected preset and resulting values persist.
+
 ## Display / quality
 
 - Alt+Enter toggles fullscreen once per key press.
