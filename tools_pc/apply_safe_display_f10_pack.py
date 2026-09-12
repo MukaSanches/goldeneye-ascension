@@ -3,6 +3,9 @@
 
 The patch only surfaces existing port options plus an optional clean window-title
 toggle. No ROM, PT-BR, physics, AI or save-format changes.
+
+All target contents are prepared and validated before either file is written, so
+an anchor mismatch cannot leave a partially applied two-file patch.
 """
 from pathlib import Path
 import sys
@@ -23,8 +26,7 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
-def patch_video() -> None:
-    original = VIDEO.read_text(encoding="utf-8")
+def patched_video(original: str) -> str:
     text = original
     text = replace_once(
         text,
@@ -48,12 +50,10 @@ def patch_video() -> None:
         '                snprintf(title, sizeof(title), "%s", ASCENSION_WINDOW_TITLE);\n',
         "clean/FPS window title",
     )
-    if text != original:
-        VIDEO.write_text(text, encoding="utf-8")
+    return text
 
 
-def patch_overlay() -> None:
-    original = OVERLAY.read_text(encoding="utf-8")
+def patched_overlay(original: str) -> str:
     text = original
 
     display_anchor = '''    { .key="Video.TextureFilter",  .label="Texture filter",\n      .help="Texture sharpness and smoothing.", .category=CAT_DISPLAY,\n      .kind=ROW_ENUM, .step=1, .names=kTexFilter, .resetValue=1 },\n'''
@@ -67,15 +67,24 @@ def patch_overlay() -> None:
     input_anchor = '''    /* INPUT */\n    { .key="Input.MouseAimSpeed",  .label="Mouse aim speed",\n'''
     input_replacement = '''    /* INPUT */\n    { .key="Input.MouseEnabled", .label="Mouse input",\n      .help="Enable or disable mouse input without changing keyboard/gamepad.", .category=CAT_INPUT,\n      .kind=ROW_TOGGLE, .step=1, .names=kOnOff, .resetValue=1 },\n\n    { .key="Input.MouseAimSpeed",  .label="Mouse aim speed",\n'''
     text = replace_once(text, input_anchor, input_replacement, "mouse enabled row")
-
-    if text != original:
-        OVERLAY.write_text(text, encoding="utf-8")
+    return text
 
 
 def main() -> int:
-    patch_video()
-    patch_overlay()
-    print("SUCCESS: safe display/input compatibility pack applied.")
+    video_original = VIDEO.read_text(encoding="utf-8")
+    overlay_original = OVERLAY.read_text(encoding="utf-8")
+
+    # Validate and prepare both files first. If any anchor fails, replace_once
+    # exits before either target is written.
+    video_text = patched_video(video_original)
+    overlay_text = patched_overlay(overlay_original)
+
+    if video_text != video_original:
+        VIDEO.write_text(video_text, encoding="utf-8")
+    if overlay_text != overlay_original:
+        OVERLAY.write_text(overlay_text, encoding="utf-8")
+
+    print("SUCCESS: safe display/input compatibility pack applied atomically.")
     return 0
 
 
