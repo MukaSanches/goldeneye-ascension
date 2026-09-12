@@ -1,9 +1,9 @@
 /*
- * Ascension 0.0.3 localization layer.
+ * Ascension localization layer.
  *
- * Scope is intentionally narrow: only strings already owned by Ascension's
- * PC overlay are translated. GoldenEye ROM text, mission text and assets are
- * never modified here.
+ * English remains the original interface language. PT-BR strings are UTF-8;
+ * the PC text bridge renders Brazilian Portuguese accents without modifying
+ * the original ROM font assets.
  */
 
 #include <string.h>
@@ -24,12 +24,6 @@ struct LocaleEntry {
 static int s_language;
 static int s_eventWatchInstalled;
 
-/*
- * Keep PT-BR strings ASCII-safe for now. The original Gothic renderer comes
- * from the N64 text path and its UTF-8/extended-glyph behavior is not a stable
- * contract across every ROM region. Correct accents can be enabled later once
- * that coverage is verified rather than risking missing glyphs in 0.0.3.
- */
 static const struct LocaleEntry kPtBr[] = {
     /* File-select discovery */
     { "F10 CONTROL", "F10 CONTROLE" },
@@ -37,27 +31,27 @@ static const struct LocaleEntry kPtBr[] = {
     { "SELECT FILE", "SELECIONAR ARQUIVO" },
 
     /* Categories */
-    { "DISPLAY", "VIDEO" },
+    { "DISPLAY", "VÍDEO" },
     { "INPUT", "CONTROLES" },
     { "GAMEPLAY", "JOGO" },
 
     /* Display rows */
     { "Fullscreen", "Tela cheia" },
     { "Windowed or fullscreen display.", "Alterna entre janela e tela cheia." },
-    { "Resolution", "Resolucao" },
+    { "Resolution", "Resolução" },
     { "Window size when not fullscreen.", "Tamanho da janela fora da tela cheia." },
     { "Reduces tearing. Applies now.", "Reduz cortes na imagem. Aplica na hora." },
     { "Frame cap", "Limite de FPS" },
     { "OFF or 30/60/90/120 FPS.", "DESLIGADO ou 30/60/90/120 FPS." },
     { "Display FPS", "Mostrar FPS" },
     { "Show a small FPS counter.", "Mostra um pequeno contador de FPS." },
-    { "Smooth edges. Restart required.", "Suaviza serrilhados. Exige reinicio." },
+    { "Smooth edges. Restart required.", "Suaviza serrilhados. Exige reinício." },
     { "Texture filter", "Filtro de textura" },
-    { "Texture sharpness and smoothing.", "Nitidez e suavizacao das texturas." },
-    { "Anisotropic", "Anisotropico" },
-    { "Sharper distant textures. 1-16.", "Texturas distantes mais nitidas. 1-16." },
+    { "Texture sharpness and smoothing.", "Nitidez e suavização das texturas." },
+    { "Anisotropic", "Anisotrópico" },
+    { "Sharper distant textures. 1-16.", "Texturas distantes mais nítidas. 1-16." },
     { "FOV scale %", "Escala FOV %" },
-    { "View width. Safe range 70-120.", "Largura da visao. Faixa segura 70-120." },
+    { "View width. Safe range 70-120.", "Largura da visão. Faixa segura 70-120." },
 
     /* Input rows */
     { "Mouse aim speed", "Velocidade ao mirar" },
@@ -73,21 +67,21 @@ static const struct LocaleEntry kPtBr[] = {
     { "Language", "Idioma" },
     { "Interface and in-game text language.", "Idioma da interface e dos textos do jogo." },
     { "Screen shake", "Tremor da tela" },
-    { "Camera shake. Safe range 0-3.", "Tremor da camera. Faixa segura 0-3." },
-    { "Skip intro", "Pular introducao" },
-    { "Next launch starts at file select.", "Proximo inicio vai direto aos arquivos." },
-    { "Reset PC settings", "Redefinir opcoes do PC" },
-    { "Restore PC defaults; saves stay safe.", "Restaura padroes do PC; saves ficam seguros." },
+    { "Camera shake. Safe range 0-3.", "Tremor da câmera. Faixa segura 0-3." },
+    { "Skip intro", "Pular introdução" },
+    { "Next launch starts at file select.", "Próximo início vai direto aos arquivos." },
+    { "Reset PC settings", "Redefinir opções do PC" },
+    { "Restore PC defaults; saves stay safe.", "Restaura padrões do PC; saves ficam seguros." },
     { "Restart game", "Reiniciar jogo" },
-    { "Save settings and relaunch.", "Salva opcoes e reinicia o jogo." },
-    { "PC settings", "Opcoes do PC" },
+    { "Save settings and relaunch.", "Salva opções e reinicia o jogo." },
+    { "PC settings", "Opções do PC" },
 
     /* Values */
-    { "ENGLISH", "INGLES" },
-    { "PORTUGUESE (BRAZIL)", "PORTUGUES (BRASIL)" },
+    { "ENGLISH", "INGLÊS" },
+    { "PORTUGUESE (BRAZIL)", "PORTUGUÊS (BRASIL)" },
     { "OFF", "DESLIGADO" },
     { "ON", "LIGADO" },
-    { "NEAREST", "PROXIMO" },
+    { "NEAREST", "MAIS PRÓXIMO" },
     { "3-POINT", "3-PONTOS" },
     { "ALWAYS GRAB", "SEMPRE PRESO" },
     { "CLICK-TO-LOCK", "CLIQUE P/ TRAVAR" },
@@ -97,9 +91,9 @@ static const struct LocaleEntry kPtBr[] = {
     { "FULLSCREEN", "TELA CHEIA" },
 
     /* Feedback */
-    { "RESTART REQUIRED", "EXIGE REINICIO" },
+    { "RESTART REQUIRED", "EXIGE REINÍCIO" },
     { "APPLIED", "APLICADO" },
-    { "DEFAULTS RESTORED", "PADROES RESTAURADOS" },
+    { "DEFAULTS RESTORED", "PADRÕES RESTAURADOS" },
     { "PRESS AGAIN TO RESET", "REPITA P/ REDEFINIR" },
     { "PRESS AGAIN TO RESTART", "REPITA P/ REINICIAR" },
     { "RESTARTING", "REINICIANDO" },
