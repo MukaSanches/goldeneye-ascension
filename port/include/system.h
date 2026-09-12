@@ -73,10 +73,15 @@ void sysCpuRelax(void);
 
 void sysExit(int code);
 
-/* Relaunch this executable with the same command line, then terminate the
- * current process. Returns -1 only when the host could not start the new
- * process, in which case the current game keeps running. */
+/* Request a restart. The host thread performs the relaunch after the audio
+ * device has been released, avoiding a race where the new process starts
+ * before the previous process lets go of SDL audio. */
 int sysRestart(void);
+int sysRestartRequested(void);
+
+/* Launch a new copy with the same command line. Called only by the host thread
+ * after restart-sensitive resources have been released. */
+int sysRelaunch(void);
 
 /*
  * Start the cooperative thread kernel (green threads + vsync tick). Call
