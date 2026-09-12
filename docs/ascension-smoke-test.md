@@ -37,17 +37,37 @@ Run this after any input, F10, video, locale, or gameplay-facing change.
 - Trigger threshold returns to 23 cleanly.
 - Gamepad invert Y toggles correctly.
 
+## Display / quality
+
+- Alt+Enter toggles fullscreen once per key press.
+- F11 toggles fullscreen once per key press.
+- F10 > DISPLAY > Quality preset: Performance applies 1x MSAA, bilinear filtering, and 2x anisotropic filtering.
+- F10 > DISPLAY > Quality preset: Balanced applies 2x MSAA, 3-point filtering, and 4x anisotropic filtering.
+- F10 > DISPLAY > Quality preset: Quality applies 4x MSAA, 3-point filtering, and 8x anisotropic filtering.
+- Applying any quality preset reports that MSAA requires a restart.
+- After restart, the selected preset values persist.
+
 ## Front end / overlay
 
 - F10 rows scroll at low resolution.
 - Mouse hover/click still selects rows.
 - Left/right arrows still change values.
+- Rows that require a restart show an explicit restart-required hint.
+- F10 > GAMEPLAY > Ascension front-end brand can hide/show the Ascension signature and F10 hint on file select.
 - Closing F10 returns control to the game.
 - Settings survive a normal close/relaunch.
+
+## Screenshot UX
+
+- F12 captures exactly one screenshot per key press.
+- Screenshot is written under `./screenshots/`.
+- Filename uses the `ascension_YYYYMMDD_HHMMSS_NNN.ppm` pattern.
+- Capturing multiple screenshots in one session does not overwrite an earlier capture.
 
 ## Safety regression
 
 - PT-BR catalog/files are unchanged.
 - ROM files are unchanged.
 - Save data loads normally.
+- Original mission behavior remains unchanged when Ascension options are left at their defaults.
 - Dam can be played for at least two minutes without stuck input or crashes.
