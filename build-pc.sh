@@ -24,8 +24,24 @@ set -euo pipefail
 ROMID="${1:-ntsc-final}"
 BUILD_DIR="${BUILD_DIR:-build-pc}"
 
+# Ascension PT-BR uses GNU ld's symbol wrapping so the original GoldenEye text
+# renderer remains byte-for-byte intact while the PC build gains UTF-8-aware
+# rendering/measurement/wrapping. MinGW and GNU/Linux ld support --wrap;
+# macOS keeps the original path until an equivalent interpose layer is added.
+EXTRA_LINK_FLAGS="${CMAKE_EXE_LINKER_FLAGS:-}"
+case "$(uname -s 2>/dev/null || true)" in
+  MINGW*|MSYS*|CYGWIN*|Linux*)
+    EXTRA_LINK_FLAGS+=" -Wl,--wrap=textRender"
+    EXTRA_LINK_FLAGS+=" -Wl,--wrap=textRenderOutlined"
+    EXTRA_LINK_FLAGS+=" -Wl,--wrap=textMeasure"
+    EXTRA_LINK_FLAGS+=" -Wl,--wrap=textWrap"
+    ;;
+esac
+
 echo "==> Configuring PC port (ROMID=${ROMID})"
-cmake -S . -B "${BUILD_DIR}" -DROMID="${ROMID}"
+cmake -S . -B "${BUILD_DIR}" \
+  -DROMID="${ROMID}" \
+  -DCMAKE_EXE_LINKER_FLAGS="${EXTRA_LINK_FLAGS}"
 
 echo "==> Building"
 cmake --build "${BUILD_DIR}" -j
