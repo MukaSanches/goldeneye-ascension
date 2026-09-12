@@ -133,10 +133,31 @@ def apply_ips(source: bytes, patch: bytes) -> bytes:
         elif final_size > len(out):
             out.extend(b"\x00" * (final_size - len(out)))
     elif remaining not in (0,):
-        # Ignore harmless trailing bytes used by some old patchers, but report.
         print(f"Aviso: IPS contem {remaining} byte(s) extras apos EOF.")
 
     return bytes(out)
+
+
+def preserve_existing_output(out_path: Path, existing: bytes) -> None:
+    """Never destroy an existing ROM silently."""
+    if crc32(existing) == EXPECTED_BASE_CRC32:
+        backup = out_path.with_name("ge007.ntsc-final.original.z64")
+    else:
+        backup = out_path.with_name("ge007.ntsc-final.previous.z64")
+
+    if backup.exists():
+        if backup.read_bytes() == existing:
+            return
+        i = 2
+        while True:
+            candidate = backup.with_name(f"{backup.stem}.{i}{backup.suffix}")
+            if not candidate.exists():
+                backup = candidate
+                break
+            i += 1
+
+    backup.write_bytes(existing)
+    print(f"Backup preservado: {backup.name}")
 
 
 def main() -> int:
@@ -166,9 +187,10 @@ def main() -> int:
             print(f"Saida: {out_path.relative_to(root)}")
             print(f"CRC32 PT-BR: {crc32(existing):08X}")
             return 0
+        preserve_existing_output(out_path, existing)
 
     out_path.write_bytes(translated)
-    print("\nSUCESSO: ROM PT-BR gerada sem alterar a ROM original.")
+    print("\nSUCESSO: ROM PT-BR gerada sem perder a ROM anterior.")
     print(f"Saida: {out_path.relative_to(root)}")
     print(f"Tamanho: {len(translated)} bytes")
     print(f"CRC32 PT-BR: {crc32(translated):08X}")
