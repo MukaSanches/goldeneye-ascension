@@ -7,12 +7,16 @@
  * original, verified ROM loaded by the PC port.
  */
 
-#include <stdlib.h>
 #include <string.h>
 
 #include "ascension_locale.h"
 #include "fs.h"
 #include "system.h"
+
+/* The C include path intentionally exposes the N64 libc stubs. Declare the
+ * host allocation entry points explicitly, as other port TUs do. */
+extern void *malloc(size_t size);
+extern void free(void *ptr);
 
 #define PTBR_MAGIC "ASPTBR1"
 #define PTBR_MAGIC_LEN 7
