@@ -19,8 +19,8 @@ python tools_pc/import_ptbr_patch.py
 echo "[3/6] Auditando cobertura estrutural dos textos..."
 python tools_pc/ptbr_audit.py --strict
 
-echo "[4/6] Importando graficos traduzidos sem alterar o layout da ROM..."
-python tools_pc/import_ptbr_graphics.py
+echo "[4/6] Importando graficos traduzidos com manifesto/padding validados..."
+python tools_pc/import_ptbr_graphics_safe.py
 
 echo "[5/6] Compilando Ascension..."
 if [[ $clean -eq 1 ]]; then
