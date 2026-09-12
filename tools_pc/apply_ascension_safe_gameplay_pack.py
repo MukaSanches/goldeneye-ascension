@@ -5,7 +5,8 @@ Order:
   1. Modern Controls v1 input bridge
   2. In-game F10 control preset selector
   3. Existing-input tuning rows in F10
-  4. Conventional Alt+Enter fullscreen shortcut
+  4. Existing display/input compatibility rows in F10
+  5. Conventional Alt+Enter fullscreen shortcut
 
 Every child patcher is idempotent and anchor-validated. This wrapper aborts on
 the first failure, making local test setup reproducible and easy to audit.
@@ -19,6 +20,7 @@ SCRIPTS = [
     ROOT / "tools_pc" / "apply_modern_controls_test.py",
     ROOT / "tools_pc" / "apply_control_selector_test.py",
     ROOT / "tools_pc" / "apply_safe_input_f10_pack.py",
+    ROOT / "tools_pc" / "apply_safe_display_f10_pack.py",
     ROOT / "tools_pc" / "apply_alt_enter_fullscreen.py",
 ]
 
