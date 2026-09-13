@@ -1,0 +1,64 @@
+{
+  "id": "06",
+  "slug": "campanha_objetivos_dificuldade",
+  "title": "Campanha, objetivos e dificuldade",
+  "category": "Gameplay / Design",
+  "level": "Intermediario",
+  "audience": "Jogadores que querem dominar a campanha",
+  "summary": "Por que Agent, Secret Agent e 00 Agent mudam mais que resistencia: objetivos adicionais, rotas, risco e conhecimento acumulado.",
+  "objectives": [
+    "Comparar os tres niveis classicos de dificuldade",
+    "Planejar missoes por objetivos",
+    "Reduzir falhas por desconhecimento de condicoes",
+    "Entender dificuldade como camada de design"
+  ],
+  "modules": [
+    {
+      "title": "Dificuldade como conteudo",
+      "bullets": [
+        "Novos objetivos aumentam a carga de decisao",
+        "Conhecimento da fase passa a valer mais",
+        "Tempo, municao e dano criam margens menores"
+      ]
+    },
+    {
+      "title": "Objetivos dependentes",
+      "bullets": [
+        "Algumas tarefas exigem ordem",
+        "NPCs importantes podem ser condicoes de sucesso",
+        "Um erro cedo pode tornar a missao impossivel"
+      ]
+    },
+    {
+      "title": "Planejamento",
+      "bullets": [
+        "Divida a fase em setores",
+        "Associe cada setor a um objetivo",
+        "Defina ponto de retorno antes de sair da area"
+      ]
+    },
+    {
+      "title": "Aprendizagem",
+      "bullets": [
+        "Falha deve gerar informacao",
+        "Repetir sem mudar estrategia nao e treino",
+        "Registre o motivo real da derrota"
+      ]
+    }
+  ],
+  "lab": [
+    "Escolha uma fase e crie tabela objetivo -> local -> risco -> verificacao",
+    "Complete no nivel mais baixo e anote o que muda no seguinte",
+    "Identifique uma falha evitavel e escreva um procedimento para nao repeti-la"
+  ],
+  "quiz": [
+    "Por que 00 Agent nao e apenas mais vida para inimigos?",
+    "O que e um objetivo dependente?",
+    "Como transformar uma tentativa fracassada em dado util?"
+  ],
+  "references": [
+    "GoldenEye 007 - objetivos por dificuldade",
+    "Ascension - filosofia de validacao",
+    "Notas de playtest"
+  ]
+}
