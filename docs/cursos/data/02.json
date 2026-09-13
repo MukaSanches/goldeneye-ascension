@@ -1,0 +1,64 @@
+{
+  "id": "02",
+  "slug": "bond_e_os_anos_90",
+  "title": "James Bond e a transicao para os anos 1990",
+  "category": "Cinema / Historia",
+  "level": "Fundamentos",
+  "audience": "Leitores interessados em contexto cultural e franquias",
+  "summary": "Como a franquia reposicionou seu heroi depois da Guerra Fria, conciliando tradicao, novas ameacas, tecnologia e um publico diferente.",
+  "objectives": [
+    "Entender a mudanca geopolitica do periodo",
+    "Identificar o que GoldenEye preserva da formula Bond",
+    "Distinguir atualizacao de descaracterizacao",
+    "Relacionar contexto cultural e decisoes narrativas"
+  ],
+  "modules": [
+    {
+      "title": "O problema de continuar",
+      "bullets": [
+        "Mudanca de contexto apos a Guerra Fria",
+        "Competicao com o cinema de acao dos anos 1990",
+        "Necessidade de tornar Bond relevante sem apagar a tradicao"
+      ]
+    },
+    {
+      "title": "O que permanece",
+      "bullets": [
+        "Missao, briefing, gadget, deslocamento internacional",
+        "Humor seco e competencia profissional",
+        "M como contraponto institucional"
+      ]
+    },
+    {
+      "title": "O que muda",
+      "bullets": [
+        "Tecnologia de informacao ganha peso",
+        "Personagens femininas com funcoes dramaticas e tecnicas mais fortes",
+        "O proprio passado britanico entra no conflito"
+      ]
+    },
+    {
+      "title": "Legado para o jogo",
+      "bullets": [
+        "Uma estetica contemporanea facilitou a adaptacao ao videogame",
+        "Tecnologia e instalacoes viram sistemas e objetivos",
+        "A tensao entre classico e moderno reaparece no Ascension"
+      ]
+    }
+  ],
+  "lab": [
+    "Monte uma linha do tempo 1989-1997 com cinco eventos culturais ou tecnologicos",
+    "Liste tres elementos Bond que poderiam mudar e tres que deveriam permanecer",
+    "Escreva um briefing de missao que pareca anos 1990 sem usar referencias modernas"
+  ],
+  "quiz": [
+    "Que mudanca geopolitica afetou diretamente o contexto de Bond?",
+    "Qual a diferenca entre atualizar e substituir a identidade de uma franquia?",
+    "Por que tecnologia funciona tao bem como elo entre filme e jogo?"
+  ],
+  "references": [
+    "007.com - arquivo oficial de filmes",
+    "British Film Institute - estudos sobre cinema britanico",
+    "Ascension Learning Series - notas editoriais"
+  ]
+}
