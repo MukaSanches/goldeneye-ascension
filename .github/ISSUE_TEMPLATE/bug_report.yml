@@ -49,6 +49,18 @@ body:
     validations:
       required: true
   - type: dropdown
+    id: reproduces_classic
+    attributes:
+      label: Does the issue also reproduce in Classic?
+      description: For gameplay or input issues, switch to Classic and retry when practical. This helps separate Ascension regressions from base-port behavior.
+      options:
+        - Yes
+        - No
+        - Not tested
+        - Not applicable
+    validations:
+      required: true
+  - type: dropdown
     id: stage
     attributes:
       label: Which stage fails?
