@@ -1,0 +1,64 @@
+{
+  "id": "11",
+  "slug": "bastidores_rare",
+  "title": "Bastidores da Rare: equipe, metodo e experimentacao",
+  "category": "Historia do desenvolvimento",
+  "level": "Intermediario",
+  "audience": "Desenvolvedores e pesquisadores de producao",
+  "summary": "O valor de uma equipe pequena, iteracao, prototipagem e decisoes tardias que mudaram o produto final, com cuidado para separar fatos documentados de lendas repetidas.",
+  "objectives": [
+    "Entender a cultura de experimentacao",
+    "Identificar riscos de desenvolvimento",
+    "Distinguir evidencia primaria de memoria posterior",
+    "Extrair principios aplicaveis ao Ascension"
+  ],
+  "modules": [
+    {
+      "title": "Equipe",
+      "bullets": [
+        "Responsabilidades amplas por pessoa",
+        "Comunicacao curta favorece iteracao",
+        "Pouca experiencia previa tambem aumenta risco"
+      ]
+    },
+    {
+      "title": "Prototipagem",
+      "bullets": [
+        "Sistemas amadurecem por uso, nao apenas por documento",
+        "Testes internos revelam o que diverte",
+        "Recursos podem ganhar importancia tarde no ciclo"
+      ]
+    },
+    {
+      "title": "Decisoes tardias",
+      "bullets": [
+        "Multiplayer e um caso classico de alto impacto",
+        "Mudancas tardias exigem arquitetura flexivel",
+        "Sucesso posterior nao apaga o risco original"
+      ]
+    },
+    {
+      "title": "Licao para projetos atuais",
+      "bullets": [
+        "Experimente em branches isoladas",
+        "Integre apenas o que pode ser explicado e testado",
+        "Mantenha historico para que descoberta nao vire folclore"
+      ]
+    }
+  ],
+  "lab": [
+    "Escolha uma feature e descreva o menor prototipo capaz de testa-la",
+    "Crie uma tabela hipotese -> teste -> criterio -> decisao",
+    "Liste uma historia famosa sobre GoldenEye e procure a fonte primaria antes de repeti-la"
+  ],
+  "quiz": [
+    "Qual a vantagem e o risco de responsabilidades amplas?",
+    "Por que uma feature tardia precisa de criterio forte?",
+    "Como o Git ajuda a preservar conhecimento de projeto?"
+  ],
+  "references": [
+    "Game Developer - entrevistas com Martin Hollis e equipe",
+    "GDC Vault - palestras retrospectivas",
+    "Rare - material historico do estudio"
+  ]
+}
