@@ -37,7 +37,7 @@ def main() -> int:
     )
 
     anchor = '''    /* INPUT */\n    { .key="Input.MouseAimSpeed",  .label="Mouse aim speed",\n'''
-    replacement = '''    /* INPUT */\n    { .key="Input.ControlPreset", .label="Control preset",\n      .help="Classic, Hybrid or Modern PC controls.", .category=CAT_INPUT,\n      .kind=ROW_ENUM, .step=1, .names=kControlPreset, .resetValue=2 },\n\n    { .key="Input.DedicatedCrouch", .label="Dedicated crouch",\n      .help="Enable the Ascension crouch shortcut for Hybrid/Modern.", .category=CAT_INPUT,\n      .kind=ROW_TOGGLE, .step=1, .names=kOnOff, .resetValue=1 },\n\n    { .key="Input.MouseAimSpeed",  .label="Mouse aim speed",\n'''
+    replacement = '''    /* INPUT */\n    { .key="Input.ControlPreset", .label="Control preset",\n      .help="Classic, Hybrid or Modern PC controls.", .category=CAT_INPUT,\n      .kind=ROW_ENUM, .step=1, .names=kControlPreset, .resetValue=0 },\n\n    { .key="Input.DedicatedCrouch", .label="Dedicated crouch",\n      .help="Enable the Ascension crouch shortcut for Hybrid/Modern.", .category=CAT_INPUT,\n      .kind=ROW_TOGGLE, .step=1, .names=kOnOff, .resetValue=1 },\n\n    { .key="Input.MouseAimSpeed",  .label="Mouse aim speed",\n'''
     text = replace_once(text, anchor, replacement, "F10 control rows")
 
     if text == original:

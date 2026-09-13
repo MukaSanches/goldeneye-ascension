@@ -8,7 +8,7 @@
 
 /* 0 = Classic, 1 = Hybrid, 2 = Modern. The preset only changes Ascension's
  * PC-side interpretation; original GoldenEye control logic remains intact. */
-static int s_controlPreset = 2;
+static int s_controlPreset = 0;
 static int s_dedicatedCrouch = 1;
 
 PD_CONSTRUCTOR static void ascensionControlsConfigInit(void)
