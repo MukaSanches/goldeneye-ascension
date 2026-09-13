@@ -42,6 +42,7 @@ Expected results:
 - An already-saved HYBRID or MODERN selection remains selected after relaunch; the new default must not overwrite existing user configuration.
 - F10 > INPUT > Dedicated crouch shows OFF / ON.
 - Modern: C / Left Ctrl / Right Ctrl crouch; Left Ctrl must not fire simultaneously.
+- Releasing each Modern dedicated-crouch key returns input cleanly without leaving aim or crouch stuck.
 - Hybrid: C crouches; legacy Left Ctrl fire remains available.
 - Classic: dedicated crouch shortcut is disabled.
 - Weapon-specific crouch restrictions still behave like GoldenEye.
