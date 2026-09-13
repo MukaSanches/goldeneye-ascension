@@ -1,0 +1,64 @@
+{
+  "id": "10",
+  "slug": "tecnologia_n64_design",
+  "title": "Nintendo 64, controle e restricoes que viraram design",
+  "category": "Tecnologia / Design",
+  "level": "Intermediario",
+  "audience": "Tecnicos e curiosos sobre hardware historico",
+  "summary": "Leitura tecnica acessivel de como memoria, renderizacao, resolucao, controle e taxa de quadros condicionaram decisoes de design.",
+  "objectives": [
+    "Entender restricao como parte do design",
+    "Relacionar controle e camera",
+    "Reconhecer compromissos de renderizacao",
+    "Evitar julgar 1997 por padroes isolados de hoje"
+  ],
+  "modules": [
+    {
+      "title": "Hardware e memoria",
+      "bullets": [
+        "Orcamento limitado exige reutilizacao",
+        "Geometria e textura competem por recursos",
+        "Streaming e carregamento moldam a estrutura dos niveis"
+      ]
+    },
+    {
+      "title": "Renderizacao",
+      "bullets": [
+        "Distancia, fog e oclusao ajudam performance",
+        "Modelos simples priorizam leitura em baixa resolucao",
+        "Efeitos devem caber em um pipeline restrito"
+      ]
+    },
+    {
+      "title": "Controle",
+      "bullets": [
+        "Um analogico exige esquemas diferentes do mouse",
+        "Mira e movimento foram organizados em presets",
+        "Ergonomia do controle influencia velocidade dos encontros"
+      ]
+    },
+    {
+      "title": "Port moderno",
+      "bullets": [
+        "Remover limite tecnico nao autoriza mudar design automaticamente",
+        "Classic e Enhanced precisam de fronteira clara",
+        "Testes devem comparar comportamento, nao apenas FPS"
+      ]
+    }
+  ],
+  "lab": [
+    "Escolha uma limitacao tecnica e liste tres decisoes de design que ela induz",
+    "Compare dois esquemas de controle e descreva trade-offs",
+    "Proponha uma melhoria moderna com opcao de preservar comportamento classico"
+  ],
+  "quiz": [
+    "Por que aumentar resolucao pode revelar problemas que antes eram invisiveis?",
+    "Como o controle afeta level design?",
+    "Qual a funcao de um modo Classic?"
+  ],
+  "references": [
+    "Nintendo 64 - documentacao tecnica historica",
+    "GoldenEye decompilation / PC port - codigo e notas",
+    "Ascension - pilar Classic / Enhanced"
+  ]
+}
