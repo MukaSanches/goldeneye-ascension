@@ -113,6 +113,9 @@ jobs:
       - name: Byte-compile Python tooling
         run: python3 -m compileall -q scripts tools_pc
 
+      - name: Validate Ascension patcher manifest
+        run: python3 tools_pc/apply_ascension_safe_gameplay_pack.py --preflight-only
+
       - name: Validate Ascension test runner shell syntax
         run: bash -n tools_pc/run_ascension_safe_test.sh
 
