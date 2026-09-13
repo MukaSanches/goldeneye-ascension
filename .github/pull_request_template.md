@@ -20,6 +20,21 @@ rules there are non-negotiable.
 - [ ] If `CMakeLists.txt` `REGION_DEFS` changed, it still matches the N64
       `Makefile` per-region macro set exactly.
 
+### Ascension compatibility
+
+<!-- Preserve these invariants unless the PR explicitly documents why a
+     narrowly-scoped Ascension option intentionally changes one of them. -->
+
+- [ ] The user must still supply a legally owned GoldenEye 007 ROM; no ROM,
+      extracted Nintendo assets, or copyrighted game data is added.
+- [ ] Existing save files remain compatible, or this PR does not touch save
+      serialization / EEPROM behavior.
+- [ ] Existing PT-BR work remains intact; changed user-facing strings were
+      checked for localization impact.
+- [ ] Original GoldenEye behavior remains the default. Any intentional
+      gameplay/control behavior change is explicitly enabled by an Ascension
+      option or preset.
+
 ## Verification
 
 <!-- What you actually ran. Delete lines that don't apply. -->
@@ -29,6 +44,8 @@ rules there are non-negotiable.
 - [ ] Single-frame `GE_PCDUMP` diff against the committed golden — no
       unexpected change
 - [ ] pal-final / jpn-final also configured
+- [ ] If Ascension patchers, controls, F10 options, or PC UX changed:
+      `ASCENSION_NO_LAUNCH=1 ./tools_pc/run_ascension_safe_test.sh`
 
 Platform tested: <!-- e.g. Windows 10 / MSYS2 MINGW64 -->
 
