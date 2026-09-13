@@ -1,0 +1,65 @@
+{
+  "id": "12",
+  "slug": "ascension_visao_identidade",
+  "title": "Ascension: visao, identidade e principios",
+  "category": "Projeto Ascension",
+  "level": "Fundamentos",
+  "audience": "Usuarios, contribuidores e colaboradores",
+  "summary": "O que o Ascension e, o que nao e, como se relaciona com o port original e por que preservacao, opcionalidade e rastreabilidade orientam o roadmap.",
+  "objectives": [
+    "Explicar a identidade do projeto",
+    "Entender proveniencia e credito",
+    "Conhecer os pilares de produto",
+    "Tomar decisoes coerentes com o roadmap"
+  ],
+  "modules": [
+    {
+      "title": "Independencia com proveniencia",
+      "bullets": [
+        "Roadmap proprio nao apaga historia tecnica",
+        "Creditos e licencas herdadas permanecem",
+        "Mudancas externas exigem verificacao de origem e compatibilidade"
+      ]
+    },
+    {
+      "title": "Pilares",
+      "bullets": [
+        "Classic preservation",
+        "Localizacao e experiencia PC",
+        "Controles, acessibilidade e tooling"
+      ]
+    },
+    {
+      "title": "Mudanca reversivel",
+      "bullets": [
+        "Commits pequenos e coerentes",
+        "Rollback precisa ser possivel",
+        "Build nao equivale a qualidade"
+      ]
+    },
+    {
+      "title": "Produto publico",
+      "bullets": [
+        "README, site e docs devem concordar",
+        "Status diferencia Active, Experimental e Planned",
+        "Release so afirma o que foi validado"
+      ]
+    }
+  ],
+  "lab": [
+    "Leia docs/ASCENSION.md e resuma cada pilar em uma frase",
+    "Classifique uma ideia como Classic, Enhanced ou Tooling",
+    "Escreva um criterio de saida mensuravel para uma feature"
+  ],
+  "quiz": [
+    "O que independencia nao significa no Ascension?",
+    "Por que reversibilidade e um requisito de engenharia?",
+    "Qual a diferenca entre roadmap e promessa?"
+  ],
+  "references": [
+    "docs/ASCENSION.md",
+    "ROADMAP_ASCENSION.md",
+    "docs/PROJECT_STATUS.md",
+    "docs/PROVENANCE.md"
+  ]
+}
