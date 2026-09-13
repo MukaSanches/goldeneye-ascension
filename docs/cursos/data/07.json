@@ -1,0 +1,64 @@
+{
+  "id": "07",
+  "slug": "combate_mira_furtividade",
+  "title": "Combate, mira e furtividade",
+  "category": "Gameplay",
+  "level": "Intermediario",
+  "audience": "Jogadores que querem jogar com mais controle",
+  "summary": "Leitura de ameaca, escolha de arma, ritmo de tiro, posicionamento e uso da furtividade como ferramenta, nao como regra absoluta.",
+  "objectives": [
+    "Priorizar alvos",
+    "Controlar exposicao",
+    "Entender o custo do ruido",
+    "Escolher arma conforme contexto"
+  ],
+  "modules": [
+    {
+      "title": "Leitura de ameaca",
+      "bullets": [
+        "Posicao e linha de visao importam mais que quantidade bruta",
+        "Guardas proximos a alarmes mudam prioridade",
+        "Portas podem revelar ou limitar grupos"
+      ]
+    },
+    {
+      "title": "Mira",
+      "bullets": [
+        "Ajuste fino exige tempo e estabilidade",
+        "Disparos controlados preservam municao",
+        "Acertos criticos reduzem duracao do confronto"
+      ]
+    },
+    {
+      "title": "Ruido",
+      "bullets": [
+        "Armas silenciosas preservam a iniciativa",
+        "Tiros podem atrair guardas fora da tela",
+        "Stealth falhou nao significa missao perdida"
+      ]
+    },
+    {
+      "title": "Posicionamento",
+      "bullets": [
+        "Evite trocar dano em espaco aberto",
+        "Use quinas para limitar linhas de tiro",
+        "Recuar pode ser melhor que avancar sob alerta"
+      ]
+    }
+  ],
+  "lab": [
+    "Passe por uma area usando apenas arma silenciosa",
+    "Repita de forma agressiva e compare numero de inimigos acionados",
+    "Treine uma entrada com prioridade de alvos definida antes de abrir a porta"
+  ],
+  "quiz": [
+    "Por que o ruido e uma variavel de combate?",
+    "Qual vantagem de reduzir o numero de linhas de tiro simultaneas?",
+    "Quando abandonar furtividade e uma decisao correta?"
+  ],
+  "references": [
+    "GoldenEye 007 - arsenal e IA",
+    "Ascension - controles e input",
+    "Playtests da campanha"
+  ]
+}
