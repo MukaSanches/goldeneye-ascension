@@ -8,6 +8,22 @@ Run this after any input, F10, video, locale, or gameplay-facing change.
 - Game reaches file select.
 - F10 opens and closes cleanly.
 
+## Automated preflight / build verification
+
+Before a gameplay-facing test, run:
+
+```bash
+ASCENSION_NO_LAUNCH=1 ./tools_pc/run_ascension_safe_test.sh
+```
+
+Expected results:
+
+- The Ascension patcher preflight reports that all child patchers parse cleanly before any patcher runs.
+- The NTSC-final PC target builds successfully.
+- The runner finds the generated `ge007` executable for the current platform.
+- The run ends with `ASCENSION_NO_LAUNCH=1; skipping game launch.` rather than trying to open an SDL window.
+- A normal run without `ASCENSION_NO_LAUNCH=1` still launches the game after the same patch/build path.
+
 ## Keyboard / mouse
 
 - WASD movement works.
