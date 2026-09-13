@@ -1,0 +1,373 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+    # No paths-ignore here: tag pushes must always build so a release can be
+    # cut even when the tagged commit only touched docs, and a workflow that
+    # never triggers would leave a required status check pending forever.
+    # Docs-only branch pushes are instead skipped by the `changes` job below,
+    # which reports the build jobs as "skipped" (green for branch protection).
+  pull_request:
+    # No paths-ignore here either: a docs-only PR must still trigger the
+    # workflow so the required checks report a status. The `changes` job
+    # below diffs the PR against its base and, for a docs-only PR, reports
+    # the build jobs as "skipped" — which branch protection accepts as
+    # success. With paths-ignore the workflow never ran and the required
+    # checks stayed "expected" forever, wedging every docs PR (M-44).
+  workflow_dispatch:
+
+# Minimal token: CI only reads the repo and uploads build artifacts, neither of
+# which needs write access. Fork PRs run untrusted build scripts on the runner,
+# so keep the granted scope as small as possible and never expose secrets here.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Jobs:
+#
+#   linux-build   — ubuntu, system GCC. Actually compiles + links (unlike
+#                   validate), then packages the Linux bundle (exe + README +
+#                   licenses + prepare-assets, NO ROM / assets / bundled libs)
+#                   via tools_pc/bundle-linux.sh and uploads it. Surfaces
+#                   GCC-on-Linux strictness gaps MinGW misses. Not a runtime
+#                   claim; not a required check yet.
+#
+#   validate      — ubuntu, configure-only. Byte-compiles the tooling,
+#                   regenerates the US ROM-asset symbol file, and CMake-
+#                   configures ntsc-final (REGION_DEFS, the source list, and
+#                   that SDL2 / zlib / OpenGL are discoverable). No ROM is used.
+#                   Does NOT compile; running on ubuntu is NOT a claim the port
+#                   works on Linux.
+#
+#   windows-build — windows/MSYS2, the real supported platform. Compiles and
+#                   links the full executable, then packages the distributable
+#                   bundle (exe + runtime DLLs + README + licenses, NO ROM /
+#                   assets) via tools_pc/bundle-win.sh and uploads it. Neither
+#                   the ROM nor extracted assets are needed to BUILD (they are
+#                   runtime-only), so CI builds but never runs the port.
+#
+#   release       — tags only (v*). Downloads the Windows + Linux bundles and
+#                   attaches both to a DRAFT pre-release for that tag. Draft, so
+#                   a human does the ROM smoke-test on each platform and hits
+#                   Publish. This is the only job granted contents: write.
+
+jobs:
+  # Did this change touch anything outside docs / licenses? No workflow-level
+  # paths-ignore exists (see the `on:` comments), so this job is the single
+  # place a docs-only push OR pull request is filtered out — a PR is diffed
+  # against its base sha, a branch push against `github.event.before`. Tag
+  # builds always run. Docs globs: **.md, docs/**, LICENSE, NOTICE.
+  changes:
+    runs-on: ubuntu-22.04
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+      # Windows builds default to the self-hosted box (fast, local ccache;
+      # docs/dev/notes/SELFHOSTED-RUNNER-PLAN.md §G2) for everything EXCEPT:
+      # (a) a release build (tag push) -- keep that on a clean, reproducible
+      #     GitHub-hosted runner for the artifact that actually ships, and
+      # (b) a fork PR -- untrusted PR code must never reach a box that will
+      #     later hold a ROM. Same-repo (non-fork) PRs now also get routed to
+      #     self-hosted per the 2026-09-12 standing preference.
+      windows_selfhosted: ${{ steps.runner.outputs.selfhosted }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - id: runner
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "selfhosted=false" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "pull_request" ] && \
+               [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
+            echo "selfhosted=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "selfhosted=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - id: filter
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base='${{ github.event.pull_request.base.sha }}'
+            head='${{ github.event.pull_request.head.sha }}'
+          elif [ "${{ github.event_name }}" != "push" ] || [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"; exit 0
+          else
+            base='${{ github.event.before }}'
+            head='${{ github.sha }}'
+          fi
+          if ! git cat-file -e "${base}^{commit}" 2>/dev/null || ! git cat-file -e "${head}^{commit}" 2>/dev/null; then
+            echo "no usable base ${base}/head ${head} — building to be safe"
+            echo "code=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          changed="$(git diff --name-only "$base" "$head")"
+          echo "Changed files:"; echo "$changed"
+          if echo "$changed" | grep -qvE '(\.md$|^docs/|^LICENSE$|^NOTICE$)'; then
+            echo "code=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "docs-only push — skipping build"
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  validate:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake python3 libsdl2-dev zlib1g-dev libgl1-mesa-dev
+
+      - name: Byte-compile Python tooling
+        run: python3 -m compileall -q scripts tools_pc
+
+      # Generated dev-docs stay in sync with the tree (speed-ups plan Step 4).
+      - name: Check generated dev indexes are current
+        run: |
+          python3 tools_pc/gen_findings_index.py --check
+          python3 tools_pc/gen_env_probes.py --check
+
+      # US only. gen_romassets.py resolves every symbol for the US region from
+      # the committed CSVs with no ROM present; PAL/JP each need a handful of
+      # region-specific prop/font offsets that only come from that region's ROM
+      # (see docs/building.md — PAL/JP builders generate romassets_e/j.s
+      # locally). No ROM is used or required here.
+      - name: Regenerate ROM-asset symbol file (US)
+        run: |
+          python3 scripts/gen_romassets.py u
+          git diff --stat -- port/src/romassets_u.s
+
+      - name: CMake configure (ntsc-final)
+        run: cmake -S . -B build-ntsc -DROMID=ntsc-final
+
+  # Linux (Ubuntu, system GCC) compile job. Unlike `validate` this actually
+  # runs `cmake --build`, so it surfaces the GCC-on-Linux strictness gaps that
+  # MinGW does not flag. The port has never been run on Linux — a green build
+  # here is a "does it compile + link" signal only, not a runtime claim.
+  # Not a required check yet; flip it to required once it is reliably green.
+  #
+  # Toolchain: ubuntu-24.04 + gcc-14. The port is developed on MinGW GCC 16;
+  # pinning a recent GCC here keeps the first bring-up focused on real
+  # portability gaps rather than a decade of accumulated old-GCC pedantry.
+  # (A "does it build on the GCC a typical distro ships" pass can come later.)
+  linux-build:
+    runs-on: ubuntu-24.04
+    env:
+      CC: gcc-14
+      CXX: g++-14
+      # CMakeLists.txt opt-in enables CMAKE_{C,CXX}_COMPILER_LAUNCHER=ccache
+      # when ccache is on PATH (b4de1c68, speed-ups plan Step 5). Game
+      # sources are frozen (1:1 with the decomp), so after the first run only
+      # touched port/ files miss cache -- near-total hit rate.
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 500M
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential gcc-14 g++-14 cmake python3 \
+            libsdl2-dev zlib1g-dev libgl1-mesa-dev ccache
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-linux-${{ hashFiles('CMakeLists.txt') }}-${{ github.sha }}
+          restore-keys: |
+            ccache-linux-${{ hashFiles('CMakeLists.txt') }}-
+            ccache-linux-
+
+      - name: Regenerate ROM-asset symbol file (US)
+        run: python3 scripts/gen_romassets.py u
+
+      - name: Configure (ntsc-final)
+        run: cmake -S . -B build-linux -DROMID=ntsc-final
+             -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14
+
+      - name: Build (ntsc-final)
+        run: cmake --build build-linux -j"$(nproc)"
+
+      - name: ccache stats
+        run: ccache -s
+
+      - name: Show binary
+        run: |
+          ls -la build-linux/ge007* || true
+          file build-linux/ge007* || true
+
+      # Package the Linux bundle on every run so the release path stays
+      # exercised. No shared libs are bundled — the README tells the user to
+      # install SDL2 / zlib / libGL from their distro. Same ROM / size guards
+      # as the Windows bundle.
+      - name: Package Linux bundle
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            V="${GITHUB_REF_NAME}"
+          else
+            V="0.0.0-ci.${GITHUB_SHA::7}"
+          fi
+          tools_pc/bundle-linux.sh "$V"
+
+      - name: Upload bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: goldeneye-pc-port-linux-x86_64
+          path: |
+            dist/*.tar.gz
+            dist/*.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  # Real Windows (MSYS2 MINGW64) build — the only platform the port is
+  # developed and tested on. This compiles and LINKS the full executable.
+  #
+  # No ROM and no extracted assets are needed to build: the compiled asset set
+  # is a handful of committed pure-data .c files plus the generated
+  # address-constant romassets_<region>.s. The ROM (.z64) and the ROM-derived
+  # blobs are runtime-only dependencies — CI cannot run the game, only build it.
+  windows-build:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    # Self-hosted by default (fast, local ccache); windows-latest only for a
+    # release (tag) build or a fork PR — see the `changes` job's `runner`
+    # step for the exact rule (docs/dev/notes/SELFHOSTED-RUNNER-PLAN.md §G2).
+    runs-on: ${{ needs.changes.outputs.windows_selfhosted == 'true' && fromJSON('["self-hosted", "windows"]') || 'windows-latest' }}
+    defaults:
+      run:
+        shell: msys2 {0}
+    env:
+      # Same opt-in ccache CMakeLists.txt already wires up (Step 5). Note:
+      # this cache path is read/written by the JS actions/cache step outside
+      # the msys2 shell too, so it stays a plain workspace-relative path
+      # rather than an msys /c/... form.
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 500M
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # windows-latest (release tag / fork PR) is ephemeral: full install +
+      # update every run. Self-hosted (everything else): `release: false`
+      # reuses the box's own C:\msys64 as-is and, with update/install both
+      # empty here, does no pacman -Syu / pacman -S at all (verified against
+      # the action's source) — it only registers the `msys2 {0}` shell
+      # wrapper every job needs. Packages themselves are hand-maintained on
+      # the box; the dependency check below (not this step) verifies they're
+      # present.
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          release: ${{ needs.changes.outputs.windows_selfhosted != 'true' }}
+          update: ${{ needs.changes.outputs.windows_selfhosted != 'true' }}
+          install: ${{ needs.changes.outputs.windows_selfhosted != 'true' && 'mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-SDL2 mingw-w64-x86_64-zlib mingw-w64-x86_64-python mingw-w64-x86_64-ccache zip unzip' || '' }}
+
+      # Self-hosted only: fails fast with exact install instructions if the
+      # box's hand-maintained MSYS2 is missing a required package, instead of
+      # a confusing failure deeper in the build. windows-latest just installed
+      # everything above, so this would be redundant there.
+      - name: Check self-hosted dependencies
+        if: needs.changes.outputs.windows_selfhosted == 'true'
+        run: tools_pc/check-selfhosted-deps.sh
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-windows-${{ hashFiles('CMakeLists.txt') }}-${{ github.sha }}
+          restore-keys: |
+            ccache-windows-${{ hashFiles('CMakeLists.txt') }}-
+            ccache-windows-
+
+      - name: Regenerate ROM-asset symbol file (US)
+        run: python scripts/gen_romassets.py u
+
+      - name: Build (ntsc-final)
+        run: ./build-pc.sh ntsc-final
+
+      - name: ccache stats
+        run: ccache -s
+
+      # Package the distributable bundle on every run so the release path is
+      # always exercised. On a tag build VERSION is the tag; otherwise it is a
+      # throwaway CI string. bundle-win.sh hard-fails if a ROM image or an
+      # oversized blob ends up inside the bundle.
+      - name: Package Windows bundle
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            V="${GITHUB_REF_NAME}"
+          else
+            V="0.0.0-ci.${GITHUB_SHA::7}"
+          fi
+          tools_pc/bundle-win.sh "$V"
+
+      - name: Upload bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: goldeneye-pc-port-win64
+          path: |
+            dist/*.zip
+            dist/*.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+      # CI builds and packages the executable but does not run it — running the
+      # port needs a ROM, which CI does not provide. Runtime checks (the
+      # -level_09 soak, a golden-frame diff) would run on a self-hosted runner
+      # instead. Not planned.
+
+  # Tags only. Attach the packaged Windows + Linux bundles to a DRAFT
+  # pre-release so a human can do the ROM smoke-test on each platform before
+  # publishing. This job — and only this job — gets contents: write.
+  release:
+    if: github.ref_type == 'tag'
+    needs: [ changes, validate, windows-build, linux-build ]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: goldeneye-pc-port-win64
+          path: dist
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: goldeneye-pc-port-linux-x86_64
+          path: dist
+
+      - name: Create or update draft pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          ASSETS=(dist/*.zip dist/*.zip.sha256 dist/*.tar.gz dist/*.tar.gz.sha256)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${ASSETS[@]}" --clobber
+          else
+            NOTES="$(mktemp)"
+            sed "s/<version>/${TAG}/g" .github/release-notes.md > "$NOTES"
+            gh release create "$TAG" "${ASSETS[@]}" \
+              --draft --prerelease \
+              --title "GoldenEye 007 PC Port $TAG" \
+              --notes-file "$NOTES"
+          fi
