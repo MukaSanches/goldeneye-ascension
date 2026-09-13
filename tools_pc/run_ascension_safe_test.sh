@@ -42,15 +42,17 @@ for candidate in \
     "build-pc/ge007.x86_64" \
     "build-pc/ge007.exe" \
     "build-pc/ge007"; do
-    if [[ -f "$candidate" && ( -x "$candidate" || "$candidate" == *.exe ) ]]; then
+    # A successful build artifact must also be non-empty. This prevents a
+    # truncated/zero-byte executable from being reported as a verified build.
+    if [[ -s "$candidate" && ( -x "$candidate" || "$candidate" == *.exe ) ]]; then
         BIN="$candidate"
         break
     fi
 done
 
 if [[ -z "$BIN" ]]; then
-    echo "ERROR: built GoldenEye executable not found in build-pc/" >&2
-    echo "       Expected ge007(.exe) or ge007.x86_64(.exe)." >&2
+    echo "ERROR: built GoldenEye executable not found in build-pc/ or is empty" >&2
+    echo "       Expected non-empty ge007(.exe) or ge007.x86_64(.exe)." >&2
     exit 2
 fi
 
