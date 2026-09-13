@@ -35,6 +35,20 @@ if ! command -v cmake >/dev/null 2>&1; then
     exit 2
 fi
 
+# The runner invokes build-pc.sh directly after patching. Verify the script is
+# present and executable first so a damaged/incomplete checkout cannot be
+# modified by the Ascension patch pack before an inevitable build failure.
+if [[ ! -f ./build-pc.sh ]]; then
+    echo "ERROR: build-pc.sh was not found at the repository root." >&2
+    echo "       Restore the build script before running the Ascension test." >&2
+    exit 2
+fi
+if [[ ! -x ./build-pc.sh ]]; then
+    echo "ERROR: build-pc.sh is not executable." >&2
+    echo "       Run 'chmod +x build-pc.sh' and retry." >&2
+    exit 2
+fi
+
 echo "==> Applying validated Ascension low-risk pack with $PYTHON_BIN..."
 "$PYTHON_BIN" tools_pc/apply_ascension_safe_gameplay_pack.py
 
