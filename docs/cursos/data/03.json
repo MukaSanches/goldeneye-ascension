@@ -1,0 +1,64 @@
+{
+  "id": "03",
+  "slug": "do_filme_ao_jogo",
+  "title": "Do filme ao jogo: anatomia de uma adaptacao interativa",
+  "category": "Design",
+  "level": "Intermediario",
+  "audience": "Game designers, modders e jogadores curiosos",
+  "summary": "Estudo de adaptacao: como personagens, locacoes e conflitos do cinema foram convertidos em objetivos, espacos, regras e repeticao jogavel.",
+  "objectives": [
+    "Entender adaptacao como traducao de linguagem",
+    "Identificar o que um nivel precisa acrescentar a uma cena",
+    "Analisar objetivo, espaco e repeticao",
+    "Aplicar o metodo a uma nova missao"
+  ],
+  "modules": [
+    {
+      "title": "Cena nao e nivel",
+      "bullets": [
+        "Cinema controla tempo; jogo divide controle com o jogador",
+        "Uma locacao precisa sustentar exploracao e retorno",
+        "Objetivos transformam narrativa em acao verificavel"
+      ]
+    },
+    {
+      "title": "Compressao e recombinacao",
+      "bullets": [
+        "Eventos sao reorganizados para formar uma campanha coerente",
+        "Locacoes do filme podem ganhar escala e funcoes novas",
+        "Personagens podem mudar de momento sem perder papel dramatico"
+      ]
+    },
+    {
+      "title": "Informacao ao jogador",
+      "bullets": [
+        "Briefing substitui exposicao cinematografica",
+        "Objetivos em dificuldade alta ampliam leitura do espaco",
+        "Falha e repeticao criam outra relacao com a historia"
+      ]
+    },
+    {
+      "title": "Metodo de adaptacao",
+      "bullets": [
+        "Preserve a fantasia central",
+        "Converta conflito em verbo de jogo",
+        "Crie evidencia clara de sucesso e falha"
+      ]
+    }
+  ],
+  "lab": [
+    "Escolha uma cena e escreva a fantasia central em uma frase",
+    "Converta a cena em quatro objetivos de dificuldade crescente",
+    "Desenhe em blocos a rota principal e uma rota alternativa"
+  ],
+  "quiz": [
+    "Por que reproduzir uma cena quadro a quadro raramente cria um bom nivel?",
+    "Como a dificuldade altera a narrativa pratica da missao?",
+    "O que significa converter conflito em verbo?"
+  ],
+  "references": [
+    "GoldenEye 007 - campanha original",
+    "Game Developer / GDC - entrevistas historicas com a equipe",
+    "Ascension - documentacao de design e preservacao"
+  ]
+}
