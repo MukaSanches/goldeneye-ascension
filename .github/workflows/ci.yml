@@ -113,6 +113,9 @@ jobs:
       - name: Byte-compile Python tooling
         run: python3 -m compileall -q scripts tools_pc
 
+      - name: Validate Ascension test runner shell syntax
+        run: bash -n tools_pc/run_ascension_safe_test.sh
+
       # Generated dev-docs stay in sync with the tree (speed-ups plan Step 4).
       - name: Check generated dev indexes are current
         run: |
