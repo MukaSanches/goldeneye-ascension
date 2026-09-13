@@ -33,6 +33,7 @@
 #include "mixer.h"
 #include "crash.h"
 #include "thread_config.h"
+#include "human_ai.h"
 
 /* Defined in the game (src/init.c). The port calls into the real game entry. */
 extern void mainproc(void *args);
@@ -64,8 +65,12 @@ static void portPrintHelp(const char *argv0)
     printf("\nusage: %s [options] [-level_XX]\n\n"
            "  --help            this message\n"
            "  --version         build id only\n"
+           "  --human-ai        start with Ascension Human AI enabled\n"
+           "  --classic-ai      force original GoldenEye AI\n"
            "  -level_XX         boot straight into a solo level (per-level\n"
            "                    memory pools are auto-injected)\n\n"
+           "AI: F9 toggles CLASSIC/HUMAN at runtime. Persistent settings live\n"
+           "    under [AI] in ge007.ini; HumanMode defaults to 0 (Classic).\n\n"
            "config: ge007.ini in the data dir (written on first run).\n\n"
            "solo levels (-level_XX):\n", argv0 ? argv0 : "ge007");
     for (size_t i = 0; i < sizeof(kSoloLevels) / sizeof(kSoloLevels[0]); ++i) {
@@ -76,7 +81,8 @@ static void portPrintHelp(const char *argv0)
 static void portAtExit(void)
 {
     /* Clean-exit only (exit(0) from videoPumpEvents). Crash/fatal paths call
-     * abort(), which does not run atexit handlers. */
+     * abort(), which does not run atexit handlers. Human AI state is process
+     * local; no teardown is needed while game threads are still terminating. */
     videoSaveWindowState();
     configSave();
 }
@@ -133,11 +139,20 @@ int main(int argc, char **argv)
      *     mempools) + KSEG0 mirror @ 0x80000000 (see port/src/dram.c). */
     dramReserve();
 
-    /* 3. Video / audio / input. */
+    /* 3. Video / optional port modules / audio / input. */
     if (videoInit() != 0) {
         sysLogPrintf(LOG_ERROR, "videoInit failed");
         return 1;
     }
+
+    /* Human AI is deliberately initialized after videoInit: video owns the
+     * fast3d pre-swap hook first, then Human AI chains it instead of replacing
+     * screenshot/frame-dump behaviour. It never edits src/game/*. */
+    humanAiInit();
+    if (sysArgCheck("--human-ai")) humanAiSetEnabled(1);
+    if (sysArgCheck("--classic-ai")) humanAiSetEnabled(0);
+    humanAiAttachRenderHook();
+
     audioInit();
     mixerInit();
     inputInit();
@@ -160,6 +175,8 @@ int main(int argc, char **argv)
     }
 
     /* Unreachable in practice; clean up if we ever get here. */
+    humanAiDetachRenderHook();
+    humanAiShutdown();
     inputDestroy();
     mixerDestroy();
     audioDestroy();
