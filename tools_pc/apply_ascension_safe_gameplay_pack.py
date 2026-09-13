@@ -39,10 +39,14 @@ SCRIPTS = [
 
 
 def preflight() -> bool:
-    """Verify every child patcher exists and parses before any file is changed."""
+    """Verify the manifest is sane and every child patcher parses before changes."""
+    if len(SCRIPTS) != len(set(SCRIPTS)):
+        print("ERROR: duplicate patcher entry in Ascension manifest", file=sys.stderr)
+        return False
+
     for script in SCRIPTS:
-        if not script.exists():
-            print(f"ERROR: missing {script.relative_to(ROOT)}", file=sys.stderr)
+        if not script.is_file():
+            print(f"ERROR: missing patcher file {script.relative_to(ROOT)}", file=sys.stderr)
             return False
         try:
             source = script.read_text(encoding="utf-8")
