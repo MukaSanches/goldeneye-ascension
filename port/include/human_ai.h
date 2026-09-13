@@ -17,8 +17,12 @@ void humanAiInit(void);
 void humanAiShutdown(void);
 void humanAiTick(void);
 
-/* Thread-safe request. The actual transition is consumed on the scheduler
- * thread by humanAiTick(). */
+/* Attach after videoInit(): chains fast3d's existing pre-swap callback so the
+ * Human AI tick runs on the game scheduler/render thread. */
+void humanAiAttachRenderHook(void);
+void humanAiDetachRenderHook(void);
+
+/* Thread-safe requests. The transition is consumed by humanAiTick(). */
 void humanAiToggle(void);
 void humanAiSetEnabled(int enabled);
 int  humanAiIsEnabled(void);
