@@ -1,0 +1,65 @@
+{
+  "id": "13",
+  "slug": "ascension_iniciante_instalar_compilar",
+  "title": "Ascension para iniciantes: instalar, compilar e executar",
+  "category": "Projeto Ascension / Build",
+  "level": "Iniciante",
+  "audience": "Quem nunca compilou um projeto C/C++",
+  "summary": "Do MSYS2 ao executavel: dependencias, clone, ROM legalmente obtida, build, sidecars, primeira execucao e diagnostico basico.",
+  "objectives": [
+    "Preparar o Windows com MSYS2 MINGW64",
+    "Clonar o repositorio",
+    "Entender onde entra a ROM",
+    "Compilar e localizar o executavel"
+  ],
+  "modules": [
+    {
+      "title": "Ambiente",
+      "bullets": [
+        "Use MSYS2 MINGW64",
+        "Instale toolchain, SDL2, zlib, CMake, Python, make e git",
+        "Nao misture terminais sem entender as diferencas"
+      ]
+    },
+    {
+      "title": "Repositorio",
+      "bullets": [
+        "Clone do GitHub",
+        "Mantenha ROM fora do historico",
+        "Confirme branch e commit antes de testar"
+      ]
+    },
+    {
+      "title": "Build",
+      "bullets": [
+        "build-pc.sh configura e compila",
+        "ntsc-final e o caminho de referencia",
+        "Erros de link e runtime sao problemas diferentes"
+      ]
+    },
+    {
+      "title": "Execucao",
+      "bullets": [
+        "Sidecars sao necessarios no runtime atual",
+        "Execute a partir da raiz esperada",
+        "Registre terminal e crash log quando algo falhar"
+      ]
+    }
+  ],
+  "lab": [
+    "Instale dependencias em um ambiente limpo",
+    "Rode git status antes e depois do build",
+    "Anote caminho do executavel e dos arquivos de runtime"
+  ],
+  "quiz": [
+    "Por que MINGW64 e importante no fluxo de referencia?",
+    "A ROM deve ser commitada?",
+    "Qual a diferenca entre compilar e executar?"
+  ],
+  "references": [
+    "README.md",
+    "docs/building.md",
+    "SUPPORT.md",
+    "docs/GUIA-INICIANTE.md"
+  ]
+}
