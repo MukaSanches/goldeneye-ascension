@@ -15,8 +15,12 @@ Order:
 Every child patcher is idempotent and anchor-validated. Before any patcher runs,
 this wrapper also parses every child script so a syntax error cannot leave a
 partially-applied local tree.
+
+Use --preflight-only to validate the child patcher manifest without modifying
+the source tree.
 """
 from pathlib import Path
+import argparse
 import subprocess
 import sys
 
@@ -50,12 +54,30 @@ def preflight() -> bool:
     return True
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Apply the validated Ascension low-risk gameplay/input patch pack."
+    )
+    parser.add_argument(
+        "--preflight-only",
+        action="store_true",
+        help="validate the child patcher manifest without modifying the source tree",
+    )
+    return parser.parse_args()
+
+
 def main() -> int:
+    args = parse_args()
+
     if not preflight():
         print("ERROR: no Ascension patchers were run.", file=sys.stderr)
         return 2
 
     print("==> Preflight OK: all Ascension patchers parse cleanly.")
+
+    if args.preflight_only:
+        print("SUCCESS: Ascension patcher manifest validated; no files were changed.")
+        return 0
 
     for script in SCRIPTS:
         print(f"\n==> {script.name}")
