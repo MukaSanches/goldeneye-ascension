@@ -1,0 +1,64 @@
+{
+  "id": "05",
+  "slug": "como_jogar_fundamentos",
+  "title": "Como jogar GoldenEye 007: fundamentos do agente",
+  "category": "Gameplay",
+  "level": "Iniciante",
+  "audience": "Quem esta jogando pela primeira vez",
+  "summary": "Um guia pratico de leitura de briefing, orientacao, combate, uso de itens e conclusao de objetivos sem transformar cada fase em corrida e tiro.",
+  "objectives": [
+    "Ler objetivos antes de agir",
+    "Controlar ritmo e exposicao",
+    "Usar o ambiente como informacao",
+    "Entender quando evitar combate"
+  ],
+  "modules": [
+    {
+      "title": "Antes da missao",
+      "bullets": [
+        "Leia briefing e objetivos",
+        "Entenda condicoes de falha",
+        "Associe nomes de locais e pessoas ao mapa mental"
+      ]
+    },
+    {
+      "title": "Movimento e leitura",
+      "bullets": [
+        "Avance por setores, nao por impulso",
+        "Use portas e corredores como pontos de controle",
+        "Observe patrulhas, cameras e alarmes"
+      ]
+    },
+    {
+      "title": "Combate",
+      "bullets": [
+        "Priorize ameacas proximas",
+        "Evite desperdicio de municao",
+        "Use mira deliberada quando a precisao compensa o tempo"
+      ]
+    },
+    {
+      "title": "Fechando objetivos",
+      "bullets": [
+        "Confirme mensagens de sucesso",
+        "Nao saia da fase antes de completar tudo",
+        "Aprenda a reconhecer itens e terminais de missao"
+      ]
+    }
+  ],
+  "lab": [
+    "Jogue uma missao sem correr por 5 minutos e registre o que passou a perceber",
+    "Refaca a mesma area tentando reduzir disparos",
+    "Ao terminar, reconstrua sua rota em um desenho simples"
+  ],
+  "quiz": [
+    "Por que o briefing muda sua forma de jogar?",
+    "Quando mirar com mais cuidado e melhor que disparar rapidamente?",
+    "Qual o risco de correr para a saida cedo demais?"
+  ],
+  "references": [
+    "GoldenEye 007 - briefings e objetivos originais",
+    "Ascension - guia para iniciantes",
+    "Documentacao de controles do projeto"
+  ]
+}
