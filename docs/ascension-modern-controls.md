@@ -12,6 +12,17 @@ Ascension keeps GoldenEye's original gameplay/input path intact and layers a sma
 
 `Input.DedicatedCrouch = 1` enables the dedicated crouch action for Hybrid/Modern.
 
+## Compatibility contract
+
+- Classic must remain behaviour-compatible with the existing PC-port controls; Ascension-specific crouch translation is inactive in this preset.
+- Hybrid must keep legacy Left Ctrl fire intact; only `C` is interpreted as dedicated crouch.
+- Modern may reinterpret Ctrl as dedicated crouch, but suppresses the legacy Ctrl-fire action on the same input poll so one key press cannot crouch and fire simultaneously.
+- Dedicated crouch is translated back through GoldenEye's native aim-plus-stick-down gesture rather than bypassing the original crouch state machine.
+- Changing presets must not alter ROM data, EEPROM/save format, mission logic, or PT-BR assets.
+- Standard keyboard remapping remains owned by the existing `[Input.Bind]` configuration; Ascension does not replace that system.
+
+Any change to this contract should pass the regression checklist in [`ascension-smoke-test.md`](ascension-smoke-test.md) before it is treated as validated.
+
 ## Design rules
 
 - Original N64 control logic remains the authority for movement, aiming, weapons and crouch restrictions.
