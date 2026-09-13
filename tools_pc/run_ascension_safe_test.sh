@@ -26,6 +26,15 @@ if ! "$PYTHON_BIN" -c 'import sys; raise SystemExit(0 if sys.version_info.major 
     exit 2
 fi
 
+# Fail before patching the source tree when the build tool is unavailable.
+# build-pc.sh requires CMake, so discovering this prerequisite up front keeps
+# a local checkout unchanged when it cannot be built or tested anyway.
+if ! command -v cmake >/dev/null 2>&1; then
+    echo "ERROR: CMake is required to build and test GoldenEye Ascension." >&2
+    echo "       Install CMake for your platform, then rerun this command." >&2
+    exit 2
+fi
+
 echo "==> Applying validated Ascension low-risk pack with $PYTHON_BIN..."
 "$PYTHON_BIN" tools_pc/apply_ascension_safe_gameplay_pack.py
 
