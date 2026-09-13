@@ -1,0 +1,19 @@
+{
+  "id": "17",
+  "slug": "git_github_ascension",
+  "title": "Git e GitHub no Ascension: trabalhar sem perder o controle",
+  "category": "Colaboracao",
+  "level": "Intermediario",
+  "audience": "Novos contribuidores",
+  "summary": "Branches, commits, diff, revert, Pull Requests e evidencias de teste aplicados ao fluxo real do projeto.",
+  "objectives": ["Trabalhar fora de main quando apropriado", "Criar commits pequenos", "Revisar o proprio diff", "Escrever PRs verificaveis"],
+  "modules": [
+    {"title": "Estado", "bullets": ["git status responde o que mudou", "git diff mostra mudancas nao staged", "git log ajuda a localizar regressao"]},
+    {"title": "Branches", "bullets": ["Nome indique intencao", "Atualize base antes de trabalho longo", "Nao misture features independentes"]},
+    {"title": "Commits", "bullets": ["Um commit deve explicar uma decisao", "Mensagem descreve por que e escopo", "Revert e preferivel a reescrever historia publica"]},
+    {"title": "Pull Request", "bullets": ["Problema, solucao, teste e risco", "Screenshots ajudam mudancas visuais", "Codigo externo exige origem e licenca"]}
+  ],
+  "lab": ["Crie uma branch docs/exercicio", "Faca uma mudanca pequena e rode git diff --check", "Escreva uma descricao de PR usando o template do repositorio"],
+  "quiz": ["Qual comando mostra arquivos modificados?", "Por que um commit gigante e dificil de revisar?", "Quando usar git revert?"],
+  "references": ["CONTRIBUTING.md", ".github/pull_request_template.md", "docs/PROVENANCE.md", "CHANGELOG.md"]
+}

@@ -1,0 +1,19 @@
+{
+  "id": "18",
+  "slug": "testes_regressao_qualidade",
+  "title": "Testes, regressao e qualidade",
+  "category": "QA / Engenharia",
+  "level": "Avancado",
+  "audience": "Contribuidores que alteram comportamento",
+  "summary": "Uma disciplina de evidencia: build, execucao, reproducao, comparacao, playtest e documentacao como niveis diferentes de confianca.",
+  "objectives": ["Distinguir classes de evidencia", "Criar teste reproduzivel", "Definir baseline", "Registrar resultados negativos"],
+  "modules": [
+    {"title": "Escala de evidencia", "bullets": ["Compila", "Executa", "Reproduz", "Nao regrediu / foi jogado / esta documentado"]},
+    {"title": "Baseline", "bullets": ["Compare com commit conhecido", "Defina cena, nivel e configuracao", "Evite conclusoes com ambiente nao controlado"]},
+    {"title": "Automacao", "bullets": ["CI detecta classes repetiveis de erro", "Frame dump ajuda renderizacao deterministica", "Automacao nao avalia sensacao de controle"]},
+    {"title": "Playtest", "bullets": ["Input, audio e apresentacao precisam de pessoa", "Registre hardware e configuracao", "Teste casos normais e limites"]}
+  ],
+  "lab": ["Escreva um caso de teste com pre-condicao, passos e resultado", "Compare dois commits no mesmo nivel", "Registre um teste que falhou sem tentar esconder o resultado"],
+  "quiz": ["Qual a diferenca entre executa e reproduz?", "Quando playtest humano e obrigatorio?", "Por que resultados negativos devem ser documentados?"],
+  "references": ["docs/PROJECT_STATUS.md", "CONTRIBUTING.md", ".github/workflows/ci.yml", "docs/dev/"]
+}

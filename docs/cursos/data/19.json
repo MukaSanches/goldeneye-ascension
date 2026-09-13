@@ -1,0 +1,19 @@
+{
+  "id": "19",
+  "slug": "localizacao_ptbr_engenharia_texto",
+  "title": "Localizacao PT-BR: engenharia, linguagem e QA",
+  "category": "Localizacao",
+  "level": "Avancado",
+  "audience": "Tradutores, revisores e programadores",
+  "summary": "Arquitetura de idioma, fallback, bancos de texto, glifos, wrapping e revisao humana para fazer portugues caber no jogo sem perder intencao.",
+  "objectives": ["Separar traducao e arquitetura", "Preservar IDs estaveis", "Validar acentos e layout", "Construir glossario consistente"],
+  "modules": [
+    {"title": "Arquitetura", "bullets": ["Idioma deve ser uma camada, nao um fork de strings", "English funciona como referencia/fallback", "Bancos e IDs devem permanecer estaveis"]},
+    {"title": "Texto", "bullets": ["Traduza funcao, nao palavra isolada", "UI exige concisao", "Briefing pode aceitar frase mais natural"]},
+    {"title": "Renderizacao", "bullets": ["Acentos dependem de glifos e encoding", "Wrapping precisa ser testado em tela", "Strings longas podem colidir com HUD"]},
+    {"title": "QA", "bullets": ["Revise dentro do jogo", "Use checklist por tela e missao", "Registre texto original, traducao, contexto e status"]}
+  ],
+  "lab": ["Monte glossario de 20 termos recorrentes", "Revise uma tela em contexto e reduza texto sem perder sentido", "Crie uma planilha de QA com ID, original, PT-BR, tela e resultado"],
+  "quiz": ["Por que fallback em ingles e importante?", "O que torna uma traducao de UI diferente de um texto corrido?", "Que problemas podem ocorrer mesmo quando a frase esta linguisticamente correta?"],
+  "references": ["docs/localization/pt-BR.md", "port/src/localization/", "port/src/ascension_game_locale.c", "tools/ascension_l10n_audit.py"]
+}

@@ -1,0 +1,19 @@
+{
+  "id": "15",
+  "slug": "rom_assets_sidecars_pipeline",
+  "title": "ROM, assets e sidecars: entendendo o pipeline",
+  "category": "Engenharia / Dados",
+  "level": "Avancado",
+  "audience": "Contribuidores de engine e tooling",
+  "summary": "O que vem da ROM, o que e codigo, o que e gerado offline e por que o projeto nao distribui dados comerciais derivados.",
+  "objectives": ["Separar codigo, ROM e dados derivados", "Entender os emitters de sidecar", "Regerar dados quando necessario", "Evitar commits indevidos"],
+  "modules": [
+    {"title": "Fronteiras", "bullets": ["Repositorio distribui codigo e ferramentas", "ROM e fornecida pelo usuario", "Dados derivados permanecem locais"]},
+    {"title": "Sidecars", "bullets": ["pcmodels contem layout de modelos para PC", "pccg cobre dados de background/stan e setup", "Geracao e deterministica para ROM suportada"]},
+    {"title": "Emitters", "bullets": ["d43_emit para modelos", "d69_emit para dados de cenario", "d88_emit adiciona setups por fase"]},
+    {"title": "Higiene", "bullets": ["Nunca faca commit da ROM", "Confira .gitignore antes de experimentar", "Documente mudancas em conversores porque afetam dados regenerados"]}
+  ],
+  "lab": ["Mapeie entrada e saida dos tres emitters", "Rode uma geracao em diretorio limpo", "Use git status para confirmar que nenhum dado derivado entrou no stage"],
+  "quiz": ["Por que sidecars existem?", "Qual ferramenta adiciona os setups de fase?", "Por que dados derivados nao devem ir para o repositorio?"],
+  "references": ["docs/building.md", "tools_pc/d43_emit.py", "tools_pc/d69_emit.py", "tools_pc/d88_emit.py"]
+}

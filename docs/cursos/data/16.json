@@ -1,0 +1,19 @@
+{
+  "id": "16",
+  "slug": "configuracoes_ge007_ini",
+  "title": "Configuracoes do Ascension e ge007.ini",
+  "category": "Configuracao",
+  "level": "Intermediario",
+  "audience": "Jogadores avancados e contribuidores",
+  "summary": "Como o sistema de configuracao registra opcoes, organiza secoes, aplica limites e integra configuracao persistente com ferramentas de runtime.",
+  "objectives": ["Localizar ge007.ini", "Entender chaves por secao", "Distinguir valor persistente e variavel de ambiente", "Alterar configuracao sem quebrar o parser"],
+  "modules": [
+    {"title": "Modelo INI", "bullets": ["Chaves sao registradas no codigo", "Secoes usam o prefixo antes do ultimo ponto", "Valores sao validados contra limites definidos"]},
+    {"title": "Tipos", "bullets": ["Int, UInt, Float e String", "Metadados ajudam a interface de opcoes", "Enums podem mapear numeros para nomes"]},
+    {"title": "Runtime", "bullets": ["Algumas variaveis de ambiente podem ter prioridade", "Debug.FrameDump espelha GE_PCDUMP", "Debug.InputLog pode ser ativado sem editar codigo"]},
+    {"title": "Mudanca segura", "bullets": ["Altere uma chave por vez", "Guarde copia do INI", "Se o comportamento ficar estranho, teste com configuracao regenerada"]}
+  ],
+  "lab": ["Abra o ge007.ini e identifique as secoes existentes", "Mude uma opcao reversivel e reinicie", "Compare valor no arquivo e comportamento em runtime"],
+  "quiz": ["Como uma chave dotted vira secao INI?", "Quando uma variavel de ambiente pode vencer o INI?", "Por que limites de valor devem ficar no registro da opcao?"],
+  "references": ["port/src/config.c", "port/include/config.h", "port/src/optionsoverlay.c", "docs/PROJECT_STATUS.md"]
+}

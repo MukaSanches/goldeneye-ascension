@@ -1,0 +1,56 @@
+name: Course PDFs
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'docs/cursos/data/**'
+      - 'docs/cursos/build_courses.py'
+      - '.github/workflows/courses.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: course-pdfs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install PDF dependency
+        run: python -m pip install --disable-pip-version-check reportlab==4.2.5
+      - name: Generate course PDFs
+        run: python docs/cursos/build_courses.py
+      - name: Verify output set
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f docs/cursos/pdf/00_CATALOGO_ASCENSION_LEARNING_SERIES.pdf
+          count="$(find docs/cursos/pdf -maxdepth 1 -type f -name '*.pdf' | wc -l)"
+          test "$count" -eq 21
+          find docs/cursos/pdf -maxdepth 1 -type f -name '*.pdf' -size +10k | grep -q .
+      - name: Commit generated PDFs
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add docs/cursos/pdf
+          if git diff --cached --quiet; then
+            echo "Course PDFs are already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "docs(courses): regenerate learning series PDFs"
+          git push

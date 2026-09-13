@@ -1,0 +1,19 @@
+{
+  "id": "14",
+  "slug": "msys2_cmake_pipeline_build",
+  "title": "MSYS2, MinGW64, CMake e pipeline de build",
+  "category": "Engenharia",
+  "level": "Intermediario",
+  "audience": "Contribuidores tecnicos",
+  "summary": "Como as camadas de shell, toolchain, CMake e linker se conectam no build do Ascension e como diagnosticar cada classe de falha.",
+  "objectives": ["Distinguir MSYS2 e MINGW64", "Entender configure, compile e link", "Ler erros por etapa", "Fazer builds reproduziveis"],
+  "modules": [
+    {"title": "Shell e toolchain", "bullets": ["MSYS2 fornece ambiente e pacotes", "MINGW64 gera binarios Windows nativos", "PATH errado pode selecionar ferramentas incompativeis"]},
+    {"title": "CMake", "bullets": ["Configure cria a arvore de build", "ROMID define variacoes regionais", "Cache pode preservar configuracoes antigas"]},
+    {"title": "Compilacao e link", "bullets": ["Compiler error aponta arquivo/linha", "Linker error aponta simbolos e bibliotecas", "Runtime crash acontece depois do build bem-sucedido"]},
+    {"title": "Diagnostico", "bullets": ["Reproduza em build limpo", "Use git diff --check e commit conhecido", "Cole o primeiro erro relevante, nao apenas o ultimo"]}
+  ],
+  "lab": ["Rode cmake -S . -B build-pc -DROMID=ntsc-final manualmente", "Apague apenas a pasta de build e reconstrua", "Classifique tres mensagens de erro como configure, compile, link ou runtime"],
+  "quiz": ["O que o CMake configure faz?", "Por que PATH pode quebrar um build?", "Um executavel linkado prova que a campanha funciona?"],
+  "references": ["CMakeLists.txt", "build-pc.sh", ".github/workflows/ci.yml", "docs/building.md"]
+}

@@ -1,0 +1,19 @@
+{
+  "id": "20",
+  "slug": "roadmap_releases_comunidade",
+  "title": "Roadmap, releases e comunidade ate 1.0",
+  "category": "Projeto Ascension",
+  "level": "Intermediario",
+  "audience": "Mantenedores e contribuidores",
+  "summary": "Como transformar ambicao em marcos testaveis: criterios de saida, status, release notes, suporte e participacao da comunidade.",
+  "objectives": ["Ler roadmap como direcao", "Definir criterio de saida", "Entender Alpha, Beta, RC e Stable", "Comunicar limitacoes sem marketing vazio"],
+  "modules": [
+    {"title": "Roadmap", "bullets": ["Cada marco tem foco", "Feature nao esta pronta por estar listada", "Dependencias entre versoes devem ser explicitas"]},
+    {"title": "Criterio de saida", "bullets": ["Precisa ser observavel", "Inclui teste e documentacao", "Nao use porcentagem sem definicao"]},
+    {"title": "Release", "bullets": ["Alpha aceita mudanca e risco", "Beta prioriza estabilizacao", "RC testa candidato concreto", "Stable exige compatibilidade documentada"]},
+    {"title": "Comunidade", "bullets": ["Issues precisam de reproducao", "Feature requests precisam de problema real", "Documentacao reduz custo de entrada e manutencao"]}
+  ],
+  "lab": ["Escolha um item Planned e escreva criterio de saida", "Redija release note com mudanca, compatibilidade e risco", "Transforme uma ideia vaga em feature request verificavel"],
+  "quiz": ["Por que roadmap nao e promessa?", "O que diferencia Beta de RC?", "Como documentacao influencia a saude de uma comunidade?"],
+  "references": ["ROADMAP_ASCENSION.md", "docs/RELEASES.md", "docs/PROJECT_STATUS.md", "SUPPORT.md", "CONTRIBUTING.md"]
+}
