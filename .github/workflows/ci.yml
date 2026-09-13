@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, ascension-modern-controls-v1, ascension-dev ]
     tags: [ 'v*' ]
     # No paths-ignore here: tag pushes must always build so a release can be
     # cut even when the tagged commit only touched docs, and a workflow that
