@@ -1,2 +1,0 @@
-//D:8003D410
-MODELFILEHEADER(headdave, 0, NULL, 0, 2, 1, 218.35564, 0, 4)

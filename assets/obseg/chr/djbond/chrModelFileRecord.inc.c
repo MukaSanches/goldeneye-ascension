@@ -1,1 +1,0 @@
-{&djbond_header, "CdjbondZ", 1.0, 1.0446, 0x1, 0x00, 0x00, 0x00},

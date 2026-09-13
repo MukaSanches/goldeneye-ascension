@@ -1,2 +1,0 @@
-//D:800XXXXX
-MODELFILEHEADER(dattape, 0, &SKELETON(standard_gun), 0, 0x1C, 3, 79.868584, 0, 4)

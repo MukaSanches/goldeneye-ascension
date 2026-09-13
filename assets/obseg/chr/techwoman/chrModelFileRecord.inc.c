@@ -1,1 +1,0 @@
-{&techwoman_header, "CtechwomanZ", 1.0, 0.91600001, 0x00, 0x00, 0x00, 0x00},

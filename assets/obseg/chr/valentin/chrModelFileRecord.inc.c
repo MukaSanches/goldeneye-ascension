@@ -1,1 +1,0 @@
-{&valentin_header, "CvalentinZ", 1.0, 0.93239999, 0x1, 0x01, 0x00, 0x00},

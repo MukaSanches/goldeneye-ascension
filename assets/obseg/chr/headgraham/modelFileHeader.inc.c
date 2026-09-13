@@ -1,2 +1,0 @@
-//D:8003D410
-MODELFILEHEADER(headgraham, 0, NULL, 0, 2, 1, 193.20615, 0, 5)

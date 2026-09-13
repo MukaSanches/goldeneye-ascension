@@ -1,2 +1,0 @@
-//D:800XXXXX
-MODELFILEHEADER(grenade, 0, &SKELETON(standard_gun), 0, 0x24, 3, 427.27081, 0, 5)

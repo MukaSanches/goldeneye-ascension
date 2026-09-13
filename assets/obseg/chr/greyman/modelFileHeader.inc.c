@@ -1,2 +1,0 @@
-//D:8003D410
-MODELFILEHEADER(greyman, 0, &SKELETON(guard), 0, 7, 0x15, 1293.0195, 0, 0xF)

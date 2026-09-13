@@ -1,1 +1,0 @@
-{&snowbond_header, "CsnowbondZ", 1.0, 1.0438, 0x1, 0x00, 0x00, 0x00},

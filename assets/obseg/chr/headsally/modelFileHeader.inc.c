@@ -1,2 +1,0 @@
-//D:8003D410
-MODELFILEHEADER(headsally, 0, NULL, 0, 2, 1, 219.97256, 0, 3)

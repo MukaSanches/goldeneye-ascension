@@ -1,2 +1,0 @@
-//D:800XXXXX
-MODELFILEHEADER(spectre, 0, &SKELETON(standard_gun), 0, 0x24, 4, 598.42865, 0, 0xB)

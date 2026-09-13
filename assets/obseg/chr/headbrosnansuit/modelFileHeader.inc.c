@@ -1,2 +1,0 @@
-//D:8003D410
-MODELFILEHEADER(headbrosnansuit, 0, NULL, 0, 2, 1, 212.45657, 0, 5)

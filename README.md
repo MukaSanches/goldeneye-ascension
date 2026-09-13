@@ -1,422 +1,224 @@
-# Ascension — GoldenEye no PC
+# ASCENSION
 
-> **Comece por aqui.** Este manual foi escrito para quem nunca mexeu em código. Se você consegue abrir um terminal, copiar um comando e ler uma mensagem de erro, consegue começar.
+<p align="center"><strong>GoldenEye 007 no PC, evoluído como um projeto aberto, documentado e acessível em português.</strong></p>
 
-Ascension é nossa linha independente de desenvolvimento do GoldenEye 007 original de Nintendo 64 para PC. O projeto nasceu do ecossistema de decompilação e ports do jogo e mantém os créditos, licenças e histórico herdados. O Ascension tem seu próprio roadmap, decisões e melhorias.
+<p align="center">
+  <img src="docs/img/attract-bunker1.png" width="32%" alt="GoldenEye rodando no PC — Bunker 1">
+  <img src="docs/media/goldeneye-demo.gif" width="32%" alt="Demonstração do GoldenEye rodando no PC">
+  <img src="docs/img/attract-dam.png" width="32%" alt="GoldenEye rodando no PC — Dam">
+</p>
 
-> **ROM:** este repositório não fornece ROM comercial do GoldenEye. Use somente material que você tenha direito de usar e nunca envie a ROM para o GitHub.
+<p align="center"><em>Imagens e demonstração reais do motor do projeto. O GIF mostra trechos do jogo em execução.</em></p>
 
-## Quero compilar e abrir o jogo no Windows
+> **Novo aqui? Comece por esta página.** Ela foi escrita para permitir que uma pessoa sem experiência com este código consiga instalar, compilar, testar, alterar e desfazer alterações sem precisar entender o projeto inteiro.
 
-O caminho recomendado é **Windows + MSYS2 MINGW64**.
+## O que é o Ascension?
 
-### 1. Abra o terminal certo
+Ascension é nossa linha independente de desenvolvimento do port nativo de **GoldenEye 007 (Nintendo 64, 1997)** para computadores modernos. O projeto preserva a genealogia técnica, autoria, licenças e créditos do trabalho do qual deriva, mas possui direção, documentação e roadmap próprios.
 
-Instale o MSYS2 e abra **MSYS2 MINGW64**. Os comandos abaixo devem ser executados nele.
+O objetivo é simples: preservar a experiência clássica e construir, de forma opcional e reversível, uma experiência de PC mais moderna — localização, controles, configuração, acessibilidade, apresentação, estabilidade e ferramentas para a comunidade.
 
-### 2. Instale as ferramentas
+> **Importante:** nenhuma ROM comercial é distribuída aqui. Você deve fornecer sua própria cópia legalmente obtida quando o processo de build exigir.
 
-Copie, cole e pressione Enter:
+## Estado atual
+
+O projeto está em desenvolvimento. A base já inicializa, renderiza e permite jogar a campanha, mas ainda existem defeitos e áreas que precisam de validação. Uma compilação bem-sucedida não significa que cada missão, cena, áudio ou configuração esteja perfeita.
+
+O desenvolvimento do Ascension segue quatro estados: **implementado**, **compilado**, **testado automaticamente** e **testado jogando**. Não tratamos esses termos como sinônimos.
+
+## Começo rápido — Windows
+
+### 1. Instale o MSYS2 e abra `MSYS2 MINGW64`
+
+Instale as dependências:
 
 ```sh
 pacman -S --needed mingw-w64-x86_64-toolchain mingw-w64-x86_64-SDL2 mingw-w64-x86_64-zlib mingw-w64-x86_64-cmake mingw-w64-x86_64-python make git
 ```
 
-### 3. Baixe NOSSO projeto
+### 2. Baixe o Ascension
 
 ```sh
 git clone https://github.com/MukaSanches/goldeneye-pc-port.git
 cd goldeneye-pc-port
 ```
 
-### 4. Coloque sua ROM
+### 3. Prepare sua ROM
 
-Crie a pasta `data`. Para a versão americana, coloque sua ROM legalmente obtida nela com exatamente este nome:
+Crie `data/`. Para a ROM americana suportada, o caminho esperado é:
 
 ```text
 data/ge007.ntsc-final.z64
 ```
 
-**Não faça commit da ROM. Não envie a ROM ao GitHub.**
+Nunca faça commit ou upload da ROM.
 
-### 5. Compile
+### 4. Compile
 
 ```sh
 ./build-pc.sh ntsc-final
 ```
 
-Se terminar sem erro fatal, procure:
+O executável será gerado em:
 
 ```text
 build-pc/ge007.x86_64.exe
 ```
 
-### 6. Abra
+### 5. Execute
 
 ```sh
 ./build-pc/ge007.x86_64.exe
 ```
 
-Se o jogo abriu, sua instalação básica está funcionando.
+Se a build funcionar mas faltarem dados derivados da sua própria ROM, siga o guia completo em [`docs/building.md`](docs/building.md).
 
-> Se a build funciona mas o jogo não passa da inicialização, talvez faltem os dados auxiliares gerados a partir da sua própria ROM. Veja [`docs/building.md`](docs/building.md), seção de PC asset sidecars.
+## Quero alterar o jogo: onde começo?
 
----
-
-# Quero alterar alguma coisa. Onde mexo?
-
-Você **não precisa entender o projeto inteiro** antes da primeira alteração.
-
-| Quero mexer em... | Comece aqui |
+| Quero mudar | Primeiro lugar para olhar |
 |---|---|
-| teclado, mouse ou controle | `port/src/input.c` |
-| configurações | `port/src/config.c` e `ge007.ini` |
-| janela e vídeo | `port/src/video.c` |
-| áudio | `port/src/audio.c` |
-| renderização/OpenGL | `port/fast3d/` |
-| integração do jogo com o PC | `port/src/` |
-| código reconstruído do jogo | `src/` |
-| definições e estruturas | `include/` |
-| conversores de dados para PC | `tools_pc/` |
-| documentação | `docs/` |
-| compilação | `CMakeLists.txt` e `build-pc.sh` |
+| Teclado, mouse e controle | `port/src/input.c` |
+| Configurações | `port/src/config.c` e `ge007.ini` |
+| Janela e vídeo | `port/src/video.c` |
+| Áudio | `port/src/audio.c` |
+| Renderização | `port/fast3d/` |
+| Integração com o PC | `port/src/` |
+| Lógica reconstruída do jogo | `src/` |
+| Estruturas e definições | `include/` |
+| Ferramentas de dados | `tools_pc/` |
+| Documentação | `docs/` |
+| Build | `CMakeLists.txt` e `build-pc.sh` |
 
-**Regra de ouro:** mude uma coisa pequena → compile → teste → só depois faça a próxima.
+### Regra de ouro
 
----
+**Mude uma coisa → compile → jogue/teste → confira `git diff` → faça um commit.**
 
-# Jeito seguro de modificar o jogo
-
-Primeiro atualize a `main`:
+## Faça experiências sem destruir a `main`
 
 ```sh
 git switch main
 git pull
-```
-
-Crie uma branch para sua experiência:
-
-```sh
 git switch -c teste/minha-mudanca
 ```
 
-Uma branch é uma linha de trabalho separada. Você pode experimentar nela sem transformar a `main` em bagunça.
-
-Faça a alteração e compile:
+Depois de editar:
 
 ```sh
 ./build-pc.sh ntsc-final
-```
-
-Abra o jogo:
-
-```sh
 ./build-pc/ge007.x86_64.exe
-```
-
-Veja exatamente o que mudou:
-
-```sh
 git status
 git diff
 ```
 
-Se estiver correto, salve no histórico:
+Se estiver correto:
 
 ```sh
 git add .
-git commit -m "descreva o que voce mudou"
+git commit -m "descreva claramente a mudanca"
 ```
 
-Agora sua mudança tem um ponto identificável e reversível.
+## Fiz besteira
 
----
-
-# Fiz besteira. Como volto?
-
-**Não apague o projeto inteiro.** O Git existe justamente para isso.
-
-## Ainda não fiz commit
-
-Primeiro confira:
+Antes de qualquer coisa:
 
 ```sh
 git status
 git diff
 ```
 
-Para abandonar alterações locais dos arquivos rastreados:
+Se ainda não fez commit e realmente quer descartar as alterações rastreadas:
 
 ```sh
 git restore .
 ```
 
-**Cuidado:** isso descarta alterações locais não salvas nesses arquivos.
-
-## Fiz um commit ruim
-
-Veja os últimos commits:
+Se já fez um commit ruim:
 
 ```sh
 git log --oneline -10
-```
-
-Copie o código do commit ruim e faça:
-
-```sh
 git revert CODIGO_DO_COMMIT
 ```
 
-Exemplo fictício:
+Preferimos `git revert`: ele desfaz a mudança sem apagar o histórico.
 
-```sh
-git revert a1b2c3d
-```
+## Não compilou
 
-Preferimos `git revert` porque ele desfaz uma mudança criando outro commit, sem apagar o histórico.
-
-## Minha branch virou uma bagunça
-
-Volte para a principal:
-
-```sh
-git switch main
-git pull
-```
-
-Sua branch experimental continua existindo, mas você voltou para uma base conhecida.
-
----
-
-# Como descobrir o que quebrou
-
-Quatro comandos básicos:
-
-```sh
-git status
-git diff
-git log --oneline -20
-git show CODIGO_DO_COMMIT
-```
-
-Eles respondem, respectivamente:
-
-1. **quais arquivos estão diferentes?**
-2. **o que mudou dentro deles?**
-3. **quais foram as últimas mudanças salvas?**
-4. **o que um commit específico fez?**
-
----
-
-# Como testar sem se enganar
-
-Compilar não significa que a mudança está correta.
-
-Depois de uma alteração:
-
-1. compile sem erro;
-2. abra o jogo;
-3. passe pelos menus;
-4. inicie uma missão;
-5. teste exatamente o recurso alterado;
-6. teste também recursos próximos;
-7. se mexeu em configuração ou save, feche e abra novamente.
-
-Se mexeu em **controles**, jogue de verdade. Se mexeu em **gráficos**, teste parado e em movimento, em mais de uma cena. Se mexeu em **áudio**, escute diferentes situações. Esses casos precisam de validação humana além de testes automáticos.
-
----
-
-# Não compilou. O que faço?
-
-Execute:
-
-```sh
-git status
-./build-pc.sh ntsc-final
-```
-
-Procure a **primeira mensagem de erro real**. Muitas vezes a última linha é apenas consequência do primeiro erro.
-
-Ao pedir ajuda, mande:
+Rode:
 
 ```sh
 git status
 git log --oneline -5
-```
-
-E também informe:
-
-- o comando executado;
-- a primeira mensagem de erro;
-- algumas linhas antes/depois do erro;
-- o que você alterou antes do problema aparecer.
-
-Isso permite reproduzir e diagnosticar o problema.
-
----
-
-# Compilou, mas o jogo não abre
-
-Confira nesta ordem:
-
-1. estou na pasta correta do projeto?
-2. existe `data/`?
-3. a ROM está com o nome esperado?
-4. preparei os dados auxiliares exigidos pela build atual?
-5. o terminal mostrou uma mensagem de erro?
-6. minha alteração recente mexeu em `port/`, build, assets ou configuração?
-
-Para o pipeline completo de dados/sidecars, consulte [`docs/building.md`](docs/building.md).
-
----
-
-# Como atualizar
-
-```sh
-git switch main
-git pull
 ./build-pc.sh ntsc-final
 ```
 
-Evite baixar outra cópia e jogar arquivos manualmente por cima. Deixe o Git controlar as versões.
+Procure a **primeira mensagem de erro**, não apenas a última. Ao pedir ajuda, envie o comando usado, a primeira mensagem de erro, algumas linhas ao redor dela, `git status`, os cinco últimos commits e o que você mudou antes do problema.
 
----
+## Como testar direito
 
-# Como enviar uma melhoria
+Depois de uma mudança, no mínimo: compile; abra o jogo; passe pelo menu; inicie uma missão; teste o recurso alterado; teste algo próximo; e reinicie quando a mudança envolver configuração ou save. Mudanças de input, gráficos e áudio precisam de teste humano em jogo.
 
-O fluxo é:
+## Mapa mental das pastas
 
 ```text
-main atualizada
-    ↓
-branch nova
-    ↓
-alteração pequena
-    ↓
-compilar
-    ↓
-testar
-    ↓
-revisar git diff
-    ↓
-commit
-    ↓
-push
-    ↓
-Pull Request
+goldeneye-pc-port/
+├── src/              jogo reconstruído
+├── include/          estruturas e definições
+├── port/             ponte entre GoldenEye e o computador
+│   ├── src/          input, vídeo, áudio, config, arquivos...
+│   └── fast3d/       renderização
+├── tools_pc/         preparação/conversão de dados
+├── scripts/          ferramentas auxiliares
+├── assets/           estrutura de assets
+├── data/             dados locais; ROM nunca entra no Git
+├── docs/             documentação e pesquisa
+├── CMakeLists.txt    regras de build
+└── build-pc.sh       build do PC
 ```
 
-Comece:
+Em uma frase: `src/` é o jogo; `port/` faz esse jogo conversar com o PC; `tools_pc/` prepara dados; `docs/` explica o conhecimento; `build-pc/` é o resultado gerado.
 
-```sh
-git switch main
-git pull
-git switch -c melhoria/nome-da-melhoria
-```
+## Documentação
 
-Depois de alterar e testar:
+- [`docs/GUIA-INICIANTE.md`](docs/GUIA-INICIANTE.md) — manual de sobrevivência para quem nunca mexeu no projeto.
+- [`docs/ASCENSION.md`](docs/ASCENSION.md) — identidade e princípios.
+- [`ROADMAP_ASCENSION.md`](ROADMAP_ASCENSION.md) — direção do desenvolvimento.
+- [`docs/PROVENANCE.md`](docs/PROVENANCE.md) — como usar conhecimento externo corretamente.
+- [`docs/building.md`](docs/building.md) — build e preparação de dados em profundidade.
+- [`docs/internals.md`](docs/internals.md) — arquitetura interna.
+- [`docs/porting-notes.md`](docs/porting-notes.md) — conhecimento técnico acumulado.
+- [`docs/dev/`](docs/dev/) — investigações e registros de engenharia.
+
+## Site
+
+O código do novo site oficial em português está em [`site/`](site/). Ele foi criado especificamente para o Ascension, com apresentação visual própria, navegação responsiva, seção de demonstração, roadmap e guia de contribuição.
+
+## Contribuindo
+
+Crie uma branch, faça uma mudança pequena, compile e teste. Depois:
 
 ```sh
 git add .
 git commit -m "feat: descreve a melhoria"
-git push -u origin melhoria/nome-da-melhoria
+git push -u origin SUA_BRANCH
 ```
 
-No Pull Request, explique o problema, a solução, os arquivos alterados, como testou e os riscos conhecidos.
+Abra um Pull Request explicando: problema, solução, arquivos alterados, teste realizado, como reproduzir e riscos conhecidos.
+
+## O que não fazer
+
+- Não envie ROM ou assets comerciais extraídos.
+- Não apague autoria, créditos ou licenças herdadas.
+- Não copie código externo sem conferir licença e proveniência.
+- Não chame algo de “100% funcionando” apenas porque compilou.
+- Não misture dezenas de mudanças sem checkpoints.
+- Não use `git push --force` na `main` para esconder um erro.
+
+## Origem, créditos e licença
+
+Ascension não começou do zero. Ele existe graças a anos de trabalho de engenharia reversa, decompilação e portabilidade feitos por outras pessoas. Independência significa que o Ascension possui direção própria; **não significa reivindicar autoria sobre trabalho herdado**.
+
+Consulte [`NOTICE`](NOTICE), [`LICENSE`](LICENSE), [`CITATION.cff`](CITATION.cff) e [`docs/PROVENANCE.md`](docs/PROVENANCE.md).
 
 ---
 
-# Coisas que você NÃO deve fazer
-
-- não envie ROM para o GitHub;
-- não envie assets comerciais extraídos só para facilitar instalação;
-- não altere vinte coisas antes de testar;
-- não diga “100% funcionando” apenas porque compilou;
-- não apague créditos ou histórico herdado;
-- não copie código externo sem verificar origem e licença;
-- não use `git push --force` na `main` para consertar um erro;
-- não rode comandos destrutivos de Git sem entender o que será apagado.
-
----
-
-# O que é a `main`?
-
-`main` é a linha principal do Ascension.
-
-Nossa regra é manter mudanças rastreáveis e reversíveis. Isso permite experimentar sem perder a capacidade de descobrir exatamente qual alteração causou um problema.
-
----
-
-# Pastas explicadas como se fosse um mapa
-
-```text
-goldeneye-pc-port/
-│
-├── src/              o jogo reconstruído
-├── include/          definições usadas pelo código
-├── port/             ponte entre o GoldenEye e o PC
-│   ├── src/          input, vídeo, áudio, config, arquivos etc.
-│   └── fast3d/       parte importante da renderização
-├── tools_pc/         conversores/preparadores para PC
-├── scripts/          automações auxiliares
-├── assets/           estrutura de assets do projeto
-├── data/             dados locais de execução; ROM nunca vai para o Git
-├── docs/             manuais e pesquisa técnica
-├── CMakeLists.txt    regras da compilação CMake
-└── build-pc.sh       comando principal para construir a versão PC
-```
-
-Em linguagem simples:
-
-- `src/` = **o jogo**;
-- `port/` = **a ponte para o computador**;
-- `tools_pc/` = **ferramentas de preparação**;
-- `docs/` = **manual e conhecimento**;
-- `build-pc/` = **resultado gerado pela compilação**.
-
----
-
-# Sou completamente iniciante. O que aprendo primeiro?
-
-Nesta ordem:
-
-1. `git status`;
-2. `git diff`;
-3. compilar com `./build-pc.sh ntsc-final`;
-4. abrir e testar o jogo;
-5. criar uma branch;
-6. fazer um commit;
-7. usar `git revert`;
-8. depois estudar o subsistema que quer alterar.
-
-Não tente aprender Git, C, C++, CMake, SDL, OpenGL, engenharia reversa e Nintendo 64 ao mesmo tempo.
-
----
-
-# Documentação para quando você quiser aprofundar
-
-- [`docs/ASCENSION.md`](docs/ASCENSION.md) — princípios do Ascension.
-- [`ROADMAP_ASCENSION.md`](ROADMAP_ASCENSION.md) — direção futura.
-- [`docs/PROVENANCE.md`](docs/PROVENANCE.md) — regras para conhecimento/código externo.
-- [`docs/building.md`](docs/building.md) — compilação e preparação de dados em nível técnico.
-- [`docs/internals.md`](docs/internals.md) — funcionamento interno.
-- [`docs/porting-notes.md`](docs/porting-notes.md) — problemas técnicos e conhecimento acumulado.
-- [`docs/dev/`](docs/dev/) — registros de desenvolvimento, testes e investigações.
-
-Você não precisa ler tudo. **Primeiro faça o jogo compilar. Depois escolha uma mudança pequena.**
-
----
-
-# Origem, créditos e licença
-
-Ascension não começou do zero. O código tem uma história importante no ecossistema de decompilação e ports de GoldenEye 007. O histórico Git, autores, créditos, notices e licenças aplicáveis devem continuar preservados.
-
-Independência significa tomar nossas próprias decisões de engenharia; não significa reivindicar como nosso o trabalho criado por outras pessoas.
-
-Antes de redistribuir ou importar código externo, leia [`NOTICE`](NOTICE), [`LICENSE`](LICENSE), [`CITATION.cff`](CITATION.cff) e [`docs/PROVENANCE.md`](docs/PROVENANCE.md).
-
-## Regra final
-
-**Mudou uma coisa → compile → teste → confira `git diff` → faça um commit.**
-
-Se quebrar, encontre a mudança responsável e reverta somente ela. É assim que o Ascension cresce sem virar uma bagunça.
+<p align="center"><strong>Preservar o clássico. Melhorar o que faz sentido. Documentar para que a próxima pessoa consiga continuar.</strong></p>

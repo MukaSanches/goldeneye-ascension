@@ -1,2 +1,0 @@
-//D:8003D410
-MODELFILEHEADER(commguard, 0, &SKELETON(guard), 0, 7, 0x14, 1260.4969, 0, 0xF)

@@ -1,2 +1,0 @@
-//D:8003D410
-MODELFILEHEADER(headmarion, 0, NULL, 0, 2, 1, 203.44904, 0, 3)

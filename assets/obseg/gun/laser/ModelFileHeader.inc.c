@@ -1,2 +1,0 @@
-//D:800XXXXX
-MODELFILEHEADER(laser, 0, &SKELETON(standard_gun), 0, 0x24, 3, 442.81848, 0, 0xD)

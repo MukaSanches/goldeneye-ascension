@@ -1,2 +1,0 @@
-//D:800XXXXX
-MODELFILEHEADER(map, 0, &SKELETON(standard_gun), 0, 0x23, 3, 125.3834, 0, 4)

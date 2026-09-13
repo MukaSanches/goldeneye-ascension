@@ -1,2 +1,0 @@
-//D:800XXXXX
-MODELFILEHEADER(taser, 0, &SKELETON(standard_gun), 0, 0x23, 3, 182.78622, 0, 0x11)
