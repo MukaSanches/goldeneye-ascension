@@ -32,5 +32,14 @@ if [[ -z "$BIN" ]]; then
     exit 2
 fi
 
+echo "==> Build verified: $BIN"
+
+# Keep the normal local workflow unchanged, while allowing CI/automation to
+# validate the complete patch+build path without trying to open an SDL window.
+if [[ "${ASCENSION_NO_LAUNCH:-0}" == "1" ]]; then
+    echo "==> ASCENSION_NO_LAUNCH=1; skipping game launch."
+    exit 0
+fi
+
 echo "==> Launching GoldenEye Ascension: $BIN"
 exec "./$BIN"
