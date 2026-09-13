@@ -7,9 +7,9 @@ body:
       value: |
         Thanks for filing a report. First, please check:
 
-        - The port is **Phase 2 of 4** — rendering is incomplete and many
+        - The port is **Phase 3 of 4** — audio + input are in progress and many
           cosmetic defects are already tracked in
-          [`docs/dev/GRAPHICS-BACKLOG.md`](https://github.com/jkdansereau/goldeneye-pc-port/blob/main/docs/dev/GRAPHICS-BACKLOG.md).
+          [`docs/dev/GRAPHICS-BACKLOG.md`](https://github.com/MukaSanches/goldeneye-ascension/blob/main/docs/dev/GRAPHICS-BACKLOG.md).
           Search open issues and that file before filing.
         - Only the **Windows / MSYS2 MINGW64** build is tested. Linux and
           macOS are best-effort — build breaks there are expected.
