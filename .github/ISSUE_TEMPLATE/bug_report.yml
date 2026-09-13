@@ -37,6 +37,18 @@ body:
     validations:
       required: true
   - type: dropdown
+    id: ascension_controls
+    attributes:
+      label: Ascension control profile
+      description: Select the active profile when the bug occurred. Use Not applicable for build-only or non-Ascension reports.
+      options:
+        - Classic / original behavior
+        - Hybrid
+        - Modern
+        - Not applicable / unknown
+    validations:
+      required: true
+  - type: dropdown
     id: stage
     attributes:
       label: Which stage fails?
