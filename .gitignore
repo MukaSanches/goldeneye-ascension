@@ -79,6 +79,8 @@ docs/dev/notes/
 # PC port (see CMakeLists.txt / port/)
 build-pc/
 tools_pc/*.exe
+# Local source backups created by Ascension's reversible patchers.
+*.ascension-before-*
 data/
 # release bundles built by tools_pc/bundle-win.sh (repo root only; the
 # packaging template lives in tools_pc/dist/ and IS tracked)
