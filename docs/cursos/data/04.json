@@ -1,0 +1,64 @@
+{
+  "id": "04",
+  "slug": "historia_goldeneye_007_n64",
+  "title": "GoldenEye 007 no Nintendo 64: historia, desenvolvimento e legado",
+  "category": "Historia do jogo",
+  "level": "Fundamentos",
+  "audience": "Jogadores, pesquisadores e desenvolvedores",
+  "summary": "Da equipe da Rare ao impacto no console: desenvolvimento, campanha baseada em objetivos, multiplayer local e influencia sobre shooters posteriores.",
+  "objectives": [
+    "Situar o lancamento de 1997",
+    "Entender por que o projeto era incomum",
+    "Identificar inovacoes de estrutura e controle",
+    "Avaliar legado sem transformar memoria em mito"
+  ],
+  "modules": [
+    {
+      "title": "Rare e o projeto",
+      "bullets": [
+        "Equipe relativamente pequena e forte experimentacao",
+        "Desenvolvimento para hardware novo",
+        "Design influenciado por jogos de tiro e pela logica de missoes de espionagem"
+      ]
+    },
+    {
+      "title": "Campanha",
+      "bullets": [
+        "Objetivos variam por dificuldade",
+        "Stealth e alarme coexistem com combate",
+        "NPCs e dispositivos fazem parte do quebra-cabeca de missao"
+      ]
+    },
+    {
+      "title": "Multiplayer",
+      "bullets": [
+        "Tela dividida e regras simples de configurar",
+        "Conhecimento de mapa ganha importancia",
+        "Partidas curtas geram alto valor de repeticao"
+      ]
+    },
+    {
+      "title": "Legado",
+      "bullets": [
+        "Mostrou que FPS em console podia ser popular e preciso para seu contexto",
+        "Popularizou uma linguagem propria de campanha em consoles",
+        "O legado deve ser separado das limitacoes tecnicas originais"
+      ]
+    }
+  ],
+  "lab": [
+    "Liste cinco decisoes de design que nasceram de limitacoes do N64",
+    "Compare a estrutura de objetivos com um shooter moderno",
+    "Explique em 150 palavras por que o multiplayer local foi importante"
+  ],
+  "quiz": [
+    "Que papel a dificuldade exerce alem de alterar dano?",
+    "Por que conhecer o mapa e tao importante no multiplayer?",
+    "Como evitar exageros ao falar de legado historico?"
+  ],
+  "references": [
+    "Rare - historia do estudio",
+    "GDC / Game Developer - relatos da equipe de GoldenEye",
+    "Nintendo - catalogo historico do Nintendo 64"
+  ]
+}
