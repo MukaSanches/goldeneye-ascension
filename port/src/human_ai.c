@@ -1,21 +1,13 @@
 /*
  * GoldenEye Ascension — reversible Human AI overlay.
  *
- * Design goals:
- *   - leave the original N64 game logic and stage AI bytecode untouched;
- *   - default to exact Classic behaviour (AI.HumanMode=0);
- *   - when enabled, layer continuous perception, uncertain memory, attention,
- *     eye adaptation, room-aware hearing, fear, suppression, pain, local
- *     communication, search and conservative squad tactics over ChrRecord;
- *   - restore the original/script-owned character parameters when disabled.
+ * The original game AI remains untouched in src/game/. This port-layer module
+ * observes ChrRecord and adds optional continuous perception, uncertain memory,
+ * room-aware hearing, psychology and conservative squad tactics. Human AI is
+ * OFF by default and restores script-owned character parameters when disabled.
  *
- * This is deliberately an overlay, not a replacement AI. Mission scripts keep
- * owning narrative behaviour, alarms, objectives, bosses and bespoke action
- * blocks. The module only uses public game primitives that already exist.
- *
- * Reference design lineage (see docs/dev/HUMAN-AI.md): Thief, Splinter Cell,
- * F.E.A.R., Alien: Isolation, The Last of Us and Hitman. No code/assets from
- * those games are used here.
+ * Design references are documented in docs/dev/HUMAN-AI.md. No code or assets
+ * from other games are used here.
  */
 
 #include <math.h>
@@ -43,20 +35,18 @@
 #include "player.h"
 #include "stan.h"
 
-/* Two useful game primitives are intentionally private to chraction.c in the
- * decomp headers. They are stable, non-static symbols and are used here rather
- * than duplicating the original navigation/targeting code. */
+/* Stable, non-static game primitives that are intentionally not in the public
+ * chraction header. Reusing them preserves GE navigation/targeting semantics. */
 extern s32  plot_course_for_actor(ChrRecord *self, coord3d *target, StandTile *stan, SPEED speed);
 extern void chrlvSetTargetToPlayer(ChrRecord *self);
 
 #define HAI_PI              3.14159265358979323846f
 #define HAI_TAU             (2.0f * HAI_PI)
-#define HAI_MAX_ROOM_CACHE  256
+#define HAI_MAX_ROOMS       256
 #define HAI_MAX_DEATHS      24
-#define HAI_CLOSE_VISION_M  8.0f   /* original visionrange is in 100-unit metres */
+#define HAI_CLOSE_VISION_M  8.0f
 #define HAI_MIN_HEARING     0.12f
 
-/* Config is intentionally conservative. Classic is always the default. */
 static int   cfgHumanMode      = 0;
 static int   cfgHumanDebug     = 0;
 static float cfgHumanIntensity = 1.0f;
@@ -89,11 +79,11 @@ typedef enum HumanRole {
 } HumanRole;
 
 typedef enum HumanAttention {
-    HAI_ATTENTION_ROUTINE = 0,
-    HAI_ATTENTION_SOUND,
-    HAI_ATTENTION_VISUAL,
-    HAI_ATTENTION_DANGER,
-    HAI_ATTENTION_TARGET
+    HAI_ATTN_ROUTINE = 0,
+    HAI_ATTN_SOUND,
+    HAI_ATTN_VISUAL,
+    HAI_ATTN_DANGER,
+    HAI_ATTN_TARGET
 } HumanAttention;
 
 typedef struct HumanParams {
@@ -116,17 +106,16 @@ typedef struct HumanGuardState {
     HumanParams base;
     HumanParams applied;
 
-    f32 awareness;       /* 0..100: certainty an intruder/target exists */
-    f32 fear;            /* 0..100 */
-    f32 suppression;     /* 0..100 */
-    f32 pain;            /* 0..100, short lived */
-    f32 confidence;      /* 0..100 */
-    f32 attention;       /* 0..1 */
-    f32 eyeAdaptation;   /* 0..1 */
-    f32 uncertainty;     /* world-unit radius around remembered target */
-    f32 dangerMemory;    /* 0..100, decays much more slowly than awareness */
+    f32 awareness;
+    f32 fear;
+    f32 suppression;
+    f32 pain;
+    f32 confidence;
+    f32 attention;
+    f32 eyeAdaptation;
+    f32 uncertainty;
+    f32 dangerMemory;
 
-    /* Stable personality. These never change during a character lifetime. */
     f32 courage;
     f32 aggression;
     f32 discipline;
@@ -177,20 +166,6 @@ static int s_started = 0;
 static _Atomic int s_effectiveMode = ATOMIC_VAR_INIT(0);
 static _Atomic int s_toggleRequest = ATOMIC_VAR_INIT(0);
 static _Atomic int s_setRequest = ATOMIC_VAR_INIT(-1);
-
-static const char *mentalName(HumanMentalState s)
-{
-    switch (s) {
-    case HAI_CALM:         return "CALM";
-    case HAI_CURIOUS:      return "CURIOUS";
-    case HAI_SUSPICIOUS:   return "SUSPICIOUS";
-    case HAI_ALERT:        return "ALERT";
-    case HAI_COMBAT:       return "COMBAT";
-    case HAI_SEARCHING:    return "SEARCHING";
-    case HAI_SURRENDERING: return "SURRENDERING";
-    default:               return "?";
-    }
-}
 
 static f32 clampf32(f32 v, f32 lo, f32 hi)
 {
@@ -249,12 +224,24 @@ static f32 rngSigned(HumanGuardState *s)
     return rng01(s) * 2.0f - 1.0f;
 }
 
+static const char *mentalName(HumanMentalState state)
+{
+    switch (state) {
+    case HAI_CALM: return "CALM";
+    case HAI_CURIOUS: return "CURIOUS";
+    case HAI_SUSPICIOUS: return "SUSPICIOUS";
+    case HAI_ALERT: return "ALERT";
+    case HAI_COMBAT: return "COMBAT";
+    case HAI_SEARCHING: return "SEARCHING";
+    case HAI_SURRENDERING: return "SURRENDERING";
+    default: return "?";
+    }
+}
+
 static int charAlive(const ChrRecord *chr)
 {
-    if (!chr || !chr->model || !chr->prop) {
-        return 0;
-    }
-    return chr->actiontype != ACT_DIE && chr->actiontype != ACT_DEAD;
+    return chr && chr->model && chr->prop &&
+           chr->actiontype != ACT_DIE && chr->actiontype != ACT_DEAD;
 }
 
 static int charArmed(ChrRecord *chr)
@@ -270,14 +257,12 @@ static int charCivilian(const ChrRecord *chr)
 
 static int charMissionProtected(const ChrRecord *chr)
 {
-    /* Invulnerable/script-critical actors should still perceive and remember,
-     * but Human AI must never force them to surrender. */
     return (chr->chrflags & CHRFLAG_INVINCIBLE) != 0;
 }
 
 static s32 charRoom(const ChrRecord *chr)
 {
-    return (chr && chr->prop && chr->prop->stan) ? getTileRoom(chr->prop->stan) : -1;
+    return chr && chr->prop && chr->prop->stan ? getTileRoom(chr->prop->stan) : -1;
 }
 
 static void captureParams(HumanParams *p, const ChrRecord *chr)
@@ -292,21 +277,14 @@ static void captureParams(HumanParams *p, const ChrRecord *chr)
     p->alertness = chr->alertness;
 }
 
-/* Preserve stage scripts as owners of their values. If game code changes a
- * field while our previous overlay is active, the value no longer equals the
- * one we wrote; accept that new value as the baseline before applying the next
- * Human frame. */
+/* If stage bytecode changed a field after our last write, preserve that new
+ * value as baseline. This keeps the overlay subordinate to mission scripts. */
 static void syncBaseline(HumanGuardState *s, ChrRecord *chr)
 {
     if (!s->appliedValid) {
         captureParams(&s->base, chr);
         return;
     }
-
-#define HAI_SYNC_FIELD(field) \
-    do { if (chr->field != s->applied.field) s->base.field = chr->field; } while (0)
-    HAI_SYNC_FIELD(visionrange);
-#undef HAI_SYNC_FIELD
 
     if (chr->visionrange != s->applied.vision) s->base.vision = chr->visionrange;
     if (chr->hearingscale != s->applied.hearing) s->base.hearing = chr->hearingscale;
@@ -322,9 +300,8 @@ static void syncBaseline(HumanGuardState *s, ChrRecord *chr)
 static void restoreGuard(HumanGuardState *s, ChrRecord *chr)
 {
     if (!s || !s->initialized || !s->appliedValid || !chr ||
-        chr->model != s->identityModel || chr->chrnum != s->identityChrnum) {
-        return;
-    }
+        chr->model != s->identityModel || chr->chrnum != s->identityChrnum) return;
+
     chr->visionrange = s->base.vision;
     chr->hearingscale = s->base.hearing;
     chr->accuracyrating = s->base.accuracy;
@@ -338,13 +315,9 @@ static void restoreGuard(HumanGuardState *s, ChrRecord *chr)
 
 static void restoreAll(void)
 {
-    if (!s_states || !s_slotsBase || s_slotsBase != g_ChrSlots) {
-        return;
-    }
-    s32 n = s_stateCount < g_NumChrSlots ? s_stateCount : g_NumChrSlots;
-    for (s32 i = 0; i < n; ++i) {
-        restoreGuard(&s_states[i], &g_ChrSlots[i]);
-    }
+    if (!s_states || !s_slotsBase || s_slotsBase != g_ChrSlots) return;
+    s32 count = s_stateCount < g_NumChrSlots ? s_stateCount : g_NumChrSlots;
+    for (s32 i = 0; i < count; ++i) restoreGuard(&s_states[i], &g_ChrSlots[i]);
 }
 
 static void initGuardState(HumanGuardState *s, ChrRecord *chr, s32 slot)
@@ -360,9 +333,6 @@ static void initGuardState(HumanGuardState *s, ChrRecord *chr, s32 slot)
     seed ^= (uint32_t)(uintptr_t)chr->model;
     s->rng = mix32(seed);
 
-    /* Personalities are intentionally correlated rather than uniformly
-     * random: trained/experienced characters tend to be more disciplined and
-     * less nervous, while aggression and courage remain partly independent. */
     f32 rating = clampf32(((f32)chr->accuracyrating + (f32)chr->speedrating + 80.0f) / 280.0f, 0.0f, 1.0f);
     s->experience = clampf32(0.25f + 0.45f * rating + 0.30f * rng01(s), 0.0f, 1.0f);
     s->discipline = clampf32(0.25f + 0.55f * s->experience + 0.20f * rng01(s), 0.0f, 1.0f);
@@ -376,80 +346,69 @@ static void initGuardState(HumanGuardState *s, ChrRecord *chr, s32 slot)
     s->eyeAdaptation = 0.55f;
     s->confidence = 35.0f + 50.0f * s->courage;
     s->mentalState = HAI_CALM;
-    s->attentionTarget = HAI_ATTENTION_ROUTINE;
+    s->attentionTarget = HAI_ATTN_ROUTINE;
     s->role = (u8)(rngNext(s) % 5U);
     s->lastDamage = chr->damage;
     s->lastCloseArghs = chr->numclosearghs;
     s->wasAlive = (u8)charAlive(chr);
     s->observedLastSee = chr->lastseetarget60;
     s->observedLastHear = chr->lastheartarget60;
-    s->nextVisionTick = g_GlobalTimer + (slot % 3);
+    s->nextVisionTick = g_GlobalTimer + slot % 3;
     s->nextHearTick = g_GlobalTimer;
-    s->nextSearchTick = g_GlobalTimer + (slot % 13);
-    s->nextTacticTick = g_GlobalTimer + (slot % 17);
-    s->nextCommTick = g_GlobalTimer + (slot % 19);
+    s->nextSearchTick = g_GlobalTimer + slot % 13;
+    s->nextTacticTick = g_GlobalTimer + slot % 17;
+    s->nextCommTick = g_GlobalTimer + slot % 19;
 }
 
 static int ensureStateStorage(void)
 {
-    if (g_NumChrSlots <= 0 || !g_ChrSlots) {
-        return 0;
-    }
-    if (s_slotsBase == g_ChrSlots && s_stateCount == g_NumChrSlots && s_states) {
-        return 1;
-    }
+    if (g_NumChrSlots <= 0 || !g_ChrSlots) return 0;
+    if (s_states && s_slotsBase == g_ChrSlots && s_stateCount == g_NumChrSlots) return 1;
 
-    /* A changed slot arena means a stage/character pool changed. The old
-     * pointer is no longer safe to restore; simply discard external state. */
     free(s_states);
     s_states = (HumanGuardState *)calloc((size_t)g_NumChrSlots, sizeof(*s_states));
     s_slotsBase = g_ChrSlots;
     s_stateCount = g_NumChrSlots;
     s_lastTick = g_GlobalTimer;
     if (!s_states) {
-        s_stateCount = 0;
         s_slotsBase = NULL;
+        s_stateCount = 0;
         sysLogPrintf(LOG_ERROR, "human-ai: state allocation failed");
         return 0;
     }
     return 1;
 }
 
-static int playerRoom(void)
+static s32 currentPlayerRoom(void)
 {
-    PropRecord *p = getCurrentPlayerProp();
-    return (p && p->stan) ? getTileRoom(p->stan) : -1;
+    PropRecord *player = getCurrentPlayerProp();
+    return player && player->stan ? getTileRoom(player->stan) : -1;
 }
 
-/* Build shortest portal-hop distance from the player's current room. This is
- * the Thief-inspired semantic acoustic graph: sound attenuates by rooms rather
- * than pretending every wall is transparent. Doors/portal openness are not
- * yet exposed robustly enough for a universal material coefficient, so each
- * portal currently provides a conservative fixed loss. */
-static void buildRoomHopCache(s16 out[HAI_MAX_ROOM_CACHE], s32 startRoom)
+/* Shortest portal-hop map from Bond's current room. It is a semantic acoustic
+ * graph: each room transition attenuates a sound instead of treating walls as
+ * transparent. */
+static void buildRoomHops(s16 hops[HAI_MAX_ROOMS], s32 startRoom)
 {
-    for (s32 i = 0; i < HAI_MAX_ROOM_CACHE; ++i) out[i] = -1;
-    if (startRoom < 0 || startRoom >= HAI_MAX_ROOM_CACHE || !g_BgPortals) return;
+    for (s32 i = 0; i < HAI_MAX_ROOMS; ++i) hops[i] = -1;
+    if (startRoom < 0 || startRoom >= HAI_MAX_ROOMS || !g_BgPortals) return;
 
-    s16 q[HAI_MAX_ROOM_CACHE];
+    s16 queue[HAI_MAX_ROOMS];
     s32 head = 0, tail = 0;
-    out[startRoom] = 0;
-    q[tail++] = (s16)startRoom;
+    hops[startRoom] = 0;
+    queue[tail++] = (s16)startRoom;
 
     while (head < tail) {
-        s32 room = q[head++];
-        s32 depth = out[room];
+        s32 room = queue[head++];
+        s32 depth = hops[room];
         if (depth >= 6) continue;
-
-        for (s32 pi = 0; pi < PORTMAX && g_BgPortals[pi].offset_portal != NULL; ++pi) {
-            s32 a = g_BgPortals[pi].connectedRoom1;
-            s32 b = g_BgPortals[pi].connectedRoom2;
-            s32 next = -1;
-            if (a == room) next = b;
-            else if (b == room) next = a;
-            if (next < 0 || next >= HAI_MAX_ROOM_CACHE || out[next] >= 0) continue;
-            out[next] = (s16)(depth + 1);
-            if (tail < HAI_MAX_ROOM_CACHE) q[tail++] = (s16)next;
+        for (s32 p = 0; p < PORTMAX && g_BgPortals[p].offset_portal != NULL; ++p) {
+            s32 a = g_BgPortals[p].connectedRoom1;
+            s32 b = g_BgPortals[p].connectedRoom2;
+            s32 next = a == room ? b : b == room ? a : -1;
+            if (next < 0 || next >= HAI_MAX_ROOMS || hops[next] >= 0) continue;
+            hops[next] = (s16)(depth + 1);
+            if (tail < HAI_MAX_ROOMS) queue[tail++] = (s16)next;
         }
     }
 }
@@ -474,38 +433,36 @@ static int roomsCommunicate(s32 a, s32 b)
     return bgRoomsSharePortal(a, b) ? 1 : 0;
 }
 
-static void rememberPosition(HumanGuardState *s, PropRecord *player,
-                             f32 uncertainty, int exact)
+static void rememberPosition(HumanGuardState *s, PropRecord *player, f32 uncertainty, int exact)
 {
     if (!player) return;
+    coord3d pos = player->pos;
+    StandTile *stan = player->stan;
+    f32 radius = exact ? 0.0f : clampf32(uncertainty, 20.0f, 3000.0f);
 
-    coord3d candidate = player->pos;
-    StandTile *candidateStan = player->stan;
-    f32 u = exact ? 0.0f : clampf32(uncertainty, 20.0f, 3000.0f);
-
-    if (!exact && u > 0.0f) {
+    if (!exact && radius > 0.0f && player->stan) {
         f32 angle = rng01(s) * HAI_TAU;
-        /* sqrt gives an even distribution across the uncertainty disc. */
-        f32 radius = sqrtf(rng01(s)) * u;
-        candidate.x += cosf(angle) * radius;
-        candidate.z += sinf(angle) * radius;
+        f32 r = sqrtf(rng01(s)) * radius;
+        coord3d candidate = pos;
+        candidate.x += cosf(angle) * r;
+        candidate.z += sinf(angle) * r;
 
         coord3d snapped;
         StandTile *snappedStan = NULL;
-        if (player->stan && getposstan(&candidate, player->stan, 20.0f, &snapped, &snappedStan)) {
-            candidate = snapped;
-            candidateStan = snappedStan;
+        if (getposstan(&candidate, player->stan, 20.0f, &snapped, &snappedStan) && snappedStan) {
+            pos = snapped;
+            stan = snappedStan;
         }
     }
 
-    s->estimate = candidate;
-    s->estimateStan = candidateStan;
-    s->uncertainty = u;
+    s->estimate = pos;
+    s->estimateStan = stan;
+    s->uncertainty = radius;
 }
 
 static void injectApproximateHearing(ChrRecord *chr, HumanGuardState *s)
 {
-    if (!chr || !s->estimateStan) return;
+    if (!s->estimateStan) return;
     chr->lastheartarget60 = g_GlobalTimer;
     chr->lastknowntargetpos = s->estimate;
     chr->targetTile = s->estimateStan;
@@ -521,11 +478,9 @@ static void confirmVisual(ChrRecord *chr, HumanGuardState *s, PropRecord *player
     s->lastDirectVisual = g_GlobalTimer;
     s->searchUntil = g_GlobalTimer + (s32)(CHRLV_FRAMERATE_F * (14.0f + 10.0f * s->discipline));
     s->attention = 1.0f;
-    s->attentionTarget = HAI_ATTENTION_TARGET;
+    s->attentionTarget = HAI_ATTN_TARGET;
     rememberPosition(s, player, 0.0f, 1);
 
-    /* Feed the original AI the same semantic fact, but only after the Human
-     * perception/reaction pipeline has actually identified the target. */
     chr->lastseetarget60 = g_GlobalTimer;
     chr->lastknowntargetpos = player->pos;
     chr->targetTile = player->stan;
@@ -535,18 +490,17 @@ static void confirmVisual(ChrRecord *chr, HumanGuardState *s, PropRecord *player
 
 static f32 humanAngleToBond(ChrRecord *chr)
 {
-    f32 a = fabsf(chrGetAngleToBond(chr));
-    while (a >= HAI_TAU) a -= HAI_TAU;
-    if (a > HAI_PI) a = HAI_TAU - a;
-    return a;
+    f32 angle = fabsf(chrGetAngleToBond(chr));
+    while (angle >= HAI_TAU) angle -= HAI_TAU;
+    return angle > HAI_PI ? HAI_TAU - angle : angle;
 }
 
 static f32 visualAngleFactor(f32 angle)
 {
-    const f32 d30  = HAI_PI * (30.0f / 180.0f);
-    const f32 d60  = HAI_PI * (60.0f / 180.0f);
-    const f32 d90  = HAI_PI * (90.0f / 180.0f);
-    const f32 d110 = HAI_PI * (110.0f / 180.0f);
+    f32 d30 = HAI_PI * (30.0f / 180.0f);
+    f32 d60 = HAI_PI * (60.0f / 180.0f);
+    f32 d90 = HAI_PI * (90.0f / 180.0f);
+    f32 d110 = HAI_PI * (110.0f / 180.0f);
     if (angle <= d30) return 1.00f;
     if (angle <= d60) return 0.78f;
     if (angle <= d90) return 0.42f;
@@ -556,8 +510,6 @@ static f32 visualAngleFactor(f32 angle)
 
 static f32 darknessFromAlpha(u8 alpha)
 {
-    /* GE's STAN shading convention uses alpha as a useful darkness proxy:
-     * white~0, grey~64, black~128. Clamp above 160 to avoid extreme data. */
     return clampf32((f32)alpha / 160.0f, 0.0f, 1.0f);
 }
 
@@ -572,30 +524,29 @@ static HumanMentalState deriveMentalState(const HumanGuardState *s)
     return HAI_CALM;
 }
 
-static void logTransition(ChrRecord *chr, HumanGuardState *s, HumanMentalState before, HumanMentalState after)
+static void logTransition(ChrRecord *chr, HumanGuardState *s,
+                          HumanMentalState before, HumanMentalState after)
 {
     if (!cfgHumanDebug || before == after) return;
     sysLogPrintf(LOG_INFO,
-        "human-ai: chr=%d %s -> %s awareness=%.1f fear=%.1f suppression=%.1f uncertainty=%.0f",
+        "human-ai: chr=%d %s->%s aw=%.1f fear=%.1f sup=%.1f uncertainty=%.0f",
         (int)chr->chrnum, mentalName(before), mentalName(after),
         s->awareness, s->fear, s->suppression, s->uncertainty);
 }
 
-static void updatePersonState(ChrRecord *chr, HumanGuardState *s, f32 dt,
-                              HumanDeathEvent deaths[], s32 *deathCount)
+static void updatePhysiology(ChrRecord *chr, HumanGuardState *s, f32 dt,
+                             HumanDeathEvent deaths[], s32 *deathCount)
 {
     int alive = charAlive(chr);
-
     if (s->wasAlive && !alive && *deathCount < HAI_MAX_DEATHS && chr->prop) {
-        HumanDeathEvent *e = &deaths[(*deathCount)++];
-        e->pos = chr->prop->pos;
-        e->room = charRoom(chr);
-        e->chrnum = chr->chrnum;
+        HumanDeathEvent *event = &deaths[(*deathCount)++];
+        event->pos = chr->prop->pos;
+        event->room = charRoom(chr);
+        event->chrnum = chr->chrnum;
     }
     s->wasAlive = (u8)alive;
     if (!alive) return;
 
-    /* Pain and suppression are driven from real damage/near-miss feedback. */
     if (chr->damage > s->lastDamage + 0.001f) {
         f32 delta = chr->damage - s->lastDamage;
         s->pain = clampf32(s->pain + 30.0f + delta * 12.0f, 0.0f, 100.0f);
@@ -603,7 +554,7 @@ static void updatePersonState(ChrRecord *chr, HumanGuardState *s, f32 dt,
         s->fear = clampf32(s->fear + (18.0f + delta * 5.0f) * (1.25f - 0.65f * s->courage), 0.0f, 100.0f);
         s->dangerMemory = clampf32(s->dangerMemory + 25.0f, 0.0f, 100.0f);
         s->attention = 1.0f;
-        s->attentionTarget = HAI_ATTENTION_DANGER;
+        s->attentionTarget = HAI_ATTN_DANGER;
     }
     s->lastDamage = chr->damage;
 
@@ -614,7 +565,7 @@ static void updatePersonState(ChrRecord *chr, HumanGuardState *s, f32 dt,
         s->awareness = clampf32(s->awareness + 20.0f + nearDelta * 5.0f, 0.0f, 100.0f);
         s->dangerMemory = clampf32(s->dangerMemory + 12.0f, 0.0f, 100.0f);
         s->attention = 1.0f;
-        s->attentionTarget = HAI_ATTENTION_DANGER;
+        s->attentionTarget = HAI_ATTN_DANGER;
     }
     s->lastCloseArghs = chr->numclosearghs;
 
@@ -633,16 +584,17 @@ static void applyDeathAwareness(ChrRecord *chr, HumanGuardState *s,
 
     for (s32 i = 0; i < deathCount; ++i) {
         if (deaths[i].chrnum == chr->chrnum) continue;
-        f32 d = distXZ(&chr->prop->pos, &deaths[i].pos);
-        int roomLink = roomsCommunicate(room, deaths[i].room);
-        if (d > 1800.0f || roomLink == 0) continue;
+        f32 distance = distXZ(&chr->prop->pos, &deaths[i].pos);
+        int link = roomsCommunicate(room, deaths[i].room);
+        if (distance > 1800.0f || link == 0) continue;
 
-        f32 strength = (roomLink == 2 ? 1.0f : 0.60f) * (1.0f - clampf32(d / 2200.0f, 0.0f, 0.8f));
+        f32 strength = (link == 2 ? 1.0f : 0.60f) *
+                       (1.0f - clampf32(distance / 2200.0f, 0.0f, 0.8f));
         s->fear = clampf32(s->fear + strength * (18.0f + 22.0f * s->nervousness), 0.0f, 100.0f);
         s->dangerMemory = clampf32(s->dangerMemory + strength * 35.0f, 0.0f, 100.0f);
         s->awareness = clampf32(s->awareness + strength * 22.0f, 0.0f, 100.0f);
         s->attention = clampf32(s->attention + strength * 0.30f, 0.0f, 1.0f);
-        s->attentionTarget = HAI_ATTENTION_DANGER;
+        s->attentionTarget = HAI_ATTN_DANGER;
     }
 }
 
@@ -650,18 +602,15 @@ static void updateVisual(ChrRecord *chr, HumanGuardState *s, PropRecord *player,
 {
     s->directVisible = 0;
     if (g_GlobalTimer < s->nextVisionTick) return;
-    s->nextVisionTick = g_GlobalTimer + 2 + (rngNext(s) & 1U);
+    s->nextVisionTick = g_GlobalTimer + 2 + (s32)(rngNext(s) & 1U);
 
-    f32 dist = chrGetDistanceToBond(chr);
-    f32 maxDist = fmaxf(200.0f, fmaxf(1.0f, s->base.vision) * 100.0f);
-    f32 angle = humanAngleToBond(chr);
-    f32 angleFactor = visualAngleFactor(angle);
-    if (angleFactor <= 0.0f || dist > maxDist * 1.15f) return;
+    f32 distance = chrGetDistanceToBond(chr);
+    f32 maxDistance = fmaxf(200.0f, fmaxf(1.0f, s->base.vision) * 100.0f);
+    f32 angleFactor = visualAngleFactor(humanAngleToBond(chr));
+    if (angleFactor <= 0.0f || distance > maxDistance * 1.15f || !chrCanSeeBond(chr)) return;
 
-    if (!chrCanSeeBond(chr)) return;
     s->directVisible = 1;
-
-    f32 rangeFactor = clampf32(1.0f - dist / fmaxf(maxDist, 1.0f), 0.05f, 1.0f);
+    f32 rangeFactor = clampf32(1.0f - distance / fmaxf(maxDistance, 1.0f), 0.05f, 1.0f);
     f32 targetDark = g_CurrentPlayer ? darknessFromAlpha(g_CurrentPlayer->tileColor.a) : 0.0f;
     f32 guardDark = darknessFromAlpha(chr->shadecol.a);
 
@@ -672,40 +621,33 @@ static void updateVisual(ChrRecord *chr, HumanGuardState *s, PropRecord *player,
     }
 
     f32 lightFactor = clampf32(1.0f - targetDark * 0.55f, 0.35f, 1.0f);
-    if (targetDark > guardDark + 0.12f) {
-        lightFactor *= 0.42f + 0.58f * s->eyeAdaptation;
-    }
+    if (targetDark > guardDark + 0.12f) lightFactor *= 0.42f + 0.58f * s->eyeAdaptation;
 
     coord3d *prev = getCurrentPlayerPrevPos();
-    f32 movement = prev ? distXZ(&player->pos, prev) : 0.0f;
-    f32 movementFactor = 0.82f + clampf32(movement / 45.0f, 0.0f, 0.55f);
+    f32 motion = prev ? distXZ(&player->pos, prev) : 0.0f;
+    f32 motionFactor = 0.82f + clampf32(motion / 45.0f, 0.0f, 0.55f);
     f32 attentionFactor = 0.65f + 0.55f * s->attention;
-    f32 gain = 105.0f * rangeFactor * angleFactor * lightFactor * movementFactor *
+    f32 gain = 105.0f * rangeFactor * angleFactor * lightFactor * motionFactor *
                attentionFactor * (0.65f + 0.55f * s->perception) * cfgHumanIntensity;
-
-    /* Humans identify a target faster once they are already suspicious. */
     if (s->awareness >= 45.0f) gain *= 1.25f;
     if (s->awareness >= 75.0f) gain *= 1.20f;
 
     s->awareness = clampf32(s->awareness + gain * dt, 0.0f, 100.0f);
     s->attention = clampf32(s->attention + dt * 0.8f, 0.0f, 1.0f);
-    s->attentionTarget = HAI_ATTENTION_VISUAL;
+    s->attentionTarget = HAI_ATTN_VISUAL;
     s->lastDirectVisual = g_GlobalTimer;
-    rememberPosition(s, player, fmaxf(20.0f, dist * 0.015f), 0);
     s->lastContact = g_GlobalTimer;
+    rememberPosition(s, player, fmaxf(20.0f, distance * 0.015f), 0);
 
     if (!s->confirmed && s->awareness >= 90.0f) {
         if (s->reactionUntil <= 0) {
-            /* ~0.18-0.95s, with trained/alert guards toward the fast end. */
-            f32 reactionSec = 0.95f - 0.48f * s->experience - 0.20f * s->discipline;
-            reactionSec += rngSigned(s) * (0.10f + 0.12f * s->nervousness);
-            if (dist < 350.0f) reactionSec *= 0.60f;
-            reactionSec = clampf32(reactionSec, 0.18f, 1.10f);
-            s->reactionUntil = g_GlobalTimer + (s32)(reactionSec * CHRLV_FRAMERATE_F);
+            f32 reaction = 0.95f - 0.48f * s->experience - 0.20f * s->discipline;
+            reaction += rngSigned(s) * (0.10f + 0.12f * s->nervousness);
+            if (distance < 350.0f) reaction *= 0.60f;
+            reaction = clampf32(reaction, 0.18f, 1.10f);
+            s->reactionUntil = g_GlobalTimer + (s32)(reaction * CHRLV_FRAMERATE_F);
         }
-        if (g_GlobalTimer >= s->reactionUntil) {
-            confirmVisual(chr, s, player);
-        }
+        if (g_GlobalTimer >= s->reactionUntil) confirmVisual(chr, s, player);
     } else if (s->confirmed) {
         confirmVisual(chr, s, player);
     }
@@ -713,66 +655,51 @@ static void updateVisual(ChrRecord *chr, HumanGuardState *s, PropRecord *player,
 
 static f32 playerGunNoise(void)
 {
-    f32 n = 0.0f;
-    if (get_hands_firing_status(GUNRIGHT)) n = fmaxf(n, getCurrentPlayerNoise(GUNRIGHT));
-    if (get_hands_firing_status(GUNLEFT))  n = fmaxf(n, getCurrentPlayerNoise(GUNLEFT));
-    return n;
+    f32 noise = 0.0f;
+    if (get_hands_firing_status(GUNRIGHT)) noise = fmaxf(noise, getCurrentPlayerNoise(GUNRIGHT));
+    if (get_hands_firing_status(GUNLEFT)) noise = fmaxf(noise, getCurrentPlayerNoise(GUNLEFT));
+    return noise;
 }
 
 static void updateHearing(ChrRecord *chr, HumanGuardState *s, PropRecord *player,
-                          const s16 roomHops[HAI_MAX_ROOM_CACHE], f32 gunNoise,
-                          f32 movement, f32 dt)
+                          const s16 roomHops[HAI_MAX_ROOMS], f32 gunNoise, f32 movement)
 {
     if (g_GlobalTimer < s->nextHearTick || !chr->prop || !chr->prop->stan) return;
     s->nextHearTick = g_GlobalTimer + 3;
 
     s32 room = charRoom(chr);
-    s32 hops = (room >= 0 && room < HAI_MAX_ROOM_CACHE) ? roomHops[room] : -1;
+    s32 hops = room >= 0 && room < HAI_MAX_ROOMS ? roomHops[room] : -1;
     if (hops < 0 || hops > 5) return;
 
     f32 attenuation = acousticAttenuation(hops);
-    if (attenuation <= 0.0f) return;
-
     f32 gunRadius = gunNoise > 0.0f ? gunNoise * 100.0f : 0.0f;
-    /* Player root movement is a useful, deterministic footstep proxy. */
-    f32 moveRadius = movement > 1.5f
-        ? clampf32(120.0f + movement * 28.0f, 120.0f, 1100.0f)
-        : 0.0f;
+    f32 moveRadius = movement > 1.5f ? clampf32(120.0f + movement * 28.0f, 120.0f, 1100.0f) : 0.0f;
     f32 rawRadius = fmaxf(gunRadius, moveRadius);
-    if (rawRadius <= 0.0f) return;
+    if (attenuation <= 0.0f || rawRadius <= 0.0f) return;
 
-    f32 hearing = fmaxf(0.05f, s->base.hearing);
-    f32 radius = rawRadius * hearing * attenuation;
-    f32 dist = distXZ(&chr->prop->pos, &player->pos);
-    if (dist > radius) return;
+    f32 radius = rawRadius * fmaxf(0.05f, s->base.hearing) * attenuation;
+    f32 distance = distXZ(&chr->prop->pos, &player->pos);
+    if (distance > radius) return;
 
     int gunEvent = gunRadius >= moveRadius && gunRadius > 0.0f;
-    f32 proximity = clampf32(1.0f - dist / fmaxf(radius, 1.0f), 0.0f, 1.0f);
-    f32 strength = gunEvent ? (38.0f + 45.0f * proximity) : (8.0f + 22.0f * proximity);
-    strength *= (0.72f + 0.48f * s->perception) * cfgHumanIntensity;
+    f32 proximity = clampf32(1.0f - distance / fmaxf(radius, 1.0f), 0.0f, 1.0f);
+    f32 strength = (gunEvent ? 38.0f + 45.0f * proximity : 8.0f + 22.0f * proximity) *
+                   (0.72f + 0.48f * s->perception) * cfgHumanIntensity;
 
     s->awareness = clampf32(s->awareness + strength, 0.0f, 100.0f);
     s->attention = 1.0f;
-    s->attentionTarget = HAI_ATTENTION_SOUND;
+    s->attentionTarget = HAI_ATTN_SOUND;
     s->lastContact = g_GlobalTimer;
     s->dangerMemory = clampf32(s->dangerMemory + (gunEvent ? 18.0f : 5.0f), 0.0f, 100.0f);
 
-    /* A sound tells a human a direction/area, not the exact player coordinate.
-     * More walls, distance and low experience widen the estimate. */
-    f32 uncertainty = 55.0f + 85.0f * (f32)hops + dist * (gunEvent ? 0.025f : 0.060f);
+    f32 uncertainty = 55.0f + 85.0f * (f32)hops + distance * (gunEvent ? 0.025f : 0.060f);
     uncertainty *= 1.25f - 0.50f * s->experience;
     rememberPosition(s, player, uncertainty, 0);
-
-    if (s->awareness >= 25.0f) {
-        injectApproximateHearing(chr, s);
-    }
-
-    (void)dt;
+    if (s->awareness >= 25.0f) injectApproximateHearing(chr, s);
 }
 
-/* If the original mission script/sensor saw or heard Bond before the overlay
- * sampled it, absorb that information rather than fighting the level logic.
- * An original hearing event is deliberately made uncertain again. */
+/* Mission bytecode remains authoritative. If it already observed a target,
+ * absorb the fact rather than trying to undo the level designer's intent. */
 static void absorbOriginalEvents(ChrRecord *chr, HumanGuardState *s, PropRecord *player)
 {
     if (chr->lastseetarget60 > 0 && chr->lastseetarget60 != s->observedLastSee) {
@@ -787,13 +714,13 @@ static void absorbOriginalEvents(ChrRecord *chr, HumanGuardState *s, PropRecord 
     if (chr->lastheartarget60 > 0 && chr->lastheartarget60 != s->observedLastHear) {
         s->observedLastHear = chr->lastheartarget60;
         if (!s->confirmed) {
-            f32 dist = chrGetDistanceToBond(chr);
+            f32 distance = chrGetDistanceToBond(chr);
             s->awareness = clampf32(s->awareness + 32.0f, 0.0f, 100.0f);
-            rememberPosition(s, player, 100.0f + dist * 0.05f, 0);
+            rememberPosition(s, player, 100.0f + distance * 0.05f, 0);
             chr->lastknowntargetpos = s->estimate;
             chr->targetTile = s->estimateStan;
             s->attention = 1.0f;
-            s->attentionTarget = HAI_ATTENTION_SOUND;
+            s->attentionTarget = HAI_ATTN_SOUND;
         }
     }
 }
@@ -816,8 +743,7 @@ static void updateMemory(HumanGuardState *s, f32 dt)
             s->awareness = fmaxf(s->awareness, 72.0f);
         }
     } else if (!s->directVisible && !s->confirmed) {
-        f32 decay = s->awareness >= 75.0f ? 3.0f :
-                    s->awareness >= 45.0f ? 4.5f : 7.0f;
+        f32 decay = s->awareness >= 75.0f ? 3.0f : s->awareness >= 45.0f ? 4.5f : 7.0f;
         f32 floor = s->dangerMemory * 0.25f;
         s->awareness = fmaxf(floor, s->awareness - decay * dt);
         s->uncertainty = clampf32(s->uncertainty + 18.0f * dt, 0.0f, 3000.0f);
@@ -841,7 +767,7 @@ static void searchRememberedArea(ChrRecord *chr, HumanGuardState *s)
     StandTile *stan = NULL;
     if (getposstan(&candidate, s->estimateStan, 20.0f, &snapped, &stan) && stan) {
         plot_course_for_actor(chr, &snapped, stan,
-            (s->awareness >= 75.0f || s->fear >= 60.0f) ? SPEED_RUN : SPEED_WALK);
+                              s->awareness >= 75.0f || s->fear >= 60.0f ? SPEED_RUN : SPEED_WALK);
         if (cfgHumanDebug) {
             sysLogPrintf(LOG_INFO, "human-ai: chr=%d searches uncertainty=%.0f",
                          (int)chr->chrnum, s->uncertainty);
@@ -852,14 +778,11 @@ static void searchRememberedArea(ChrRecord *chr, HumanGuardState *s)
 static int tryCoverOrFlank(ChrRecord *chr, HumanGuardState *s, int *tacticalCount)
 {
     if (*tacticalCount >= cfgMaxTactical || g_GlobalTimer < s->nextTacticTick ||
-        !chrHasStoppedOrPatroling(chr)) {
-        return 0;
-    }
+        !chrHasStoppedOrPatroling(chr)) return 0;
 
-    s->nextTacticTick = g_GlobalTimer +
-        (s32)(CHRLV_FRAMERATE_F * (0.8f + 1.5f * rng01(s)));
-
+    s->nextTacticTick = g_GlobalTimer + (s32)(CHRLV_FRAMERATE_F * (0.8f + 1.5f * rng01(s)));
     u8 quadrant = 0;
+
     if (s->suppression > 62.0f || s->fear > 78.0f || s->role == HAI_ROLE_COVER) {
         quadrant = QUADRANT_BACK;
     } else if (s->role == HAI_ROLE_FLANK_LEFT) {
@@ -876,35 +799,31 @@ static int tryCoverOrFlank(ChrRecord *chr, HumanGuardState *s, int *tacticalCoun
         return 0;
     }
 
-    if (check_2328_preset_set_with_method(chr, quadrant) && chr->padpreset1 >= 0) {
-        if (chrGoToPad(chr, chr->padpreset1, SPEED_RUN)) {
-            (*tacticalCount)++;
-            return 1;
-        }
+    if (check_2328_preset_set_with_method(chr, quadrant) && chr->padpreset1 >= 0 &&
+        chrGoToPad(chr, chr->padpreset1, SPEED_RUN)) {
+        (*tacticalCount)++;
+        return 1;
     }
 
-    /* If no useful waypoint exists, retain the original local evasive
-     * vocabulary rather than inventing movement the map cannot support. */
-    if (s->suppression < 75.0f && rng01(s) < 0.45f) {
-        if (actor_steps_sideways(chr) || actor_hops_sideways(chr)) {
-            (*tacticalCount)++;
-            return 1;
-        }
+    if (s->suppression < 75.0f && rng01(s) < 0.45f &&
+        (actor_steps_sideways(chr) || actor_hops_sideways(chr))) {
+        (*tacticalCount)++;
+        return 1;
     }
     return 0;
 }
 
 static void maybeSurrender(ChrRecord *chr, HumanGuardState *s)
 {
-    if (s->surrendered || charMissionProtected(chr) || charCivilian(chr) || !charArmed(chr)) return;
-    if (!chrHasStoppedOrPatroling(chr)) return;
+    if (s->surrendered || charMissionProtected(chr) || charCivilian(chr) ||
+        !charArmed(chr) || !chrHasStoppedOrPatroling(chr)) return;
 
-    f32 morale = (f32)chr->morale;
     f32 pressure = 0.55f * s->fear + 0.35f * s->suppression + 0.10f * s->pain;
     f32 threshold = 78.0f + 16.0f * s->courage + 8.0f * s->discipline;
-    if (pressure < threshold || morale > 55.0f) return;
+    if (pressure < threshold || chr->morale > 55) return;
 
-    f32 chance = clampf32((pressure - threshold) / 28.0f + (1.0f - s->courage) * 0.20f, 0.0f, 0.75f);
+    f32 chance = clampf32((pressure - threshold) / 28.0f + (1.0f - s->courage) * 0.20f,
+                          0.0f, 0.75f);
     if (rng01(s) < chance && chrTrySurrender(chr)) {
         s->surrendered = 1;
         s->confirmed = 0;
@@ -916,51 +835,46 @@ static void maybeSurrender(ChrRecord *chr, HumanGuardState *s)
 static void communicate(HumanGuardState *sender, ChrRecord *senderChr)
 {
     if (g_GlobalTimer < sender->nextCommTick || sender->teamwork < 0.30f ||
-        (!sender->confirmed && sender->awareness < 70.0f) || !senderChr->prop) {
-        return;
-    }
-    sender->nextCommTick = g_GlobalTimer +
-        (s32)(CHRLV_FRAMERATE_F * (0.9f + 1.2f * rng01(sender)));
+        (!sender->confirmed && sender->awareness < 70.0f) || !senderChr->prop) return;
 
+    sender->nextCommTick = g_GlobalTimer + (s32)(CHRLV_FRAMERATE_F * (0.9f + 1.2f * rng01(sender)));
     s32 senderRoom = charRoom(senderChr);
-    for (s32 i = 0; i < s_stateCount; ++i) {
-        HumanGuardState *r = &s_states[i];
-        ChrRecord *rc = &g_ChrSlots[i];
-        if (r == sender || !r->initialized || !charAlive(rc) || !charArmed(rc) || !rc->prop) continue;
-        if (charCivilian(rc)) continue;
 
-        /* We never force a zero-context actor into hostility. Communication
-         * strengthens characters already exposed to danger/sound/mission AI;
-         * their own AI list remains the authority on what that means. */
-        if (r->awareness < 5.0f && r->dangerMemory < 5.0f &&
-            rc->lastheartarget60 <= 0 && rc->lastseetarget60 <= 0) {
-            continue;
+    for (s32 i = 0; i < s_stateCount; ++i) {
+        HumanGuardState *receiver = &s_states[i];
+        ChrRecord *receiverChr = &g_ChrSlots[i];
+        if (receiver == sender || !receiver->initialized || !charAlive(receiverChr) ||
+            !charArmed(receiverChr) || charCivilian(receiverChr) || !receiverChr->prop) continue;
+
+        /* Do not invent hostility for a zero-context story actor. The mission
+         * script still decides what a received alert actually means. */
+        if (receiver->awareness < 5.0f && receiver->dangerMemory < 5.0f &&
+            receiverChr->lastheartarget60 <= 0 && receiverChr->lastseetarget60 <= 0) continue;
+
+        f32 distance = distXZ(&senderChr->prop->pos, &receiverChr->prop->pos);
+        int link = roomsCommunicate(senderRoom, charRoom(receiverChr));
+        f32 quality = link == 2 ? 1.0f : link == 1 ? 0.62f : 0.0f;
+        if (quality == 0.0f && sender->teamwork > 0.78f && distance < 3500.0f) quality = 0.32f;
+        if (quality <= 0.0f || distance > (link ? 2200.0f : 3500.0f)) continue;
+
+        f32 received = sender->awareness * quality * (0.65f + 0.35f * receiver->teamwork);
+        if (received <= receiver->awareness) continue;
+
+        receiver->awareness = clampf32(received, 0.0f, 96.0f);
+        receiver->attention = fmaxf(receiver->attention, 0.85f);
+        receiver->attentionTarget = HAI_ATTN_SOUND;
+        receiver->dangerMemory = fmaxf(receiver->dangerMemory, sender->dangerMemory * quality);
+        receiver->estimate = sender->estimate;
+        receiver->estimateStan = sender->estimateStan;
+        receiver->uncertainty = clampf32(sender->uncertainty + 140.0f + distance * 0.03f +
+                                          (1.0f - quality) * 250.0f, 80.0f, 3000.0f);
+        if (receiver->estimateStan && receiver->awareness >= 25.0f) {
+            injectApproximateHearing(receiverChr, receiver);
         }
 
-        f32 d = distXZ(&senderChr->prop->pos, &rc->prop->pos);
-        int roomLink = roomsCommunicate(senderRoom, charRoom(rc));
-        f32 quality = roomLink == 2 ? 1.0f : roomLink == 1 ? 0.62f : 0.0f;
-
-        /* Highly team-oriented guards get a coarse radio report at longer
-         * range. It is intentionally degraded, never exact coordinates. */
-        if (quality == 0.0f && sender->teamwork > 0.78f && d < 3500.0f) quality = 0.32f;
-        if (quality <= 0.0f || d > (roomLink ? 2200.0f : 3500.0f)) continue;
-
-        f32 received = sender->awareness * quality * (0.65f + 0.35f * r->teamwork);
-        if (received <= r->awareness) continue;
-        r->awareness = clampf32(received, 0.0f, 96.0f);
-        r->attention = fmaxf(r->attention, 0.85f);
-        r->attentionTarget = HAI_ATTENTION_SOUND;
-        r->dangerMemory = fmaxf(r->dangerMemory, sender->dangerMemory * quality);
-        r->estimate = sender->estimate;
-        r->estimateStan = sender->estimateStan;
-        r->uncertainty = clampf32(sender->uncertainty + 140.0f + d * 0.03f +
-                                  (1.0f - quality) * 250.0f, 80.0f, 3000.0f);
-        if (r->estimateStan && r->awareness >= 25.0f) injectApproximateHearing(rc, r);
-
         if (cfgHumanDebug) {
-            sysLogPrintf(LOG_INFO, "human-ai: chr=%d shared contact with chr=%d quality=%.2f",
-                         (int)senderChr->chrnum, (int)rc->chrnum, quality);
+            sysLogPrintf(LOG_INFO, "human-ai: chr=%d shared contact with chr=%d q=%.2f",
+                         (int)senderChr->chrnum, (int)receiverChr->chrnum, quality);
         }
     }
 }
@@ -970,38 +884,30 @@ static void applyHumanParameters(ChrRecord *chr, HumanGuardState *s)
     HumanParams p = s->base;
     int armed = charArmed(chr);
 
-    /* While a human guard has not identified the target, the original binary
-     * sight/hearing gates are shortened so they do not bypass continuous
-     * perception. Close-range safety remains, and confirmed/searching actors
-     * immediately regain their script-owned ranges. */
+    /* Prevent the binary original sight/hearing triggers from bypassing the
+     * Human perception build-up. Close-range detection remains possible. */
     if (armed && !s->confirmed && s->awareness < 90.0f) {
         p.vision = fminf(p.vision, HAI_CLOSE_VISION_M);
         p.hearing = fminf(p.hearing, HAI_MIN_HEARING);
     }
 
-    f32 accuracy = (f32)p.accuracy;
-    accuracy += (s->experience - 0.5f) * 8.0f;
-    accuracy -= s->suppression * 0.22f;
-    accuracy -= s->pain * 0.18f;
-    accuracy -= s->fear * 0.055f;
+    f32 accuracy = (f32)p.accuracy + (s->experience - 0.5f) * 8.0f -
+                   s->suppression * 0.22f - s->pain * 0.18f - s->fear * 0.055f;
     p.accuracy = (s8)clampi((s32)lroundf(accuracy), -99, 100);
 
-    f32 speed = (f32)p.speed;
-    speed += (s->aggression - 0.5f) * 5.0f;
-    speed -= s->pain * 0.10f;
-    speed -= s->suppression * 0.045f;
+    f32 speed = (f32)p.speed + (s->aggression - 0.5f) * 5.0f -
+                s->pain * 0.10f - s->suppression * 0.045f;
     p.speed = (s8)clampi((s32)lroundf(speed), -99, 100);
 
-    /* Never conjure grenades for a character whose mission data forbids them. */
     if (p.grenade > 0) {
-        f32 gp = (f32)p.grenade * (0.78f + 0.42f * s->aggression) *
-                 (1.0f - 0.0045f * s->fear);
-        p.grenade = (u8)clampi((s32)lroundf(gp), 0, 255);
+        f32 grenade = (f32)p.grenade * (0.78f + 0.42f * s->aggression) *
+                      (1.0f - 0.0045f * s->fear);
+        p.grenade = (u8)clampi((s32)lroundf(grenade), 0, 255);
     }
 
-    f32 humanMorale = 45.0f + 150.0f * s->courage + 40.0f * s->discipline -
-                      1.05f * s->fear - 0.48f * s->suppression - 0.20f * s->pain;
-    humanMorale = clampf32(humanMorale, 0.0f, 255.0f);
+    f32 humanMorale = clampf32(45.0f + 150.0f * s->courage + 40.0f * s->discipline -
+                                    1.05f * s->fear - 0.48f * s->suppression - 0.20f * s->pain,
+                                0.0f, 255.0f);
     p.morale = (u8)clampi((s32)lroundf(0.35f * (f32)s->base.morale + 0.65f * humanMorale), 0, 255);
 
     s32 alert = (s32)lroundf(s->awareness * 2.55f);
@@ -1042,7 +948,6 @@ void humanAiInit(void)
 {
     if (s_started) return;
     s_started = 1;
-
     const char *env = getenv("GE_HUMAN_AI");
     if (env && *env) cfgHumanMode = atoi(env) != 0;
     atomic_store(&s_effectiveMode, cfgHumanMode ? 1 : 0);
@@ -1084,8 +989,8 @@ void humanAiTick(void)
 {
     if (!s_started) return;
 
-    int setReq = atomic_exchange(&s_setRequest, -1);
-    if (setReq >= 0) setModeNow(setReq);
+    int requested = atomic_exchange(&s_setRequest, -1);
+    if (requested >= 0) setModeNow(requested);
     if (atomic_exchange(&s_toggleRequest, 0)) setModeNow(!humanAiIsEnabled());
     if (!humanAiIsEnabled()) return;
 
@@ -1100,80 +1005,76 @@ void humanAiTick(void)
     if (deltaTicks > 8) deltaTicks = 8;
     f32 dt = (f32)deltaTicks / CHRLV_FRAMERATE_F;
 
-    s16 roomHops[HAI_MAX_ROOM_CACHE];
-    buildRoomHopCache(roomHops, playerRoom());
+    s16 roomHops[HAI_MAX_ROOMS];
+    buildRoomHops(roomHops, currentPlayerRoom());
 
     coord3d *prev = getCurrentPlayerPrevPos();
-    f32 playerMovement = prev ? distXZ(&player->pos, prev) : 0.0f;
+    f32 movement = prev ? distXZ(&player->pos, prev) : 0.0f;
     f32 gunNoise = playerGunNoise();
 
     HumanDeathEvent deaths[HAI_MAX_DEATHS];
     s32 deathCount = 0;
 
-    /* Pass 1: identity/baseline synchronization and physiological events. */
+    /* Pass 1: identity, script baseline and physiology. */
     for (s32 i = 0; i < s_stateCount; ++i) {
         ChrRecord *chr = &g_ChrSlots[i];
-        HumanGuardState *s = &s_states[i];
+        HumanGuardState *state = &s_states[i];
         if (!chr->model || !chr->prop) continue;
 
-        if (!s->initialized || s->identityModel != chr->model || s->identityChrnum != chr->chrnum) {
-            initGuardState(s, chr, i);
+        if (!state->initialized || state->identityModel != chr->model ||
+            state->identityChrnum != chr->chrnum) {
+            initGuardState(state, chr, i);
         } else {
-            syncBaseline(s, chr);
+            syncBaseline(state, chr);
         }
-        updatePersonState(chr, s, dt, deaths, &deathCount);
+        updatePhysiology(chr, state, dt, deaths, &deathCount);
     }
 
-    /* Pass 2: sensory cognition, memory and social consequences. */
+    /* Pass 2: individual sensing/cognition and casualty awareness. */
     for (s32 i = 0; i < s_stateCount; ++i) {
         ChrRecord *chr = &g_ChrSlots[i];
-        HumanGuardState *s = &s_states[i];
-        if (!s->initialized || !charAlive(chr)) continue;
+        HumanGuardState *state = &s_states[i];
+        if (!state->initialized || !charAlive(chr)) continue;
 
-        HumanMentalState before = (HumanMentalState)s->mentalState;
-        applyDeathAwareness(chr, s, deaths, deathCount);
-        absorbOriginalEvents(chr, s, player);
+        HumanMentalState before = (HumanMentalState)state->mentalState;
+        applyDeathAwareness(chr, state, deaths, deathCount);
+        absorbOriginalEvents(chr, state, player);
 
-        /* Armed actors get full combat cognition. Unarmed/story actors retain
-         * their bespoke mission scripts and only receive social/emotional state. */
         if (charArmed(chr)) {
-            updateVisual(chr, s, player, dt);
-            updateHearing(chr, s, player, roomHops, gunNoise, playerMovement, dt);
+            updateVisual(chr, state, player, dt);
+            updateHearing(chr, state, player, roomHops, gunNoise, movement);
         }
-        updateMemory(s, dt);
+        updateMemory(state, dt);
 
-        HumanMentalState after = deriveMentalState(s);
-        s->mentalState = (u8)after;
-        logTransition(chr, s, before, after);
+        HumanMentalState after = deriveMentalState(state);
+        state->mentalState = (u8)after;
+        logTransition(chr, state, before, after);
     }
 
-    /* Pass 3: local information sharing. This is deliberately after all
-     * individual sensing so no guard gains clairvoyance from iteration order. */
+    /* Pass 3: information spreads locally; no iteration-order clairvoyance. */
     for (s32 i = 0; i < s_stateCount; ++i) {
         ChrRecord *chr = &g_ChrSlots[i];
-        HumanGuardState *s = &s_states[i];
-        if (s->initialized && charAlive(chr) && charArmed(chr) && !charCivilian(chr)) {
-            communicate(s, chr);
+        HumanGuardState *state = &s_states[i];
+        if (state->initialized && charAlive(chr) && charArmed(chr) && !charCivilian(chr)) {
+            communicate(state, chr);
         }
     }
 
-    /* Pass 4: conservative action selection and parameter overlay. Mission AI
-     * remains in charge; tactics only run when a character is idle/patrolling. */
+    /* Pass 4: conservative tactics only while the original AI is idle/patrol. */
     int tacticalCount = 0;
     for (s32 i = 0; i < s_stateCount; ++i) {
         ChrRecord *chr = &g_ChrSlots[i];
-        HumanGuardState *s = &s_states[i];
-        if (!s->initialized || !charAlive(chr)) continue;
+        HumanGuardState *state = &s_states[i];
+        if (!state->initialized || !charAlive(chr)) continue;
 
         if (charArmed(chr)) {
-            if (s->confirmed && !s->directVisible) {
-                searchRememberedArea(chr, s);
-            } else if (s->confirmed && s->directVisible) {
-                tryCoverOrFlank(chr, s, &tacticalCount);
+            if (state->confirmed && !state->directVisible) {
+                searchRememberedArea(chr, state);
+            } else if (state->confirmed && state->directVisible) {
+                tryCoverOrFlank(chr, state, &tacticalCount);
             }
-            maybeSurrender(chr, s);
+            maybeSurrender(chr, state);
         }
-
-        applyHumanParameters(chr, s);
+        applyHumanParameters(chr, state);
     }
 }
