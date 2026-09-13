@@ -1,0 +1,64 @@
+{
+  "id": "08",
+  "slug": "multiplayer_classico",
+  "title": "Multiplayer classico: regras, leitura e estrategia",
+  "category": "Multiplayer",
+  "level": "Intermediario",
+  "audience": "Grupos locais e jogadores competitivos casuais",
+  "summary": "Como transformar partidas de tela dividida em um jogo de rota, recursos, informacao e adaptacao sem perder o caos que tornou o modo memoravel.",
+  "objectives": [
+    "Configurar partidas equilibradas",
+    "Ler spawns e recursos",
+    "Evitar padroes previsiveis",
+    "Analisar vantagem sem confundir com sorte"
+  ],
+  "modules": [
+    {
+      "title": "Regras antes da mira",
+      "bullets": [
+        "Personagens, armas e cenario alteram o metajogo",
+        "Tempo e condicao de vitoria mudam risco aceitavel",
+        "Combine regras antes da partida"
+      ]
+    },
+    {
+      "title": "Mapa",
+      "bullets": [
+        "Conheca ciclos de circulacao",
+        "Armas criam pontos de interesse",
+        "Corredores e salas mudam valor conforme o arsenal"
+      ]
+    },
+    {
+      "title": "Informacao",
+      "bullets": [
+        "Tela dividida torna informacao parcialmente compartilhada",
+        "Som e direcao de fuga ajudam a prever movimento",
+        "Posicao vale tanto quanto precisao"
+      ]
+    },
+    {
+      "title": "Partida justa",
+      "bullets": [
+        "Troque mapa e regras para reduzir vantagem de memoria",
+        "Evite combinacoes notoriamente desequilibradas quando o objetivo for competicao",
+        "Use series curtas em vez de uma unica partida"
+      ]
+    }
+  ],
+  "lab": [
+    "Jogue melhor de cinco alternando o mapa a cada partida",
+    "Marque tres recursos-chave por mapa",
+    "Depois de cada derrota, registre se o fator principal foi posicao, aim, recurso ou decisao"
+  ],
+  "quiz": [
+    "Por que o conjunto de armas redefine um mapa?",
+    "Que informacao existe em tela dividida que nao existe em jogo online comum?",
+    "Como reduzir vantagem de quem conhece melhor o mapa?"
+  ],
+  "references": [
+    "GoldenEye 007 - multiplayer local",
+    "Documentacao comunitaria de mapas e regras",
+    "Ascension - futura direcao de multiplayer e controles"
+  ]
+}
