@@ -1,41 +1,53 @@
 # Security Policy
 
-This project is a non-commercial, fan-made research port. It has no server
-component and ships no binaries. The realistic security surface is:
+Ascension é um projeto local-first e não possui serviço de backend. A superfície de segurança relevante está concentrada no executável do port, no processamento de ROM/assets fornecidos pelo usuário, nas ferramentas de build/extração e nos workflows de CI.
 
-- the PC port executable parsing your own ROM and asset files at load time
-  (a malformed ROM/asset could in principle crash it or worse), and
-- the build/extraction scripts and CI workflow.
+## Como reportar
 
-## Reporting a vulnerability
+Não abra uma issue pública para uma vulnerabilidade ainda não corrigida.
 
-Please **do not** open a public issue for a security problem.
+Use o fluxo privado do GitHub em **Security → Report a vulnerability**:
 
-Use GitHub's private vulnerability reporting:
-**Security → Report a vulnerability** on this repository
-(<https://github.com/jkdansereau/goldeneye-pc-port/security/advisories/new>).
+https://github.com/MukaSanches/goldeneye-pc-port/security/advisories/new
 
-If that is unavailable, email the maintainer at the address on their GitHub
-profile with `SECURITY` in the subject.
+Se o recurso privado não estiver disponível, entre em contato com o mantenedor pelo canal público indicado no perfil do GitHub e informe apenas que precisa tratar de um assunto de segurança. Não publique detalhes de exploração antes de receber um canal privado de resposta.
 
-Please include:
+Inclua, quando possível:
 
-- affected version / commit hash (from `git rev-parse HEAD`),
-- OS and how you built (region, `IDO_RECOMP`, MSYS2 vs WSL, …),
-- a minimal reproduction, and
-- the crash log (`ge007.crash.log`) or a stack trace if you have one.
+- commit afetado (`git rev-parse HEAD`);
+- sistema operacional e ambiente de build;
+- região/ROMID usada;
+- passos mínimos para reprodução;
+- crash log ou stack trace;
+- avaliação de impacto;
+- qualquer mitigação temporária conhecida.
 
-## Scope
+Nunca envie ROM, assets comerciais extraídos ou conteúdo proprietário como parte do relatório.
 
-In scope: memory-safety bugs in the `port/` layer and PC-port tooling,
-issues in the CI workflow or build scripts, and dependency problems we can
-act on.
+## Escopo
 
-Out of scope: bugs inherited unchanged from the upstream
-[GoldenEye 007 decompilation](https://github.com/n64decomp/007) that are not
-made worse by the port (report those upstream), missing-asset or wrong-ROM
-errors, and anything requiring a ROM or assets we do not distribute.
+Em escopo:
 
-## Supported versions
+- corrupção de memória ou execução indevida causada pela camada `port/`;
+- parsing inseguro de arquivos controláveis pelo usuário;
+- falhas nas ferramentas de preparação/build com impacto de segurança;
+- problemas de supply chain ou dependências acionáveis pelo projeto;
+- permissões ou comportamento inseguro em GitHub Actions.
 
-Only the tip of the default branch is supported. There are no releases yet.
+Normalmente fora de escopo:
+
+- defeitos puramente visuais ou de gameplay;
+- ROM incorreta, ausente ou incompatível;
+- bugs herdados sem alteração que não aumentem risco no port;
+- problemas que exigem redistribuição de material que o projeto não fornece;
+- engenharia social contra usuários ou mantenedores.
+
+## Versões suportadas
+
+Enquanto não houver uma release estável, a referência de correção é o topo de `main`. Branches históricas, forks e builds antigos podem não receber backport.
+
+Quando releases estáveis forem publicadas, esta seção será atualizada com a janela de suporte correspondente.
+
+## Divulgação coordenada
+
+O projeto busca confirmar o relatório, preparar uma correção e publicar crédito técnico de forma responsável quando apropriado. Prazo de divulgação depende da severidade e da capacidade de reproduzir o problema; não existe SLA formal neste estágio.

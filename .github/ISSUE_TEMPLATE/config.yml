@@ -1,14 +1,17 @@
-blank_issues_enabled: true
+blank_issues_enabled: false
 contact_links:
   - name: Build & setup guide
-    url: https://github.com/jkdansereau/goldeneye-pc-port/blob/main/docs/building.md
-    about: Read this first for build/extraction problems — most are covered here.
-  - name: Known rendering defects
-    url: https://github.com/jkdansereau/goldeneye-pc-port/blob/main/docs/dev/GRAPHICS-BACKLOG.md
-    about: Cosmetic / rendering issues already known and tracked. Check before filing.
+    url: https://github.com/MukaSanches/goldeneye-pc-port/blob/main/docs/building.md
+    about: Leia primeiro para problemas de preparação, dependências e build.
+  - name: Project status
+    url: https://github.com/MukaSanches/goldeneye-pc-port/blob/main/docs/PROJECT_STATUS.md
+    about: Consulte o estado atual antes de registrar algo que possa já ser conhecido ou experimental.
+  - name: Support
+    url: https://github.com/MukaSanches/goldeneye-pc-port/blob/main/SUPPORT.md
+    about: Dúvidas de uso, build e diagnóstico que não são bugs confirmados.
   - name: Security vulnerability
-    url: https://github.com/jkdansereau/goldeneye-pc-port/security/advisories/new
-    about: Report memory-safety / build-pipeline vulnerabilities privately, not as a public issue.
+    url: https://github.com/MukaSanches/goldeneye-pc-port/security/advisories/new
+    about: Vulnerabilidades devem ser reportadas em privado.
   - name: Rights-holder concern
-    url: https://github.com/jkdansereau/goldeneye-pc-port/blob/main/NOTICE
-    about: If you represent a rights holder, see NOTICE and open an issue titled accordingly.
+    url: https://github.com/MukaSanches/goldeneye-pc-port/blob/main/NOTICE
+    about: Consulte o NOTICE antes de entrar em contato sobre direitos ou atribuição.

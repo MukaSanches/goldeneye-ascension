@@ -1,71 +1,125 @@
-name: Bug report (build or run)
-description: A build failure, crash, hang, or rendering/audio/input defect in the PC port
+name: Bug report
+description: Build failure, crash, hang, regression, or rendering/audio/input defect in Ascension
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for filing a report. First, please check:
+        Obrigado pelo relatório. Antes de abrir:
 
-        - The port is **Phase 2 of 4** — rendering is incomplete and many
-          cosmetic defects are already tracked in
-          [`docs/dev/GRAPHICS-BACKLOG.md`](https://github.com/jkdansereau/goldeneye-pc-port/blob/main/docs/dev/GRAPHICS-BACKLOG.md).
-          Search open issues and that file before filing.
-        - Only the **Windows / MSYS2 MINGW64** build is tested. Linux and
-          macOS are best-effort — build breaks there are expected.
-        - Do **not** attach a ROM, extracted assets, or any game data.
+        - atualize `main` e tente reproduzir novamente;
+        - consulte `docs/building.md`, `docs/PROJECT_STATUS.md` e issues abertas;
+        - não anexe ROM, assets extraídos ou outros dados comerciais do jogo.
+
   - type: input
     id: commit
     attributes:
       label: Commit
-      description: Output of `git rev-parse --short HEAD`
-      placeholder: 311fd012
+      description: Saída de `git rev-parse --short HEAD`.
+      placeholder: c8b7b63
     validations:
       required: true
+
   - type: dropdown
     id: region
     attributes:
-      label: Region / ROMID
-      options: [ntsc-final, pal-final, jpn-final]
-    validations:
-      required: true
-  - type: input
-    id: os
-    attributes:
-      label: OS / environment
-      description: e.g. "Windows 10, MSYS2 MINGW64" or "Ubuntu 22.04, native gcc"
-    validations:
-      required: true
-  - type: dropdown
-    id: stage
-    attributes:
-      label: Which stage fails?
+      label: Região / ROMID
       options:
-        - Asset extraction
-        - CMake configure
-        - Compile / link
-        - Runtime — crash or hang
-        - Runtime — wrong rendering / audio / input
+        - ntsc-final
+        - pal-final
+        - jpn-final
+        - Outro / não se aplica
     validations:
       required: true
-  - type: textarea
-    id: what
+
+  - type: input
+    id: environment
     attributes:
-      label: What happened vs. what you expected
+      label: Sistema e ambiente
+      description: Exemplo: Windows 11 24H2, MSYS2 MINGW64.
+      placeholder: Windows 11, MSYS2 MINGW64
     validations:
       required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área afetada
+      options:
+        - Preparação de dados / assets
+        - CMake / configuração
+        - Compilação / link
+        - Inicialização
+        - Crash / hang em runtime
+        - Renderização / HUD / vídeo
+        - Áudio
+        - Teclado / mouse / controle
+        - Localização / texto
+        - Performance
+        - Outro
+    validations:
+      required: true
+
+  - type: dropdown
+    id: regression
+    attributes:
+      label: É uma regressão?
+      description: Funcionava em um commit anterior conhecido?
+      options:
+        - Sim
+        - Não
+        - Não sei
+    validations:
+      required: true
+
+  - type: textarea
+    id: observed
+    attributes:
+      label: Comportamento observado
+      description: Descreva exatamente o que aconteceu.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportamento esperado
+      description: O que deveria ter acontecido?
+    validations:
+      required: true
+
   - type: textarea
     id: repro
     attributes:
-      label: Steps to reproduce
-      description: Exact commands, flags (e.g. `-level_09`), and what you did in-game.
+      label: Passos para reproduzir
+      description: Inclua comandos, flags, nível, menu e ações em ordem.
+      placeholder: |
+        1. ./build-pc.sh ntsc-final
+        2. Abra o executável
+        3. Carregue ...
+        4. Faça ...
     validations:
       required: true
+
   - type: textarea
     id: logs
     attributes:
       label: Logs
-      description: |
-        Paste the terminal error, and `ge007.crash.log` if the port crashed.
-        For a rendering defect, attach a screenshot.
+      description: Cole terminal, `ge007.crash.log` ou stack trace. Remova qualquer dado proprietário antes de enviar.
       render: text
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidência adicional
+      description: Screenshot, vídeo curto, comparação de commits ou observações de performance. Não anexe ROM/assets comerciais.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmações
+      options:
+        - label: Procurei por issues abertas ou duplicadas.
+          required: true
+        - label: Não estou anexando ROM nem assets comerciais extraídos.
+          required: true

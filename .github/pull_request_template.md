@@ -1,37 +1,62 @@
 <!--
-Read CONTRIBUTING.md first. This is a faithfulness-focused port; the ground
-rules there are non-negotiable.
+Leia CONTRIBUTING.md antes de enviar. Mantenha o PR pequeno o bastante para ser revisado e testado de forma objetiva.
 -->
 
-## What this changes
+## Problema
 
-<!-- One or two sentences. Link the issue it closes: "Closes #123". -->
+<!-- O que estava errado, ausente ou difícil? Inclua issue quando existir. -->
 
-## Why
+## Solução
 
-<!-- The reasoning, not just the diff. What was wrong / missing? -->
+<!-- Explique a decisão técnica e por que esta abordagem foi escolhida. -->
 
-## Scope check
+## Escopo
 
-- [ ] No changes under `src/` or `include/` — **or** the only changes are the
-      narrow `#ifdef PORT` ABI exception (CONTRIBUTING.md rule 2), and each is
-      documented in `docs/porting-notes.md` / `docs/dev/findings.md`.
-- [ ] `Makefile`, `tools/`, `rsp/`, `ld/` untouched (N64 build).
-- [ ] If `CMakeLists.txt` `REGION_DEFS` changed, it still matches the N64
-      `Makefile` per-region macro set exactly.
+<!-- Liste subsistemas/arquivos relevantes. Evite listar cada arquivo se o diff já deixa isso óbvio. -->
 
-## Verification
+- Área afetada:
+- Comportamento alterado:
+- Compatibilidade esperada:
 
-<!-- What you actually ran. Delete lines that don't apply. -->
+## Validação
 
-- [ ] `./build-pc.sh ntsc-final` — clean configure + link
-- [ ] Crash-free run of at least one level (`-level_09`)
-- [ ] Single-frame `GE_PCDUMP` diff against the committed golden — no
-      unexpected change
-- [ ] pal-final / jpn-final also configured
+Marque apenas o que você realmente executou.
 
-Platform tested: <!-- e.g. Windows 10 / MSYS2 MINGW64 -->
+- [ ] `git diff --check`
+- [ ] `./build-pc.sh ntsc-final`
+- [ ] O executável abriu sem crash
+- [ ] O fluxo/nível afetado foi reproduzido em jogo
+- [ ] Mudança visual comparada com screenshot ou referência
+- [ ] Mudança de input testada com o dispositivo afetado
+- [ ] Mudança de localização revisada em contexto, incluindo quebra de linha
+- [ ] Outras regiões foram configuradas/compiladas quando a alteração as afeta
 
-## Notes for the reviewer
+Ambiente testado:
 
-<!-- Anything uncertain, follow-ups, or areas that need a closer look. -->
+```text
+OS:
+Toolchain:
+ROMID/region:
+Commit:
+```
+
+## Risco e rollback
+
+<!-- O que pode regredir? Como identificar? O commit pode ser revertido isoladamente? -->
+
+Risco:
+
+Rollback:
+
+## Checklist de integração
+
+- [ ] Não inclui ROM, asset comercial extraído ou outro conteúdo proprietário.
+- [ ] Não reformata código não relacionado.
+- [ ] Mudanças em `src/` / `include/` são necessárias e foram justificadas.
+- [ ] Dependências novas têm licença compatível e justificativa explícita.
+- [ ] Documentação foi atualizada quando o comportamento público mudou.
+- [ ] O PR não mistura correções ou features independentes sem necessidade.
+
+## Evidência adicional
+
+<!-- Screenshots, logs, medições, notas de compatibilidade ou follow-ups. -->

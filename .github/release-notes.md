@@ -1,65 +1,76 @@
-## GoldenEye 007 PC Port — v0.1.0 alpha
+# Ascension release notes template
 
-> ⚠️ **Research alpha. Playable, not polished.**
-> The full single-player campaign runs. In a full-campaign playtest on this
-> build, **19 of 21 missions were completable start to finish**. Known issues:
-> - **no audio** (Phase 3, not started) — the game runs silent;
-> - **two levels crash mid-mission** — Bunker ii and Statue (one root cause, D191);
-> - **AI characters move too slowly**, which breaks Cradle (the final level)
->   via Trevelyan's scripted behavior (D193);
-> - **cutscenes frequently glitch** — skipped, wrong camera, misplaced actors (D148/D160);
-> - some front-end 3D models are broken (the spinning Nintendo logo, the
->   MISSION COMPLETE / mode-select models);
-> - outdoor levels render with a **black sky**;
-> - mouse aim and some textures/transparency have rough edges.
->
-> If you just want to *play* GoldenEye on PC today, use one of the Xbox 360
-> recompilation projects instead — see the
-> [project README](https://github.com/jkdansereau/goldeneye-pc-port#how-this-differs-from-the-other-goldeneye-pc-projects).
+> Use este arquivo como base para uma release. Remova instruções e preencha apenas informações verificadas no commit/tag final.
 
-### Downloads
+## Ascension vX.Y.Z
 
-| File | Platform |
+Breve resumo do que esta versão muda para quem joga, compila ou contribui.
+
+### Destaques
+
+- Mudança relevante 1.
+- Mudança relevante 2.
+- Mudança relevante 3.
+
+### Compatibilidade validada
+
+| Item | Estado |
 |---|---|
-| `goldeneye-pc-port-<version>-win64.zip` | Windows x86-64 |
-| `goldeneye-pc-port-<version>-linux-x86_64.tar.gz` | Linux x86-64 |
+| Windows / MSYS2 MINGW64 | <!-- tested / not tested --> |
+| Linux | <!-- tested / experimental / not tested --> |
+| `ntsc-final` | <!-- tested / not tested --> |
+| `pal-final` | <!-- tested / not tested --> |
+| `jpn-final` | <!-- tested / not tested --> |
 
-Each contains the engine executable, a README, license texts, and the
-`prepare-assets` tool. **No ROM, no game assets.** The Windows bundle also
-carries its runtime DLLs; the Linux bundle links against your distro's SDL2 /
-zlib / libGL (`sudo apt install libsdl2-2.0-0 zlib1g libgl1`, or the equivalent).
+Não marque uma combinação como suportada apenas porque compilou. Diferencie build de validação em runtime.
 
-Windows development and playtesting is the primary path; the Linux build boots
-and renders (tested on WSLg) but has had far less exercise.
+### Mudanças
 
-### Running it
+#### Added
 
-You supply your own **NTSC-U GoldenEye 007 N64 ROM** (`.z64`, big-endian,
-`SHA-1 abe01e4aeb033b6c0836819f549c791b26cfde83`). Only the US ROM is supported
-in this alpha.
+- 
 
-1. Unpack the archive.
-2. Make a `data/` folder next to the executable and put the ROM in it as
-   `ge007.ntsc-final.z64`.
-3. Run the one-time asset step (needs Python 3.8+):
-   `python3 prepare-assets/prepare-assets.py`
-   — it reads your ROM and writes the two `data/pc*-ntsc-final/` folders the
-   engine needs. Standard library only; a few seconds.
-4. Run the executable **from that folder**.
+#### Changed
 
-Full steps are in the bundled `README.md`.
+- 
 
-### Verify the download
+#### Fixed
 
+- 
+
+### Limitações conhecidas
+
+- 
+
+### Instalação / build
+
+A documentação oficial fica em:
+
+- https://github.com/MukaSanches/goldeneye-pc-port/blob/main/docs/building.md
+- https://github.com/MukaSanches/goldeneye-pc-port/blob/main/README.md
+
+Este projeto **não distribui ROM nem assets comerciais**. O usuário deve fornecer o material legalmente obtido exigido pelo processo de build.
+
+### Verificação
+
+Registre o commit e os checks usados para preparar a versão:
+
+```text
+Tag:
+Commit:
+CI run:
+Smoke test:
+Playtest:
 ```
-sha256sum -c goldeneye-pc-port-<version>-win64.zip.sha256
-sha256sum -c goldeneye-pc-port-<version>-linux-x86_64.tar.gz.sha256
-```
 
-### Source & docs
+Quando houver artefatos distribuíveis, publique hashes de integridade ao lado dos downloads.
 
-<https://github.com/jkdansereau/goldeneye-pc-port> — built on the
-[GoldenEye 007 decompilation](https://github.com/n64decomp/007), architecture
-after the [Perfect Dark PC port](https://github.com/fgsfdsfgs/perfect_dark).
-Non-commercial fan preservation/research project; not affiliated with any
-rights holder.
+### Proveniência e licença
+
+Ascension deriva do ecossistema de decompilação/port de GoldenEye 007 e preserva créditos e licenças do trabalho herdado. Consulte:
+
+- https://github.com/MukaSanches/goldeneye-pc-port/blob/main/NOTICE
+- https://github.com/MukaSanches/goldeneye-pc-port/blob/main/LICENSE
+- https://github.com/MukaSanches/goldeneye-pc-port/blob/main/docs/PROVENANCE.md
+
+Projeto não comercial de preservação e pesquisa; não afiliado aos titulares das marcas relacionadas.

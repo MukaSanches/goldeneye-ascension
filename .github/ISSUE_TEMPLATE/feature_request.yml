@@ -1,0 +1,84 @@
+name: Feature request
+description: Proponha uma melhoria de produto, compatibilidade, acessibilidade, tooling ou experiência de PC
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ascension prioriza mudanças que preservem a referência original, tenham escopo claro e possam ser testadas. Antes de propor, consulte `ROADMAP_ASCENSION.md` e issues abertas.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema
+      description: Que limitação concreta você quer resolver? Evite começar pela implementação.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposta
+      description: Descreva o comportamento desejado do ponto de vista do usuário.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área
+      options:
+        - Preservação / Classic
+        - Localização
+        - Controles
+        - Vídeo / HUD / apresentação
+        - Áudio
+        - Acessibilidade
+        - Performance
+        - Build / tooling
+        - Modding / creator tools
+        - Documentação / site
+        - Outro
+    validations:
+      required: true
+
+  - type: dropdown
+    id: behavior
+    attributes:
+      label: Relação com o comportamento clássico
+      options:
+        - Preserva o comportamento clássico
+        - Deve ser opcional
+        - Altera intencionalmente a experiência
+        - Não se aplica
+        - Não sei
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas consideradas
+      description: Há uma solução menor, configuração existente ou abordagem diferente?
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: Como validar
+      description: Como saberíamos objetivamente que a feature está funcionando e não regrediu outra área?
+
+  - type: textarea
+    id: references
+    attributes:
+      label: Referências
+      description: Links, projetos de referência, screenshots ou documentação. Se houver código externo, informe licença e origem.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmações
+      options:
+        - label: Procurei por propostas semelhantes no roadmap e nas issues.
+          required: true
+        - label: A proposta não depende de distribuir ROM ou assets comerciais.
+          required: true
