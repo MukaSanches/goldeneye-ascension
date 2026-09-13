@@ -1,0 +1,64 @@
+{
+  "id": "01",
+  "slug": "goldeneye_1995_cinema_contexto",
+  "title": "GoldenEye (1995): cinema, contexto e linguagem",
+  "category": "Cinema",
+  "level": "Fundamentos",
+  "audience": "Fas de 007, jogadores e estudantes de cinema",
+  "summary": "Leitura do filme como reinicio de era para James Bond: contexto industrial, linguagem visual, tecnologia, antagonismo e temas que depois ajudariam a moldar o jogo.",
+  "objectives": [
+    "Situar GoldenEye na retomada de Bond nos anos 1990",
+    "Reconhecer os principais conflitos dramaticos do filme",
+    "Ler fotografia, montagem, espaco e tecnologia como linguagem",
+    "Separar o que pertence ao filme do que foi reinterpretado pelo jogo"
+  ],
+  "modules": [
+    {
+      "title": "Uma nova era para 007",
+      "bullets": [
+        "O hiato entre Licence to Kill e GoldenEye",
+        "Pierce Brosnan e a atualizacao do personagem",
+        "Fim da Guerra Fria como problema dramatico e de identidade"
+      ]
+    },
+    {
+      "title": "Estrutura e antagonismo",
+      "bullets": [
+        "Alec Trevelyan como espelho moral de Bond",
+        "Natalya Simonova como eixo tecnico e humano",
+        "Tecnologia orbital, informacao e poder como motor da trama"
+      ]
+    },
+    {
+      "title": "Linguagem visual",
+      "bullets": [
+        "Contraste entre instalacoes militares, cidades e espacos de luxo",
+        "Acao legivel: geografia, ritmo e objetivos claros",
+        "Iconografia de espionagem sem depender apenas de nostalgia"
+      ]
+    },
+    {
+      "title": "Do cinema ao sistema",
+      "bullets": [
+        "Cenas viram missoes, nao simples reencenacoes",
+        "Personagens e locais sao recombinados para o ritmo do jogo",
+        "A adaptacao preserva identidade mesmo quando muda a cronologia"
+      ]
+    }
+  ],
+  "lab": [
+    "Assista a sequencia de abertura e anote objetivo, obstaculo, mudanca de plano e saida",
+    "Escolha uma locacao do filme e descreva como ela poderia virar um nivel jogavel",
+    "Compare uma cena do filme com sua versao no jogo e liste tres diferencas funcionais"
+  ],
+  "quiz": [
+    "Por que 1995 exigia uma atualizacao do personagem Bond?",
+    "Como Trevelyan funciona alem do papel de vilao?",
+    "Que elementos do filme se transformam melhor em objetivos de jogo?"
+  ],
+  "references": [
+    "007.com - GoldenEye film archive",
+    "EON Productions - material oficial da franquia",
+    "Documentacao editorial Ascension"
+  ]
+}
