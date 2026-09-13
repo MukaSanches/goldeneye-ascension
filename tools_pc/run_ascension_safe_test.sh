@@ -4,8 +4,30 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-echo "==> Applying validated Ascension low-risk pack..."
-python tools_pc/apply_ascension_safe_gameplay_pack.py
+# Prefer an explicit override for unusual environments, then the conventional
+# Python 3 command used by current Linux/macOS hosts, while retaining `python`
+# compatibility for Windows/MSYS2 installations where that is the installed
+# Python 3 executable. Validate the major version before running any patcher.
+PYTHON_BIN="${ASCENSION_PYTHON:-}"
+if [[ -z "$PYTHON_BIN" ]]; then
+    if command -v python3 >/dev/null 2>&1; then
+        PYTHON_BIN="python3"
+    elif command -v python >/dev/null 2>&1; then
+        PYTHON_BIN="python"
+    else
+        echo "ERROR: Python 3 is required to apply the Ascension patch pack." >&2
+        exit 2
+    fi
+fi
+
+if ! "$PYTHON_BIN" -c 'import sys; raise SystemExit(0 if sys.version_info.major == 3 else 1)' >/dev/null 2>&1; then
+    echo "ERROR: '$PYTHON_BIN' is not a working Python 3 interpreter." >&2
+    echo "       Set ASCENSION_PYTHON to the Python 3 executable to use." >&2
+    exit 2
+fi
+
+echo "==> Applying validated Ascension low-risk pack with $PYTHON_BIN..."
+"$PYTHON_BIN" tools_pc/apply_ascension_safe_gameplay_pack.py
 
 echo "==> Building NTSC-final PC target..."
 rm -rf build-pc
