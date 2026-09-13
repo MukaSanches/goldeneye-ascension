@@ -12,8 +12,9 @@ Order:
   8. Subtle F10/front-end visual polish
   9. Conservative PC-polish presets (FOV/mouse/gamepad)
 
-Every child patcher is idempotent and anchor-validated. This wrapper aborts on
-the first failure, making local test setup reproducible and easy to audit.
+Every child patcher is idempotent and anchor-validated. Before any patcher runs,
+this wrapper also parses every child script so a syntax error cannot leave a
+partially-applied local tree.
 """
 from pathlib import Path
 import subprocess
@@ -33,11 +34,30 @@ SCRIPTS = [
 ]
 
 
-def main() -> int:
+def preflight() -> bool:
+    """Verify every child patcher exists and parses before any file is changed."""
     for script in SCRIPTS:
         if not script.exists():
             print(f"ERROR: missing {script.relative_to(ROOT)}", file=sys.stderr)
-            return 2
+            return False
+        try:
+            source = script.read_text(encoding="utf-8")
+            compile(source, str(script), "exec")
+        except (OSError, UnicodeError, SyntaxError) as exc:
+            print(f"ERROR: preflight failed for {script.relative_to(ROOT)}: {exc}",
+                  file=sys.stderr)
+            return False
+    return True
+
+
+def main() -> int:
+    if not preflight():
+        print("ERROR: no Ascension patchers were run.", file=sys.stderr)
+        return 2
+
+    print("==> Preflight OK: all Ascension patchers parse cleanly.")
+
+    for script in SCRIPTS:
         print(f"\n==> {script.name}")
         result = subprocess.run([sys.executable, str(script)], cwd=ROOT)
         if result.returncode != 0:
