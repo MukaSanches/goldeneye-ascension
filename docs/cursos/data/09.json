@@ -1,0 +1,64 @@
+{
+  "id": "09",
+  "slug": "level_design_ia",
+  "title": "Level design, IA e sensacao de infiltracao",
+  "category": "Game Design",
+  "level": "Avancado",
+  "audience": "Designers, modders e jogadores analiticos",
+  "summary": "Como geometria, portas, patrulhas, alarmes e objetivos combinam para criar a sensacao de penetrar uma instalacao funcional.",
+  "objectives": [
+    "Ler um nivel como sistema",
+    "Identificar choke points e loops",
+    "Relacionar IA e arquitetura",
+    "Projetar um encontro simples"
+  ],
+  "modules": [
+    {
+      "title": "Espaco funcional",
+      "bullets": [
+        "Salas parecem ter funcao alem do combate",
+        "Rotas conectam objetivos e retorno",
+        "Portas segmentam informacao e ritmo"
+      ]
+    },
+    {
+      "title": "IA situada",
+      "bullets": [
+        "Patrulha cria expectativa",
+        "Reacao a som conecta salas",
+        "Alarmes alteram o estado do nivel"
+      ]
+    },
+    {
+      "title": "Objetivos no espaco",
+      "bullets": [
+        "Terminais e NPCs exigem aproximacao",
+        "Objetivos opcionais de dificuldade reutilizam geometria",
+        "Backtracking ganha sentido quando o estado do mundo mudou"
+      ]
+    },
+    {
+      "title": "Encontro",
+      "bullets": [
+        "Defina objetivo local",
+        "Controle o numero de ameacas simultaneas",
+        "Ofereca pelo menos uma escolha significativa"
+      ]
+    }
+  ],
+  "lab": [
+    "Desenhe um andar com oito salas e duas rotas",
+    "Posicione uma patrulha, um alarme e um terminal e explique a interacao",
+    "Escreva tres maneiras de o jogador resolver a mesma area"
+  ],
+  "quiz": [
+    "Como uma porta pode ser ferramenta de design?",
+    "Por que patrulha cria previsibilidade util?",
+    "Quando backtracking deixa de ser apenas repeticao?"
+  ],
+  "references": [
+    "GoldenEye 007 - mapas da campanha",
+    "GDC - praticas historicas de level design",
+    "Ascension - futuras ferramentas de modding"
+  ]
+}
