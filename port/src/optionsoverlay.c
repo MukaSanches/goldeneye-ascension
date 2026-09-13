@@ -66,13 +66,13 @@ static const char *const kCategoryNames[CAT_COUNT] = {
     "GAME", "AI", "VIDEO", "INPUT", "UI", "ADV"
 };
 
-static const char *const kOnOff[]       = { "OFF", "ON", NULL };
-static const char *const kClassicHuman[]= { "CLASSIC", "HUMAN", NULL };
-static const char *const kTexFilter[]   = { "NEAREST", "BILINEAR", "3-POINT", NULL };
-static const char *const kCapture[]     = { "ALWAYS", "CLICK LOCK", NULL };
-static const char *const kPointer[]     = { "LEGACY", "1:1", NULL };
-static const char *const kInputPath[]   = { "OS", "RAW", NULL };
-static const int         kMsaaSeq[]     = { 1, 2, 4, 8 };
+static const char *const kOnOff[]        = { "OFF", "ON", NULL };
+static const char *const kClassicHuman[] = { "CLASSIC 1997", "HUMAN AI", NULL };
+static const char *const kTexFilter[]    = { "NEAREST", "BILINEAR", "3-POINT", NULL };
+static const char *const kCapture[]      = { "ALWAYS", "CLICK LOCK", NULL };
+static const char *const kPointer[]      = { "LEGACY", "1:1", NULL };
+static const char *const kInputPath[]    = { "OS", "RAW", NULL };
+static const int         kMsaaSeq[]      = { 1, 2, 4, 8 };
 
 static const int kResList[][2] = {
     {  640,  480 }, {  800,  600 }, {  960,  720 }, { 1024,  768 },
@@ -144,9 +144,10 @@ static struct Row rows[] = {
     R(CAT_INTERFACE, "Input.MenuPointerMode",  "Menu pointer",       ROW_ENUM,   1, kPointer, 0, 0, 0),
     R(CAT_INTERFACE, "Input.MenuPointerSpeed", "Pointer speed",      ROW_SLIDER, 10,NULL,     0, 10, 300),
 
-    /* Advanced: deliberately separated from normal player-facing controls. */
-    R(CAT_ADVANCED, "Video.FixMipTextures",     "Mip texture fix",     ROW_TOGGLE, 1,  kOnOff, 0, 0, 0),
-    R(CAT_ADVANCED, "Video.WrapFix",            "Texture wrap fix",    ROW_TOGGLE, 1,  kOnOff, 0, 0, 0),
+    /* Advanced: low-level renderer fixes are persisted here but are applied
+     * during renderer initialization, so the UI must tell the truth: restart. */
+    R(CAT_ADVANCED, "Video.FixMipTextures",     "Mip texture fix",     ROW_TOGGLE, 1,  kOnOff, 1, 0, 0),
+    R(CAT_ADVANCED, "Video.WrapFix",            "Texture wrap fix",    ROW_TOGGLE, 1,  kOnOff, 1, 0, 0),
     R(CAT_ADVANCED, "Input.AimBand",            "Aim analog band",     ROW_SLIDER, 1,  NULL,   0, 5, 40),
     R(CAT_ADVANCED, "Input.HipfirePitchSpeed",  "Hipfire pitch",       ROW_SLIDER, 10, NULL,   0, 10, 300),
     R(CAT_ADVANCED, "AI.Debug",                 "Human AI debug log",  ROW_TOGGLE, 1,  kOnOff, 0, 0, 0),
@@ -381,7 +382,8 @@ static void rowSet(struct Row *r, double v)
 
     if (strcmp(r->key, "Video.Fullscreen") == 0) {
         videoRequestFullscreen((int)lround(v));
-    } else if (strncmp(r->key, "Video.", 6) == 0 && !r->restart) {
+    } else if (strncmp(r->key, "Video.", 6) == 0 && !r->restart &&
+               strcmp(r->key, "Video.DisplayFPS") != 0) {
         videoRequestLiveConfig();
     }
 }
@@ -455,8 +457,9 @@ void optionsOverlayScroll(int dir)
 
 static void sliderSetFromX(struct Row *r, double ox)
 {
+    if (!r) return;
     double lo = rowLo(r), hi = rowHi(r);
-    if (!r || hi <= lo) return;
+    if (hi <= lo) return;
     s32 bx0, bx1;
     sliderBarSpan(&bx0, &bx1);
     double f = (ox - bx0) / (double)(bx1 - bx0);
