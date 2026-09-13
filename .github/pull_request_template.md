@@ -46,6 +46,9 @@ rules there are non-negotiable.
 - [ ] pal-final / jpn-final also configured
 - [ ] If Ascension patchers, controls, F10 options, or PC UX changed:
       `ASCENSION_NO_LAUNCH=1 ./tools_pc/run_ascension_safe_test.sh`
+- [ ] If controls or input behavior changed: completed the **Ascension controls**
+      section of `docs/ascension-smoke-test.md`, including CLASSIC / HYBRID /
+      MODERN coverage and saved-preset persistence.
 
 Platform tested: <!-- e.g. Windows 10 / MSYS2 MINGW64 -->
 
