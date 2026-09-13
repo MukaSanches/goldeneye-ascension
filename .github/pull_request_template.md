@@ -49,6 +49,8 @@ rules there are non-negotiable.
 - [ ] If controls or input behavior changed: completed the **Ascension controls**
       section of `docs/ascension-smoke-test.md`, including CLASSIC / HYBRID /
       MODERN coverage and saved-preset persistence.
+- [ ] If save serialization / EEPROM behavior changed: loaded a save created
+      before this change and confirmed file-select progress remains intact.
 
 Platform tested: <!-- e.g. Windows 10 / MSYS2 MINGW64 -->
 
