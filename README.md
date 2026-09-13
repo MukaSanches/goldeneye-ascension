@@ -1,11 +1,11 @@
 <p align="center"><img src="docs/assets/ascension-logo.svg" width="860" alt="Ascension"></p>
 <p align="center"><strong>O clássico. Elevado.</strong><br>Preservação · Português · Experiência moderna · Engenharia aberta</p>
 <p align="center">
-  <a href="https://github.com/MukaSanches/goldeneye-pc-port/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MukaSanches/goldeneye-pc-port/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/MukaSanches/goldeneye-ascension/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MukaSanches/goldeneye-ascension/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-9b7b3a"></a>
   <img alt="Primary platform: Windows" src="https://img.shields.io/badge/primary-Windows%20%2F%20MSYS2-555">
 </p>
-<p align="center"><a href="https://mukasanches.github.io/goldeneye-pc-port/"><strong>Site</strong></a> · <a href="ROADMAP_ASCENSION.md">Roadmap</a> · <a href="docs/PROJECT_STATUS.md">Status</a> · <a href="docs/GUIA-INICIANTE.md">Guia</a> · <a href="CONTRIBUTING.md">Contribuir</a> · <a href="SUPPORT.md">Suporte</a></p>
+<p align="center"><a href="https://mukasanches.github.io/goldeneye-ascension/"><strong>Site</strong></a> · <a href="ROADMAP_ASCENSION.md">Roadmap</a> · <a href="docs/PROJECT_STATUS.md">Status</a> · <a href="docs/cursos/README.md"><strong>Cursos</strong></a> · <a href="docs/GUIA-INICIANTE.md">Guia</a> · <a href="CONTRIBUTING.md">Contribuir</a> · <a href="SUPPORT.md">Suporte</a></p>
 
 <p align="center"><img src="docs/img/attract-bunker1.png" width="31%" alt="Bunker"><img src="docs/media/goldeneye-demo.gif" width="36%" alt="GoldenEye em execução"><img src="docs/img/attract-dam.png" width="31%" alt="Dam"></p>
 
@@ -26,6 +26,7 @@ A regra de produto é simples: **preservar o clássico sem congelá-lo no tempo*
 | Build de referência | `ntsc-final` |
 | CI | validação e builds automatizados em GitHub Actions |
 | Localização | PT-BR é a primeira localização Ascension; inglês permanece referência/fallback |
+| Educação | Ascension Learning Series com 20 cursos em PDF e geração reproduzível |
 | Distribuição | código e ferramentas; sem ROM e sem assets comerciais |
 | Qualidade | build, teste automatizado e playtest são evidências diferentes |
 
@@ -38,8 +39,8 @@ Use o terminal **MSYS2 MINGW64**.
 ```sh
 pacman -S --needed mingw-w64-x86_64-toolchain mingw-w64-x86_64-SDL2 mingw-w64-x86_64-zlib mingw-w64-x86_64-cmake mingw-w64-x86_64-python make git
 
-git clone https://github.com/MukaSanches/goldeneye-pc-port.git
-cd goldeneye-pc-port
+git clone https://github.com/MukaSanches/goldeneye-ascension.git
+cd goldeneye-ascension
 ```
 
 Para a ROM americana suportada, o caminho esperado é:
@@ -67,7 +68,7 @@ Se a preparação de dados ou o build falhar, consulte [`docs/building.md`](docs
 | **PC Experience** | vídeo, HUD, configuração e qualidade de vida com opções claras |
 | **Accessibility** | melhorias úteis, explícitas e testáveis |
 | **Engineering** | mudanças pequenas, rastreáveis, reversíveis e com evidência de teste |
-| **Community** | documentação suficiente para quem joga, depura ou contribui |
+| **Community** | documentação suficiente para quem joga, estuda, depura ou contribui |
 
 ## Mapa técnico
 
@@ -104,6 +105,14 @@ git diff
 
 Leia [`CONTRIBUTING.md`](CONTRIBUTING.md) antes de enviar um Pull Request.
 
+## Ascension Learning Series
+
+O repositório inclui uma coleção editorial própria com **20 cursos**, cobrindo cinema, história do jogo, fundamentos de gameplay, campanha, combate, multiplayer, level design, tecnologia do Nintendo 64, bastidores de desenvolvimento, identidade Ascension, instalação, MSYS2/CMake, ROM e sidecars, `ge007.ini`, Git/GitHub, testes, localização PT-BR e o caminho até a versão 1.0.
+
+Os cursos vivem em [`docs/cursos/`](docs/cursos/README.md). Cada PDF é gerado a partir de fontes JSON versionadas e de um gerador vetorial em Python, permitindo revisar conteúdo e diagramação no mesmo histórico do projeto. O workflow [`.github/workflows/courses.yml`](.github/workflows/courses.yml) recompõe automaticamente o catálogo e os 20 PDFs quando a fonte editorial muda.
+
+**[Abrir a Ascension Learning Series](docs/cursos/README.md)**
+
 ## Roadmap
 
 | Marco | Foco |
@@ -122,6 +131,7 @@ O roadmap completo, com critérios de saída, está em [`ROADMAP_ASCENSION.md`](
 
 ## Documentação
 
+- [`docs/cursos/README.md`](docs/cursos/README.md) — Ascension Learning Series, catálogo e 20 cursos em PDF.
 - [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) — o que está estável, experimental ou em andamento.
 - [`docs/GUIA-INICIANTE.md`](docs/GUIA-INICIANTE.md) — entrada para novos usuários e contribuidores.
 - [`docs/ASCENSION.md`](docs/ASCENSION.md) — identidade, princípios e governança técnica.
