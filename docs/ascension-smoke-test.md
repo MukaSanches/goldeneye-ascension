@@ -37,6 +37,9 @@ Expected results:
 ## Ascension controls
 
 - F10 > INPUT > Control preset shows CLASSIC / HYBRID / MODERN.
+- A fresh configuration starts on CLASSIC, preserving the original PC-port control behaviour by default.
+- Resetting Control preset returns it to CLASSIC.
+- An already-saved HYBRID or MODERN selection remains selected after relaunch; the new default must not overwrite existing user configuration.
 - F10 > INPUT > Dedicated crouch shows OFF / ON.
 - Modern: C / Left Ctrl / Right Ctrl crouch; Left Ctrl must not fire simultaneously.
 - Hybrid: C crouches; legacy Left Ctrl fire remains available.
