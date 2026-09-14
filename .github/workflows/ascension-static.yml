@@ -24,6 +24,9 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
+      - name: Check Python tool syntax
+        run: python3 -m compileall -q tools_pc
+
       - name: Verify Ascension contracts
         run: python3 tools_pc/verify_ascension_contracts.py
 
