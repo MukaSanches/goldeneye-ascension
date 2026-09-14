@@ -1,4 +1,5 @@
 #include "asc_setup.h"
+#include "asc_setup_native.h"
 
 #include <errno.h>
 #include <stdio.h>
@@ -164,6 +165,7 @@ static int command_inspect(const char *path)
     }
 
     printf("ASCSETUP v%u\n", doc.format_version);
+    printf("source-flags: 0x%08x\n", doc.source_flags);
     printf("sections: %u\n", doc.section_count);
     for (i = 0; i < doc.section_count; ++i) {
         const AscSetupSection *s = &doc.sections[i];
@@ -211,15 +213,59 @@ static int command_repack(const char *input, const char *output)
     return ok ? 0 : 3;
 }
 
+static int command_import_native(const char *input, const char *output)
+{
+    unsigned char *native_bytes = NULL;
+    size_t native_size = 0;
+    AscSetupDocument doc;
+    AscSetupDiagnostics diagnostics;
+    unsigned char *encoded = NULL;
+    size_t encoded_size = 0;
+    int status;
+    int ok = 0;
+
+    asc_setup_document_init(&doc);
+    asc_setup_diagnostics_init(&diagnostics);
+    if (!read_file(input, &native_bytes, &native_size)) {
+        status = ASC_SETUP_ERR_INVALID_ARGUMENT;
+        goto done;
+    }
+
+    status = asc_setup_native_import(native_bytes, native_size, &doc, &diagnostics);
+    if (status == ASC_SETUP_OK) {
+        status = asc_setup_encode_ascsetup(&doc, &encoded, &encoded_size, &diagnostics);
+    }
+    print_diagnostics(&diagnostics);
+    if (status != ASC_SETUP_OK) {
+        fprintf(stderr, "asc-setup: native import failed: %s\n",
+                asc_setup_status_string(status));
+        goto done;
+    }
+
+    ok = write_file(output, encoded, encoded_size);
+    if (ok) {
+        printf("imported native setup: %s -> %s (%u roots, %zu bytes)\n",
+               input, output, doc.section_count, encoded_size);
+    }
+
+done:
+    free(native_bytes);
+    free(encoded);
+    asc_setup_diagnostics_free(&diagnostics);
+    asc_setup_document_free(&doc);
+    return ok ? 0 : 2;
+}
+
 static void usage(const char *argv0)
 {
     fprintf(stderr,
             "Ascension Setup Compatibility Tool\n"
             "usage:\n"
-            "  %s validate <file.ascsetup>\n"
-            "  %s inspect  <file.ascsetup>\n"
-            "  %s repack   <input.ascsetup> <output.ascsetup>\n",
-            argv0, argv0, argv0);
+            "  %s validate      <file.ascsetup>\n"
+            "  %s inspect       <file.ascsetup>\n"
+            "  %s repack        <input.ascsetup> <output.ascsetup>\n"
+            "  %s import-native <native-setup.bin> <output.ascsetup>\n",
+            argv0, argv0, argv0, argv0);
 }
 
 int main(int argc, char **argv)
@@ -232,6 +278,9 @@ int main(int argc, char **argv)
     }
     if (argc == 4 && strcmp(argv[1], "repack") == 0) {
         return command_repack(argv[2], argv[3]);
+    }
+    if (argc == 4 && strcmp(argv[1], "import-native") == 0) {
+        return command_import_native(argv[2], argv[3]);
     }
     usage(argv[0]);
     return 1;
