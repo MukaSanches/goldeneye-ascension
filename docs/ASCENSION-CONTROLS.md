@@ -39,6 +39,17 @@ DedicatedCrouch = 1
 
 `ControlPreset` accepts `0 = CLASSIC`, `1 = HYBRID`, or `2 = MODERN`. `DedicatedCrouch` accepts `0 = OFF` or `1 = ON`. These values are registered as bounded integer options, so out-of-range values are clamped when the configuration is loaded.
 
+## Automated verification
+
+Before committing control-related changes, run the ROM-free Ascension checks from the repository root:
+
+```sh
+python3 tools_pc/verify_ascension_contracts.py
+python3 tools_pc/test_ascension_patchers.py
+```
+
+Both commands should finish with `PASS`. These checks do not replace an in-game smoke test, but they catch accidental regressions in the preset ranges, dedicated-crouch mappings, PT-BR control strings, patcher preflight, and repository hygiene without requiring a ROM.
+
 ## Compatibility rules
 
 Ascension control options are intentionally PC-side and opt-in. Changes in this area should preserve:
