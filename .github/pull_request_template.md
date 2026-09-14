@@ -39,6 +39,7 @@ rules there are non-negotiable.
 
 <!-- What you actually ran. Delete lines that don't apply. -->
 
+- [ ] `python3 tools_pc/verify_ascension_contracts.py` — static Ascension contracts pass
 - [ ] `./build-pc.sh ntsc-final` — clean configure + link
 - [ ] Crash-free run of at least one level (`-level_09`)
 - [ ] Single-frame `GE_PCDUMP` diff against the committed golden — no
