@@ -38,6 +38,13 @@ def git_value(*args: str) -> str:
     return command_output(["git", *args]) if shutil.which("git") else "unavailable"
 
 
+def compiler_summary() -> str:
+    for compiler in ("cc", "gcc", "clang"):
+        if shutil.which(compiler):
+            return f"{compiler}: {command_output([compiler, '--version'])}"
+    return "unavailable"
+
+
 def main() -> int:
     print("GoldenEye Ascension diagnostics")
     print("===============================")
@@ -46,6 +53,7 @@ def main() -> int:
     print(f"Git branch: {git_value('rev-parse', '--abbrev-ref', 'HEAD')}")
     print(f"Git commit: {git_value('rev-parse', '--short=12', 'HEAD')}")
     print(f"CMake: {command_output(['cmake', '--version']) if shutil.which('cmake') else 'unavailable'}")
+    print(f"C/C++ toolchain: {compiler_summary()}")
 
     expected = [
         Path("build-pc.sh"),
