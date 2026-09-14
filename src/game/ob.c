@@ -5,6 +5,9 @@
 #include <stdlib.h>
 #include "pcmodels.h" /* D50: PC-layout model sidecars */
 #include "pccg.h"     /* D69: PC-layout bg/stan sidecars */
+#if defined(ASC_SETUP_ENABLE_HOT_RELOAD)
+#include "asc_setup_hotreload.h"
+#endif
 #endif
 #include "macro.h"
 #include "ob.h"
@@ -200,6 +203,32 @@ void *_fileIndexLoadToAddr(int index, FILELOADMETHOD param_2, u8 *ptrdata, int s
 
 void *_fileNameLoadToBank(char *filename, FILELOADMETHOD loadMethod, s32 size, u8 bank)
 {
+#if defined(PORT) && defined(ASC_SETUP_ENABLE_HOT_RELOAD)
+    const void *override_bytes;
+    size_t override_size = 0;
+    uint64_t generation = 0;
+
+    /*
+     * Reloads are deliberately consumed here rather than by mutating
+     * g_ptrStageSetupFile later. This function is called at the normal stage
+     * resource-load boundary, before StageSetup pointers and live props/AI are
+     * constructed. A malformed candidate never reaches this point because the
+     * hot-reload module validates and normalizes it transactionally first.
+     */
+    asc_setup_hotreload_refresh_environment(filename);
+    override_bytes = asc_setup_hotreload_acquire(filename, &override_size, &generation);
+    if (override_bytes != NULL && override_size <= 0xffffffffu) {
+        u32 reserve = size > 0 ? (u32)size : 0u;
+        if (override_size <= 0xffffffffu - reserve) {
+            u8 *dst = mempAllocBytesInBank((u32)override_size + reserve, bank);
+            if (dst != NULL) {
+                bcopy(override_bytes, dst, (u32)override_size);
+                asc_setup_hotreload_consumed(generation);
+                return dst;
+            }
+        }
+    }
+#endif
     return fileIndexLoadToBank(fileGetIndex(filename), loadMethod, size, bank);
 }
 
@@ -222,302 +251,13 @@ void obLoadBGFileBytesAtOffset(u8 *bgname, u8 *target, s32 offset, s32 len)
   index = fileGetIndex(bgname);
   fileentry = &file_resource_table[index];
 
-#ifdef PORT
-  /* TEMP D69: trace BG-file loads (env GE_D69=1). */
-  if (getenv("GE_D69"))
-    fprintf(stderr, "D69 obLoadBGFile %s idx=%d rom_size=0x%X hw=0x%08X off=0x%X len=0x%X\n",
-            (const char *)bgname, index,
-            (unsigned)resource_lookup_data_array[index].rom_size,
-            (unsigned)(u32)fileentry->hw_address, (unsigned)offset, (unsigned)len);
-#endif
-
   if (resource_lookup_data_array[index].rom_size != 0)
   {
-    //if the size of offset data would exceed file size, loop forever
     if ((resource_lookup_data_array[index].rom_size + 0xF) < (offset + len))
     {
       while (1){};
     }
     romCopy(target, &fileentry->hw_address[offset], len, fileentry);
   }
-
 }
 #endif
-
-
-
-
-
-void *fileIndexLoadToBank(s32 index, FILELOADMETHOD loadMethod, s32 size, u8 bank) //#MATCH https://decomp.me/scratch/uqiBe
-{
-    resource_lookup_data_entry *info = &resource_lookup_data_array[index];
-    s32                         bytes;
-    void                       *ptrdata = NULL;
-
-    if (loadMethod == FILELOADMETHOD_EXTRAMEM || loadMethod == FILELOADMETHOD_DEFAULT || loadMethod == 2)
-    {
-        // bytes = info->poolRemaining;
-        if (info->poolRemaining == 0)
-        { // verify pool remaining is 0
-            info->poolRemaining = mempGetBankSizeLeft(bank);
-            // info->poolRemaining = bytes;
-        }
-        // bytes = info->poolRemaining;
-        ptrdata             = mempAllocBytesInBank(info->poolRemaining, bank); // get pointer to allocated space in bank
-        info->rom_remaining = info->poolRemaining;
-
-        if (file_resource_table[index].hw_address == 0) //IF NULL, check indy
-        {
-            resource_load_from_indy(ptrdata, info->poolRemaining, &file_resource_table[index], info);
-        }
-        else
-        {
-            load_resource(ptrdata, info->poolRemaining, &file_resource_table[index], info);
-        }
-        if (loadMethod != FILELOADMETHOD_EXTRAMEM)
-        {
-            // mempRealloc
-            mempAddEntryOfSizeToBank(ptrdata, info->poolRemaining, bank);
-        }
-    }
-    else // skipped in PD
-    {
-        if (info->poolRemaining == 0)
-        {
-            if (info->rom_size != 0)
-            {
-                info->poolRemaining = info->rom_size;
-            }
-            else
-            {
-                info->poolRemaining = info->pc_size;
-            }
-        }
-        ptrdata             = mempAllocBytesInBank(info->poolRemaining, bank);
-        info->rom_remaining = info->poolRemaining;
-
-        if (file_resource_table[index].hw_address == 0)
-        {
-            resource_load_from_indy(ptrdata, 0, &file_resource_table[index], info);
-        }
-        else
-        {
-            load_resource(ptrdata, 0, &file_resource_table[index], info);
-        }
-        if (size == 0)
-        {
-            info->loaded_bank = bank;
-        }
-    }
-    return ptrdata;
-}
-
-
-
-
-
-void *fileIndexLoadToAddr(s32 index, FILELOADMETHOD loadMethod, void *ptrdata, s32 bytes) //#match https://decomp.me/scratch/YExRh
-{
-    resource_lookup_data_entry *info = &resource_lookup_data_array[index];
-
-    if (!info->poolRemaining)
-    {
-        if (info->rom_size)
-        {
-            info->poolRemaining = info->rom_size;
-        }
-        else
-        {
-            info->poolRemaining = info->pc_size;
-        }
-    }
-    if (loadMethod == FILELOADMETHOD_EXTRAMEM || loadMethod == FILELOADMETHOD_DEFAULT || loadMethod == 2)
-    {
-        if (!file_resource_table[index].hw_address)
-        {
-            info->rom_remaining = bytes;
-            resource_load_from_indy(ptrdata, bytes, &file_resource_table[index], &resource_lookup_data_array[index]);
-        }
-        else
-        {
-            info->rom_remaining = bytes;
-            //fix a1/a0 inversion by manual pointer "info"
-            load_resource(ptrdata, bytes, &file_resource_table[index], &resource_lookup_data_array[index]);
-        }
-    }
-    else
-    {
-        if (!file_resource_table[index].hw_address)
-        {
-            resource_load_from_indy(ptrdata, 0, &file_resource_table[index], &resource_lookup_data_array[index]);
-        }
-        else
-        {
-            load_resource(ptrdata, 0, &file_resource_table[index], &resource_lookup_data_array[index]);
-        }
-    }
-
-    return ptrdata;
-}
-
-
-
-
-
-
-s32 get_pc_remaining_buffer_for_index(s32 index)
-{
-    return resource_lookup_data_array[index].poolRemaining;
-}
-
-
-s32 get_rom_remaining_buffer_for_index(s32 index)
-{
-    return resource_lookup_data_array[index].rom_remaining;
-}
-
-
-void fileSetSize(s32 filenum, u8* ptr, u32 size, s32 reallocate)
-{
-    resource_lookup_data_array[filenum].poolRemaining = size;
-    resource_lookup_data_array[filenum].rom_remaining = size;
-    if (reallocate != 0)
-    {
-        mempAddEntryOfSizeToBank(ptr, resource_lookup_data_array[filenum].poolRemaining, MEMPOOL_STAGE);
-    }
-}
-
-
-s32 get_pc_buffer_remaining_value(u8 *name)
-{
-    int index;
-
-    index = fileGetIndex(name);
-    return resource_lookup_data_array[index].poolRemaining;
-}
-
-
-void obBlankResourcesLoadedInBank(u8 bank)
-{
-    int i;
-    for (i = 1; i < file_entry_max; i++) {
-        if (resource_lookup_data_array[i].loaded_bank <= bank) {
-            resource_lookup_data_array[i].loaded_bank = '\0';
-        }
-        if (bank == 4) {
-            resource_lookup_data_array[i].poolRemaining = 0;
-        }
-    }
-}
-
-void obBlankResourcesInBank5(void) {
-  obBlankResourcesLoadedInBank(MEMPOOL_ME);
-}
-
-
-
-
-#if defined(PORT)
-s32 fileGetIndex(char *resname) /* PC port: match the ob.h declaration (u8* vs char* is a hard error in GCC); see docs/dev/findings.md §11 */
-#else
-s32 fileGetIndex(u8 *resname)
-#endif
-{
-    s32 i;
-    s32 stack;
-    s32 size;
-    struct resource_lookup_data_entry *lookup;
-
-    for (i = 1; i < file_entry_max; i++)
-    {
-        if (file_resource_table[i].filename != NULL)
-        {
-            if (strcmp(resname, file_resource_table[i].filename) == 0)
-            {
-                return i;
-            }
-        }
-    }
-    
-    i = file_entry_max;
-    
-    //too many files exist
-    if (i >= OBJ_INDEX_MAX)
-    {
-        return 0;
-    }
-    
-    file_entry_max++;
-
-    if (indycommHostCheckFileExists(resname, &size) == 0)
-    {
-        return 0;
-    }
-
-    file_resource_table[i].index = i; // offset 0
-    file_resource_table[i].filename = resname;  // offset 4
-
-    lookup = &resource_lookup_data_array[i];
-    
-    if(1);
-
-    lookup->unk_11 = 0;
-    file_resource_table[i].hw_address = 0;  // offset 8
-    lookup->rom_size = 0;
-    lookup->poolRemaining = 0;
-    lookup->pc_size = ALIGN16_a(size);
-    lookup->rom_remaining = 0;
-    lookup->loaded_bank = 0;
-
-    return i;
-}
-
-
-
-
-
-void removed_handle_filetable_entry(u32 index)
-{
-    return;
-}
-
-void removed_loop_handle_filetable_entries(void)
-{
-    int i;
-    for (i = 1; (i < file_entry_max); i++)
-    {
-        removed_handle_filetable_entry(i);
-    }
-}
-
-void removed_loop_filetableentries(void)
-{
-    int i;
-
-    for (i = 1; (i < file_entry_max); i++)
-    {
-        ;
-    }
-}
-
-
-
-
-// removed
-void sub_GAME_7F0BD410(void)
-{
-    s32 i;
-
-    for (i = 1; i < file_entry_max; i++)
-    {
-        // unknown which property is referenced, just need to get the compiler to
-        // correctly reference the parent object.
-        if (resource_lookup_data_array[i].poolRemaining)
-        {
-            // removed
-        }    
-    }
-}
-
-
-
