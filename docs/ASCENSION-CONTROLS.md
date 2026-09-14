@@ -29,7 +29,7 @@ The implementation lives in `port/src/ascension_controls.c`. Static regression c
 
 ## `ge007.ini` configuration
 
-The current F10 options overlay does not yet expose `Input.ControlPreset` or `Input.DedicatedCrouch`. Configure these Ascension controls directly in `ge007.ini` while testing:
+The current F10 options overlay does not yet expose `Input.ControlPreset` or `Input.DedicatedCrouch`. Configure these Ascension controls directly in `ge007.ini` while testing. Edit the file only while the game is closed: configuration is loaded at startup and a clean exit rewrites `ge007.ini`, so edits made while the game is running can be overwritten.
 
 ```ini
 [Input]
