@@ -11,6 +11,7 @@ It protects invariants that should remain true while Ascension evolves:
 * Hybrid keeps dedicated crouch on C so Left Ctrl remains legacy fire.
 * Modern keeps dedicated crouch available on Ctrl or C.
 * Core PT-BR Ascension control/UI translations remain present.
+* The Ascension controls guide keeps the preset/config fallback documented.
 * The validated patcher manifest passes its non-mutating preflight.
 * ROM images and reversible patcher backups are never tracked by Git.
 * Generated Python bytecode/cache artifacts are never tracked by Git.
@@ -26,6 +27,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 CONTROLS = ROOT / "port" / "src" / "ascension_controls.c"
 LOCALE = ROOT / "port" / "src" / "ascension_locale.c"
+CONTROLS_DOC = ROOT / "docs" / "ASCENSION-CONTROLS.md"
 PACK = ROOT / "tools_pc" / "apply_ascension_safe_gameplay_pack.py"
 
 
@@ -53,6 +55,8 @@ def main() -> int:
         return fail(f"missing {CONTROLS.relative_to(ROOT)}")
     if not LOCALE.is_file():
         return fail(f"missing {LOCALE.relative_to(ROOT)}")
+    if not CONTROLS_DOC.is_file():
+        return fail(f"missing {CONTROLS_DOC.relative_to(ROOT)}")
     if not PACK.is_file():
         return fail(f"missing {PACK.relative_to(ROOT)}")
 
@@ -84,6 +88,18 @@ def main() -> int:
     for label, needle in required_ptbr.items():
         if " ".join(needle.split()) not in normalized_locale:
             return fail(f"PT-BR contract changed: {label}")
+
+    controls_doc = CONTROLS_DOC.read_text(encoding="utf-8")
+    normalized_controls_doc = " ".join(controls_doc.split())
+    required_controls_doc = {
+        "Classic default documentation": "`CLASSIC` is the default preset",
+        "manual ControlPreset fallback": "ControlPreset = 0",
+        "manual DedicatedCrouch fallback": "DedicatedCrouch = 1",
+        "preset numeric values": "0 = CLASSIC`, `1 = HYBRID`, or `2 = MODERN",
+    }
+    for label, needle in required_controls_doc.items():
+        if " ".join(needle.split()) not in normalized_controls_doc:
+            return fail(f"control documentation contract changed: {label}")
 
     preflight = subprocess.run(
         [sys.executable, str(PACK), "--preflight-only"],
@@ -125,6 +141,7 @@ def main() -> int:
     print(f"  commit: {commit}")
     print("  controls: Classic default; presets 0..2; dedicated crouch mappings protected")
     print("  localization: core PT-BR control coverage present")
+    print("  documentation: Ascension control presets and manual fallback protected")
     print("  patchers: preflight clean")
     print("  repository: no tracked ROM, Ascension backup, or Python cache artifacts")
     return 0
