@@ -5,6 +5,7 @@ This verifier intentionally does not need a ROM and does not launch the game.
 It protects invariants that should remain true while Ascension evolves:
 
 * Classic remains the default control preset.
+* Dedicated crouch remains enabled by default but inert under Classic.
 * ControlPreset remains constrained to Classic/Hybrid/Modern (0..2).
 * DedicatedCrouch remains constrained to a boolean off/on value (0..1).
 * Classic does not enable the Ascension dedicated-crouch bridge.
@@ -66,6 +67,7 @@ def main() -> int:
 
     required_controls = {
         "Classic default": "static int s_controlPreset = 0;",
+        "dedicated crouch default": "static int s_dedicatedCrouch = 1;",
         "preset range": 'configRegisterInt("Input.ControlPreset", &s_controlPreset, 0, 2);',
         "dedicated crouch range": 'configRegisterInt("Input.DedicatedCrouch", &s_dedicatedCrouch, 0, 1);',
         "Classic dedicated-crouch guard": "if (!s_dedicatedCrouch || s_controlPreset == 0)",
@@ -141,7 +143,7 @@ def main() -> int:
     print("PASS: Ascension static contracts verified")
     print(f"  branch: {branch}")
     print(f"  commit: {commit}")
-    print("  controls: Classic default; presets 0..2; dedicated crouch mappings protected")
+    print("  controls: Classic default; dedicated crouch default; presets 0..2; mappings protected")
     print("  localization: core PT-BR control coverage present")
     print("  documentation: Ascension control presets and manual fallback protected")
     print("  patchers: preflight clean")
