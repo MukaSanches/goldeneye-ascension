@@ -7,6 +7,7 @@ It protects invariants that should remain true while Ascension evolves:
 * Classic remains the default control preset.
 * ControlPreset remains constrained to Classic/Hybrid/Modern (0..2).
 * Classic does not enable the Ascension dedicated-crouch bridge.
+* Core PT-BR Ascension control/UI translations remain present.
 * The validated patcher manifest passes its non-mutating preflight.
 * ROM images and reversible patcher backups are never tracked by Git.
 
@@ -20,6 +21,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTROLS = ROOT / "port" / "src" / "ascension_controls.c"
+LOCALE = ROOT / "port" / "src" / "ascension_locale.c"
 PACK = ROOT / "tools_pc" / "apply_ascension_safe_gameplay_pack.py"
 
 
@@ -45,6 +47,8 @@ def git_lines(*args: str) -> list[str]:
 def main() -> int:
     if not CONTROLS.is_file():
         return fail(f"missing {CONTROLS.relative_to(ROOT)}")
+    if not LOCALE.is_file():
+        return fail(f"missing {LOCALE.relative_to(ROOT)}")
     if not PACK.is_file():
         return fail(f"missing {PACK.relative_to(ROOT)}")
 
@@ -58,6 +62,19 @@ def main() -> int:
     for label, needle in required_controls.items():
         if needle not in source:
             return fail(f"control contract changed: {label}")
+
+    locale = LOCALE.read_text(encoding="utf-8")
+    required_ptbr = {
+        "language selector": '{ "PORTUGUESE (BRAZIL)", "PORTUGUES (BRASIL)" }',
+        "control preset": '{ "Control preset", "Preset de controles" }',
+        "dedicated crouch": '{ "Dedicated crouch", "Agachar dedicado" }',
+        "Classic value": '{ "CLASSIC", "CLASSICO" }',
+        "Hybrid value": '{ "HYBRID", "HIBRIDO" }',
+        "Modern value": '{ "MODERN", "MODERNO" }',
+    }
+    for label, needle in required_ptbr.items():
+        if needle not in locale:
+            return fail(f"PT-BR contract changed: {label}")
 
     preflight = subprocess.run(
         [sys.executable, str(PACK), "--preflight-only"],
@@ -91,6 +108,7 @@ def main() -> int:
     print(f"  branch: {branch}")
     print(f"  commit: {commit}")
     print("  controls: Classic default; presets constrained to 0..2")
+    print("  localization: core PT-BR control coverage present")
     print("  patchers: preflight clean")
     print("  repository: no tracked ROM images or Ascension backup artifacts")
     return 0
