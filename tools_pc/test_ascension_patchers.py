@@ -63,7 +63,7 @@ def copy_ignore(_directory: str, names: list[str]) -> set[str]:
     return {name for name in names if name in IGNORE_DIRS}
 
 
-def run_pack(root: Path) -> None:
+def run_pack(root: Path) -> str:
     result = subprocess.run(
         [sys.executable, str(root / PACK_REL)],
         cwd=root,
@@ -75,6 +75,7 @@ def run_pack(root: Path) -> None:
     if result.returncode != 0:
         print(result.stdout, file=sys.stderr)
         raise RuntimeError(f"patcher pack failed with exit code {result.returncode}")
+    return result.stdout
 
 
 def verify_backups(root: Path) -> int:
@@ -118,7 +119,7 @@ def main() -> int:
 
         after_first = snapshot(sandbox)
         try:
-            run_pack(sandbox)
+            second_output = run_pack(sandbox)
         except RuntimeError as exc:
             print(f"FAIL: second application: {exc}", file=sys.stderr)
             return 1
@@ -133,6 +134,14 @@ def main() -> int:
             print("FAIL: patcher pack is not idempotent; second run changed:", file=sys.stderr)
             for path in changed:
                 print(f"  {path}", file=sys.stderr)
+            reapplied = [
+                line for line in second_output.splitlines()
+                if line.startswith("APPLY:")
+            ]
+            if reapplied:
+                print("Second-run patch operations:", file=sys.stderr)
+                for line in reapplied:
+                    print(f"  {line}", file=sys.stderr)
             return 1
 
     print("PASS: Ascension patcher pack is idempotent")
