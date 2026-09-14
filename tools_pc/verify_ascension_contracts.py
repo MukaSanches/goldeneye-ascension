@@ -72,6 +72,7 @@ def main() -> int:
             return fail(f"control contract changed: {label}")
 
     locale = LOCALE.read_text(encoding="utf-8")
+    normalized_locale = " ".join(locale.split())
     required_ptbr = {
         "language selector": '{ "PORTUGUESE (BRAZIL)", "PORTUGUES (BRASIL)" }',
         "control preset": '{ "Control preset", "Preset de controles" }',
@@ -81,7 +82,7 @@ def main() -> int:
         "Modern value": '{ "MODERN", "MODERNO" }',
     }
     for label, needle in required_ptbr.items():
-        if needle not in locale:
+        if " ".join(needle.split()) not in normalized_locale:
             return fail(f"PT-BR contract changed: {label}")
 
     preflight = subprocess.run(
