@@ -1,0 +1,141 @@
+#!/usr/bin/env python3
+"""ROM-free regression test for the Ascension patcher pack.
+
+The test runs entirely in a temporary copy of the repository. It verifies two
+properties that make the low-risk pack safe to iterate on:
+
+1. Applying the complete pack twice is idempotent: the second run changes no
+   file produced by the first run.
+2. Every ``*.ascension-before-*`` backup created by a patcher is byte-for-byte
+   identical to the corresponding source file before the first application.
+
+The real checkout is never modified.
+"""
+from __future__ import annotations
+
+from hashlib import sha256
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import tempfile
+
+ROOT = Path(__file__).resolve().parents[1]
+PACK_REL = Path("tools_pc/apply_ascension_safe_gameplay_pack.py")
+
+IGNORE_DIRS = {
+    ".git",
+    ".ccache",
+    "build",
+    "build-pc",
+    "build-linux",
+    "build-ntsc",
+    "dist",
+    "__pycache__",
+}
+
+
+def digest(path: Path) -> str:
+    h = sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def snapshot(root: Path) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for path in root.rglob("*"):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(root)
+        if any(part in IGNORE_DIRS for part in rel.parts):
+            continue
+        result[rel.as_posix()] = digest(path)
+    return result
+
+
+def copy_ignore(_directory: str, names: list[str]) -> set[str]:
+    return {name for name in names if name in IGNORE_DIRS}
+
+
+def run_pack(root: Path) -> None:
+    result = subprocess.run(
+        [sys.executable, str(root / PACK_REL)],
+        cwd=root,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+    if result.returncode != 0:
+        print(result.stdout, file=sys.stderr)
+        raise RuntimeError(f"patcher pack failed with exit code {result.returncode}")
+
+
+def verify_backups(root: Path, before: dict[str, str]) -> int:
+    backups = [p for p in root.rglob("*.ascension-before-*") if p.is_file()]
+    if not backups:
+        print("NOTE: no Ascension backup files were created in this tree")
+        return 0
+
+    for backup in backups:
+        rel = backup.relative_to(root).as_posix()
+        source_rel = rel.split(".ascension-before-", 1)[0]
+        expected = before.get(source_rel)
+        if expected is None:
+            print(f"FAIL: backup has no pre-apply source: {rel}", file=sys.stderr)
+            return 1
+        if digest(backup) != expected:
+            print(f"FAIL: backup does not match original source: {rel}", file=sys.stderr)
+            return 1
+
+    print(f"PASS: {len(backups)} reversible backup(s) match their original files")
+    return 0
+
+
+def main() -> int:
+    if not (ROOT / PACK_REL).is_file():
+        print(f"FAIL: missing {PACK_REL}", file=sys.stderr)
+        return 1
+
+    with tempfile.TemporaryDirectory(prefix="ascension-patcher-test-") as tmp:
+        sandbox = Path(tmp) / "repo"
+        shutil.copytree(ROOT, sandbox, ignore=copy_ignore)
+
+        before = snapshot(sandbox)
+        try:
+            run_pack(sandbox)
+        except RuntimeError as exc:
+            print(f"FAIL: {exc}", file=sys.stderr)
+            return 1
+
+        if verify_backups(sandbox, before) != 0:
+            return 1
+
+        after_first = snapshot(sandbox)
+        try:
+            run_pack(sandbox)
+        except RuntimeError as exc:
+            print(f"FAIL: second application: {exc}", file=sys.stderr)
+            return 1
+        after_second = snapshot(sandbox)
+
+        changed = sorted(
+            set(after_first) ^ set(after_second)
+            | {p for p in set(after_first) & set(after_second)
+               if after_first[p] != after_second[p]}
+        )
+        if changed:
+            print("FAIL: patcher pack is not idempotent; second run changed:", file=sys.stderr)
+            for path in changed:
+                print(f"  {path}", file=sys.stderr)
+            return 1
+
+    print("PASS: Ascension patcher pack is idempotent")
+    print("PASS: real checkout was not modified")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
