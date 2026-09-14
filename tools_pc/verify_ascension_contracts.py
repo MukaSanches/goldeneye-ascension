@@ -100,6 +100,7 @@ def main() -> int:
         "manual ControlPreset fallback": "ControlPreset = 0",
         "manual DedicatedCrouch fallback": "DedicatedCrouch = 1",
         "preset numeric values": "0 = CLASSIC`, `1 = HYBRID`, or `2 = MODERN",
+        "safe INI editing": "Edit the file only while the game is closed",
     }
     for label, needle in required_controls_doc.items():
         if " ".join(needle.split()) not in normalized_controls_doc:
