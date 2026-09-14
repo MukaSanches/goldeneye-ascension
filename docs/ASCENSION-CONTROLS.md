@@ -27,6 +27,18 @@ For manual regression testing:
 
 The implementation lives in `port/src/ascension_controls.c`. Static regression checks live in `tools_pc/verify_ascension_contracts.py`.
 
+## Manual `ge007.ini` fallback
+
+If the in-game options overlay is unavailable while testing, the same Ascension controls can be configured directly in `ge007.ini`:
+
+```ini
+[Input]
+ControlPreset = 0
+DedicatedCrouch = 1
+```
+
+`ControlPreset` accepts `0 = CLASSIC`, `1 = HYBRID`, or `2 = MODERN`. `DedicatedCrouch` accepts `0 = OFF` or `1 = ON`. These values are registered as bounded integer options, so out-of-range values are clamped when the configuration is loaded.
+
 ## Compatibility rules
 
 Ascension control options are intentionally PC-side and opt-in. Changes in this area should preserve:
