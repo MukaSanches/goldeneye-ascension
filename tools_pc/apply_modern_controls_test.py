@@ -28,12 +28,17 @@ def main() -> int:
     original = PATH.read_text(encoding="utf-8")
     text = original
 
-    text = replace_once(
-        text,
-        '#include "optionsoverlay.h"\n',
-        '#include "optionsoverlay.h"\n#include "ascension_controls.h"\n',
-        "Ascension controls include",
-    )
+    # This is an insertion that deliberately retains its anchor. Test the
+    # inserted include itself first, otherwise a second run would duplicate it.
+    if '#include "ascension_controls.h"\n' in text:
+        print("OK: Ascension controls include already applied")
+    else:
+        text = replace_once(
+            text,
+            '#include "optionsoverlay.h"\n',
+            '#include "optionsoverlay.h"\n#include "ascension_controls.h"\n',
+            "Ascension controls include",
+        )
 
     old = '''        if ((mb & SDL_BUTTON(SDL_BUTTON_LEFT)) || actHeld(ks, IA_FIRE))\n            button |= GE_CONT_G;\n        int aimHeld = (mb & SDL_BUTTON(SDL_BUTTON_RIGHT)) || actHeld(ks, IA_AIM);\n        if (aimHeld)\n            button |= GE_CONT_R;\n'''
     new = '''        /* Ascension Modern Controls v1: dedicated crouch is translated into\n         * GoldenEye's native 1.1 aim+stick-down gesture. This deliberately\n         * keeps bondview2.c as the gameplay authority, so weapon crouch\n         * restrictions and the original crouch state machine remain intact. */\n        int dedicatedCrouch = !menuMode && ascensionControlsDedicatedCrouchHeld();\n\n        /* In Modern, Left Ctrl is a crouch key. Do not also emit the legacy\n         * keyboard-fire binding on the same poll. LMB remains fire. Hybrid's\n         * crouch key is C, therefore legacy Left Ctrl fire is unaffected. */\n        if ((mb & SDL_BUTTON(SDL_BUTTON_LEFT)) ||\n            (actHeld(ks, IA_FIRE) && !dedicatedCrouch))\n            button |= GE_CONT_G;\n\n        int aimHeld = (mb & SDL_BUTTON(SDL_BUTTON_RIGHT)) ||\n                      actHeld(ks, IA_AIM) || dedicatedCrouch;\n        if (aimHeld)\n            button |= GE_CONT_R;\n\n        if (dedicatedCrouch)\n            sy = -STICK_MAX;\n'''
