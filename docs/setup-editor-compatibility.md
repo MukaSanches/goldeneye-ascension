@@ -21,6 +21,8 @@ The GoldenEye engine's `stagesetup` model is the runtime truth. Its canonical ro
 9. pad names
 10. 3D pad names
 
+The decompilation/reference tooling shows these roots serialized as 32-bit big-endian offsets relative to the beginning of the loaded setup file. Ascension therefore keeps native references as fixed-width integer offsets until an explicit decoder validates and relocates them.
+
 Ascension must preserve game behaviour. Native setup decoding belongs in a port/tooling adapter; game logic under `src/game/` remains untouched.
 
 ## Architecture
@@ -39,7 +41,7 @@ External editor / converter / future Ascension GUI
       Native GE codec    ASCSETUP codec
              |               |
              v               v
-      runtime bridge     tooling / tests
+      runtime bridge     tooling / CLI / tests
              |
              v
       GoldenEye StageSetup
@@ -47,7 +49,23 @@ External editor / converter / future Ascension GUI
 
 The intermediate representation (IR) is intentionally pointer-free and editor-neutral. Runtime pointers are never serialized.
 
-## ASCSETUP container
+## Current implementation
+
+### Core IR
+
+The compatibility core currently provides:
+
+- a versioned `AscSetupDocument` IR;
+- canonical setup section kinds corresponding to the StageSetup roots;
+- stable IDs for editor-side references;
+- original source offsets for diagnostics and future relocation work;
+- unknown/raw section preservation at the IR level;
+- structural validation and diagnostics;
+- hard safety limits against malformed or hostile files;
+- a runtime-neutral root view;
+- no dependency on editor GUI code or ROM-derived assets.
+
+### ASCSETUP container
 
 `ASCSETUP` is an Ascension-owned interchange format for tooling and tests. It is **not** the original ROM setup format and is not intended to replace the native setup files.
 
@@ -71,21 +89,45 @@ Each directory entry is 20 bytes:
 
 Payloads follow the directory. The codec performs bounds, overflow, count and size checks before exposing data.
 
-## Current guarantees
+### Native GoldenEye reader
 
-The initial compatibility core provides:
+`asc_setup_native_read_roots()` reads the ten serialized StageSetup roots as big-endian 32-bit offsets. Every non-zero offset must point inside the supplied blob and beyond the root table before it can be used.
 
-- a versioned `AscSetupDocument` IR;
-- canonical setup section kinds corresponding to the StageSetup roots;
-- stable IDs for editor-side references;
-- unknown/raw section preservation at the IR level;
-- deterministic ASCSETUP encode/decode;
-- explicit little-endian encoding;
-- structural validation and diagnostics;
-- hard safety limits against malformed or hostile files;
-- a runtime-neutral root view;
-- round-trip and malformed-input tests;
-- no dependency on editor GUI code or proprietary assets.
+`asc_setup_native_import()` performs a lossless coarse import:
+
+1. validates the full root table;
+2. keeps offsets as integers;
+3. finds each root's raw byte interval by locating the next greater root offset;
+4. copies that interval into the corresponding pointer-free IR section;
+5. retains the original source offset;
+6. validates the resulting document.
+
+This is intentionally below the semantic decoder layer. It provides a safe native-file ingress path before object, AI, intro and path record interpretation is added.
+
+### Command-line tooling
+
+The standalone `asc-setup` utility currently supports:
+
+```text
+asc-setup validate      <file.ascsetup>
+asc-setup inspect       <file.ascsetup>
+asc-setup repack        <input.ascsetup> <output.ascsetup>
+asc-setup import-native <native-setup.bin> <output.ascsetup>
+```
+
+The CLI has an independent file-size ceiling, reports structural diagnostics and never mutates live game state.
+
+### Build
+
+The module can be compiled independently:
+
+```sh
+cmake -S port/setup_compat -B build-setup-compat
+cmake --build build-setup-compat
+ctest --test-dir build-setup-compat --output-on-failure
+```
+
+Its CMake file is also structured so the directory can later be embedded with `add_subdirectory()` by the main PC build without declaring a nested project.
 
 ## Important boundary rule
 
@@ -93,29 +135,39 @@ The initial compatibility core provides:
 
 ## Compatibility roadmap
 
-### Phase A — foundation (this change)
+### Phase A — foundation — implemented
 
-- IR, validation, ASCSETUP codec and tests.
-- Clean-room boundary documented.
+- IR and validation;
+- deterministic ASCSETUP codec;
+- clean-room boundary documentation;
+- synthetic corruption and round-trip tests;
+- standalone/embeddable CMake target.
 
-### Phase B — native setup reader
+### Phase B1 — native root reader — implemented
 
-Implement a read-only decoder for the original extracted setup blob:
+- ten-root big-endian reader;
+- bounds checks before relocation;
+- raw root-region import into the IR;
+- CLI import path;
+- synthetic native-root tests.
 
-- locate/normalize the ten StageSetup roots;
-- explicit N64 big-endian reads;
-- convert serialized 32-bit addresses/offsets to host-safe references;
-- decode the object-list command stream by opcode/record length;
-- decode intro records;
-- decode AI lists while retaining unknown opcodes byte-for-byte;
-- decode pads, pad3d, path table, path links and path sets;
-- retain original source offsets for diagnostics and round-trip comparison.
+### Phase B2 — semantic native setup reader
+
+Implement typed decoding above the raw root regions:
+
+- object-list command stream by opcode/record length;
+- intro records;
+- AI-list directory and script bodies while retaining unknown opcodes byte-for-byte;
+- pads and 3D pads;
+- path table, path links and path sets;
+- names/string tables;
+- original source offsets on every typed node.
 
 No native record is allowed to be read by casting an untrusted byte buffer to a host struct.
 
 ### Phase C — semantic object model
 
-Add typed records above the raw payload layer for the Setup Editor concepts used by the community:
+Add typed records for the Setup Editor concepts used by the community:
 
 - doors and door scales;
 - standard props, keys, alarms, cameras and autoguns;
@@ -140,7 +192,7 @@ Every typed node retains a stable ID and its original raw form where necessary s
 
 ### Phase E — runtime integration
 
-- port-layer adapter constructs/patches runtime-ready StageSetup data;
+- port-layer adapter constructs runtime-ready StageSetup data;
 - developer-only level reload hook;
 - safe teardown/reload lifecycle for props, AI and path data;
 - runtime diagnostics shown in the developer console;
@@ -175,7 +227,17 @@ The same IR becomes the data source for:
 
 Synthetic fixtures are the default and contain no copyrighted game content. Later local tests may operate on assets extracted from a user's own ROM, but those fixtures must remain outside Git.
 
-Minimum gates for each native record family:
+The current tests cover:
+
+- ASCSETUP encode/decode round-trip;
+- invalid magic;
+- duplicate stable IDs;
+- truncated directory;
+- native big-endian root decoding;
+- native raw-region import;
+- out-of-range native roots.
+
+Minimum gates for each future native record family:
 
 - valid minimum record;
 - valid maximum/edge values;
@@ -187,4 +249,4 @@ Minimum gates for each native record family:
 
 ## Why this design
 
-A direct editor-to-runtime dependency would make map tooling fragile and would mix GUI concerns, binary parsing and live game state. The IR boundary lets Ascension support the existing community workflow today and a native Ascension editor later without rewriting the game integration each time.
+A direct editor-to-runtime dependency would make map tooling fragile and would mix GUI concerns, binary parsing and live game state. The IR boundary lets Ascension support the existing community workflow and a native Ascension editor without rewriting the game integration each time.
