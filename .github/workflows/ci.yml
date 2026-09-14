@@ -149,6 +149,8 @@ jobs:
   # portability gaps rather than a decade of accumulated old-GCC pedantry.
   # (A "does it build on the GCC a typical distro ships" pass can come later.)
   linux-build:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     env:
       CC: gcc-14
