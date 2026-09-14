@@ -27,9 +27,9 @@ For manual regression testing:
 
 The implementation lives in `port/src/ascension_controls.c`. Static regression checks live in `tools_pc/verify_ascension_contracts.py`.
 
-## Manual `ge007.ini` fallback
+## `ge007.ini` configuration
 
-If the in-game options overlay is unavailable while testing, the same Ascension controls can be configured directly in `ge007.ini`:
+The current F10 options overlay does not yet expose `Input.ControlPreset` or `Input.DedicatedCrouch`. Configure these Ascension controls directly in `ge007.ini` while testing:
 
 ```ini
 [Input]
