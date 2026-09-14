@@ -10,6 +10,8 @@ Ascension keeps GoldenEye's original gameplay/input path intact and layers a sma
 - `1` — Hybrid: preserves legacy keyboard fire on Left Ctrl while enabling dedicated crouch on `C`.
 - `2` — Modern: enables dedicated crouch on `Left Ctrl`, `Right Ctrl`, or `C`.
 
+The default for a new configuration is `0` (Classic). Existing saved `Input.ControlPreset` values are preserved.
+
 `Input.DedicatedCrouch = 1` enables the dedicated crouch action for Hybrid/Modern.
 
 ## Compatibility contract
