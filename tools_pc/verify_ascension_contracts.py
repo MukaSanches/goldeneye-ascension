@@ -13,6 +13,7 @@ It protects invariants that should remain true while Ascension evolves:
 * Core PT-BR Ascension control/UI translations remain present.
 * The validated patcher manifest passes its non-mutating preflight.
 * ROM images and reversible patcher backups are never tracked by Git.
+* Generated Python bytecode/cache artifacts are never tracked by Git.
 
 It is safe to run locally or in CI from any checkout of the repository.
 """
@@ -104,6 +105,13 @@ def main() -> int:
     if tracked_backups:
         return fail("tracked patcher backup(s): " + ", ".join(tracked_backups))
 
+    tracked_python_cache = [
+        p for p in tracked
+        if p.endswith((".pyc", ".pyo")) or "__pycache__/" in p
+    ]
+    if tracked_python_cache:
+        return fail("tracked Python cache artifact(s): " + ", ".join(tracked_python_cache))
+
     try:
         branch = git_lines("rev-parse", "--abbrev-ref", "HEAD")[0]
         commit = git_lines("rev-parse", "--short=12", "HEAD")[0]
@@ -116,7 +124,7 @@ def main() -> int:
     print("  controls: Classic default; presets 0..2; dedicated crouch mappings protected")
     print("  localization: core PT-BR control coverage present")
     print("  patchers: preflight clean")
-    print("  repository: no tracked ROM images or Ascension backup artifacts")
+    print("  repository: no tracked ROM, Ascension backup, or Python cache artifacts")
     return 0
 
 
