@@ -64,8 +64,12 @@ def patched_overlay(original: str) -> str:
     fps_replacement = fps_anchor + '''\n    { .key="Video.FpsInTitle", .label="FPS in window title",\n      .help="Show live FPS beside the Ascension window title.", .category=CAT_DISPLAY,\n      .kind=ROW_TOGGLE, .step=1, .names=kOnOff, .resetValue=1 },\n'''
     text = replace_once(text, fps_anchor, fps_replacement, "FPS title row")
 
-    input_anchor = '''    /* INPUT */\n    { .key="Input.MouseAimSpeed",  .label="Mouse aim speed",\n'''
-    input_replacement = '''    /* INPUT */\n    { .key="Input.MouseEnabled", .label="Mouse input",\n      .help="Enable or disable mouse input without changing keyboard/gamepad.", .category=CAT_INPUT,\n      .kind=ROW_TOGGLE, .step=1, .names=kOnOff, .resetValue=1 },\n\n    { .key="Input.MouseAimSpeed",  .label="Mouse aim speed",\n'''
+    # Anchor directly on the first stable existing input row rather than on
+    # the INPUT comment. Earlier patchers intentionally insert Ascension rows
+    # between that comment and MouseAimSpeed, so the old two-line anchor made
+    # this patcher order-dependent even though the target row still existed.
+    input_anchor = '''    { .key="Input.MouseAimSpeed",  .label="Mouse aim speed",\n'''
+    input_replacement = '''    { .key="Input.MouseEnabled", .label="Mouse input",\n      .help="Enable or disable mouse input without changing keyboard/gamepad.", .category=CAT_INPUT,\n      .kind=ROW_TOGGLE, .step=1, .names=kOnOff, .resetValue=1 },\n\n    { .key="Input.MouseAimSpeed",  .label="Mouse aim speed",\n'''
     text = replace_once(text, input_anchor, input_replacement, "mouse enabled row")
     return text
 
