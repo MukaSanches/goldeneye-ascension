@@ -8,6 +8,8 @@ It protects invariants that should remain true while Ascension evolves:
 * ControlPreset remains constrained to Classic/Hybrid/Modern (0..2).
 * DedicatedCrouch remains constrained to a boolean off/on value (0..1).
 * Classic does not enable the Ascension dedicated-crouch bridge.
+* Hybrid keeps dedicated crouch on C so Left Ctrl remains legacy fire.
+* Modern keeps dedicated crouch available on Ctrl or C.
 * Core PT-BR Ascension control/UI translations remain present.
 * The validated patcher manifest passes its non-mutating preflight.
 * ROM images and reversible patcher backups are never tracked by Git.
@@ -60,6 +62,8 @@ def main() -> int:
         "preset range": 'configRegisterInt("Input.ControlPreset", &s_controlPreset, 0, 2);',
         "dedicated crouch range": 'configRegisterInt("Input.DedicatedCrouch", &s_dedicatedCrouch, 0, 1);',
         "Classic dedicated-crouch guard": "if (!s_dedicatedCrouch || s_controlPreset == 0)",
+        "Hybrid dedicated-crouch C-only mapping": "if (s_controlPreset == 1)\n        return ks[SDL_SCANCODE_C] != 0;",
+        "Modern dedicated-crouch Ctrl/C mapping": "return ks[SDL_SCANCODE_LCTRL] || ks[SDL_SCANCODE_RCTRL] ||\n           ks[SDL_SCANCODE_C];",
     }
     for label, needle in required_controls.items():
         if needle not in source:
@@ -109,7 +113,7 @@ def main() -> int:
     print("PASS: Ascension static contracts verified")
     print(f"  branch: {branch}")
     print(f"  commit: {commit}")
-    print("  controls: Classic default; presets 0..2; dedicated crouch 0..1")
+    print("  controls: Classic default; presets 0..2; dedicated crouch mappings protected")
     print("  localization: core PT-BR control coverage present")
     print("  patchers: preflight clean")
     print("  repository: no tracked ROM images or Ascension backup artifacts")
