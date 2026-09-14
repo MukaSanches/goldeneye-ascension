@@ -12,10 +12,13 @@ PATH = ROOT / "port" / "src" / "video.c"
 
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
-    count = text.count(old)
-    if count == 0 and new in text:
+    applied = text.count(new)
+    if applied == 1:
         print(f"OK: {label} already applied")
         return text
+    if applied > 1:
+        raise SystemExit(f"ERROR: {label}: duplicate patched result found {applied} times; no write")
+    count = text.count(old)
     if count != 1:
         raise SystemExit(f"ERROR: {label}: expected one anchor, found {count}; no write")
     print(f"APPLY: {label}")
