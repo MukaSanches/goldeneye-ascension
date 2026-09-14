@@ -3,6 +3,15 @@
 
 #include <stdint.h>
 
+/*
+ * PC-only developer capability flag. The setup reload bridge is inert unless
+ * a validated candidate is staged through its API or GE_SETUP_OVERRIDE is
+ * explicitly set, so enabling the code path does not change normal loading.
+ */
+#ifndef ASC_SETUP_ENABLE_HOT_RELOAD
+#define ASC_SETUP_ENABLE_HOT_RELOAD 1
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
