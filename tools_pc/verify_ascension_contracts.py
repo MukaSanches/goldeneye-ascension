@@ -57,17 +57,18 @@ def main() -> int:
         return fail(f"missing {PACK.relative_to(ROOT)}")
 
     source = CONTROLS.read_text(encoding="utf-8")
+    normalized_source = " ".join(source.split())
 
     required_controls = {
         "Classic default": "static int s_controlPreset = 0;",
         "preset range": 'configRegisterInt("Input.ControlPreset", &s_controlPreset, 0, 2);',
         "dedicated crouch range": 'configRegisterInt("Input.DedicatedCrouch", &s_dedicatedCrouch, 0, 1);',
         "Classic dedicated-crouch guard": "if (!s_dedicatedCrouch || s_controlPreset == 0)",
-        "Hybrid dedicated-crouch C-only mapping": "if (s_controlPreset == 1)\n        return ks[SDL_SCANCODE_C] != 0;",
-        "Modern dedicated-crouch Ctrl/C mapping": "return ks[SDL_SCANCODE_LCTRL] || ks[SDL_SCANCODE_RCTRL] ||\n           ks[SDL_SCANCODE_C];",
+        "Hybrid dedicated-crouch C-only mapping": "if (s_controlPreset == 1) return ks[SDL_SCANCODE_C] != 0;",
+        "Modern dedicated-crouch Ctrl/C mapping": "return ks[SDL_SCANCODE_LCTRL] || ks[SDL_SCANCODE_RCTRL] || ks[SDL_SCANCODE_C];",
     }
     for label, needle in required_controls.items():
-        if needle not in source:
+        if " ".join(needle.split()) not in normalized_source:
             return fail(f"control contract changed: {label}")
 
     locale = LOCALE.read_text(encoding="utf-8")
