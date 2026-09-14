@@ -26,3 +26,6 @@ jobs:
 
       - name: Verify Ascension contracts
         run: python3 tools_pc/verify_ascension_contracts.py
+
+      - name: Test reversible patcher pack
+        run: python3 tools_pc/test_ascension_patchers.py
