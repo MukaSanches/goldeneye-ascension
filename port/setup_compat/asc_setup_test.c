@@ -1,9 +1,18 @@
 #include "asc_setup.h"
 #include "asc_setup_native.h"
+#include "asc_setup_semantic.h"
+#include "asc_setup_writer.h"
+#include "asc_setup_hotreload.h"
 
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
+
+static void write_u16_be(unsigned char *p, unsigned int value)
+{
+    p[0] = (unsigned char)((value >> 8) & 0xffu);
+    p[1] = (unsigned char)(value & 0xffu);
+}
 
 static void write_u32_be(unsigned char *p, unsigned int value)
 {
@@ -11,6 +20,12 @@ static void write_u32_be(unsigned char *p, unsigned int value)
     p[1] = (unsigned char)((value >> 16) & 0xffu);
     p[2] = (unsigned char)((value >> 8) & 0xffu);
     p[3] = (unsigned char)(value & 0xffu);
+}
+
+static unsigned int read_u32_be(const unsigned char *p)
+{
+    return ((unsigned int)p[0] << 24) | ((unsigned int)p[1] << 16) |
+           ((unsigned int)p[2] << 8) | (unsigned int)p[3];
 }
 
 static void test_round_trip(void)
@@ -103,7 +118,6 @@ static void test_native_root_import(void)
     const AscSetupSection *objects;
     const AscSetupSection *ai;
 
-    /* Root 3 = objects @ 40, root 5 = AI @ 64. All other roots are null. */
     write_u32_be(native + 3u * 4u, 40u);
     write_u32_be(native + 5u * 4u, 64u);
     native[40] = 0xaa;
@@ -139,6 +153,112 @@ static void test_native_rejects_bad_root(void)
            ASC_SETUP_ERR_INVALID_LAYOUT);
 }
 
+static void test_semantic_guard_decode(void)
+{
+    unsigned char objects[32] = {0};
+    AscSetupDocument setup;
+    AscSemanticDocument semantic;
+
+    objects[3] = 9; /* PROPDEF_GUARD */
+    write_u16_be(objects + 4, 7);
+    write_u16_be(objects + 6, 123);
+    write_u16_be(objects + 8, 4);
+    write_u16_be(objects + 10, 0x0401);
+    write_u16_be(objects + 12, 9);
+    write_u16_be(objects + 16, 100);
+    objects[28 + 3] = 48; /* PROPDEF_END */
+
+    asc_setup_document_init(&setup);
+    asc_semantic_init(&semantic);
+    assert(asc_setup_add_section(&setup, ASC_SETUP_SECTION_OBJECTS, 1, 0, 40,
+                                 objects, sizeof(objects)) == ASC_SETUP_OK);
+    assert(asc_semantic_decode(&setup, &semantic, NULL) == ASC_SETUP_OK);
+    assert(semantic.count == 1);
+    assert(semantic.nodes[0].kind == ASC_SEM_GUARD);
+    assert(semantic.nodes[0].values[0] == 7);
+    assert(semantic.nodes[0].values[1] == 123);
+    assert(semantic.nodes[0].values[3] == 0x0401);
+    assert(semantic.nodes[0].values[4] == 9);
+    assert(semantic.nodes[0].values[6] == 100);
+
+    asc_semantic_free(&semantic);
+    asc_setup_document_free(&setup);
+}
+
+static void test_native_writer_preserves_layout(void)
+{
+    unsigned char native[44] = {0};
+    AscSetupDocument setup;
+    unsigned char *written = NULL;
+    size_t written_size = 0;
+
+    write_u32_be(native + 2u * 4u, 40u);
+    write_u32_be(native + 40, 9u); /* INTRO_END */
+    asc_setup_document_init(&setup);
+    assert(asc_setup_native_import(native, sizeof(native), &setup, NULL) == ASC_SETUP_OK);
+    assert(asc_setup_native_write(&setup, ASC_SETUP_NATIVE_WRITE_PRESERVE_LAYOUT,
+                                  &written, &written_size, NULL) == ASC_SETUP_OK);
+    assert(written_size == sizeof(native));
+    assert(memcmp(written, native, sizeof(native)) == 0);
+    free(written);
+    asc_setup_document_free(&setup);
+}
+
+static void test_native_writer_relocates_paths(void)
+{
+    unsigned char paths[16] = {0};
+    AscSetupDocument setup;
+    unsigned char *written = NULL;
+    size_t written_size = 0;
+
+    /* Old section lives at 100; first path points to data at old offset 108. */
+    write_u32_be(paths, 108u);
+    paths[4] = 3;
+    paths[5] = 1;
+    write_u16_be(paths + 6, 2);
+
+    asc_setup_document_init(&setup);
+    assert(asc_setup_add_section(&setup, ASC_SETUP_SECTION_PATHS, 5, 0, 100,
+                                 paths, sizeof(paths)) == ASC_SETUP_OK);
+    assert(asc_setup_native_write(&setup, ASC_SETUP_NATIVE_WRITE_COMPACT_RELOCATE,
+                                  &written, &written_size, NULL) == ASC_SETUP_OK);
+    assert(read_u32_be(written + 4u * 4u) == 40u);
+    assert(read_u32_be(written + 40) == 48u);
+    assert(written_size == 56u);
+
+    free(written);
+    asc_setup_document_free(&setup);
+}
+
+static void test_hotreload_transaction(void)
+{
+    unsigned char native[44] = {0};
+    const void *candidate;
+    size_t candidate_size = 0;
+    uint64_t generation = 0;
+
+    write_u32_be(native + 2u * 4u, 40u);
+    write_u32_be(native + 40, 9u);
+    asc_setup_hotreload_clear();
+    assert(asc_setup_hotreload_stage_bytes("UsetupdamZ", native, sizeof(native)) == ASC_SETUP_OK);
+    candidate = asc_setup_hotreload_acquire("UsetupdamZ", &candidate_size, &generation);
+    assert(candidate != NULL);
+    assert(candidate_size == sizeof(native));
+    assert(generation != 0);
+    assert(memcmp(candidate, native, sizeof(native)) == 0);
+    asc_setup_hotreload_consumed(generation);
+
+    native[8] = 0xff; /* invalid intro root offset */
+    native[9] = 0xff;
+    native[10] = 0xff;
+    native[11] = 0xff;
+    assert(asc_setup_hotreload_stage_bytes("UsetupdamZ", native, sizeof(native)) != ASC_SETUP_OK);
+    /* Failed candidate must not replace the previously validated generation. */
+    candidate = asc_setup_hotreload_acquire("UsetupdamZ", &candidate_size, &generation);
+    assert(candidate != NULL && candidate_size == 44u);
+    asc_setup_hotreload_clear();
+}
+
 int main(void)
 {
     test_round_trip();
@@ -147,5 +267,9 @@ int main(void)
     test_rejects_truncated_directory();
     test_native_root_import();
     test_native_rejects_bad_root();
+    test_semantic_guard_decode();
+    test_native_writer_preserves_layout();
+    test_native_writer_relocates_paths();
+    test_hotreload_transaction();
     return 0;
 }
