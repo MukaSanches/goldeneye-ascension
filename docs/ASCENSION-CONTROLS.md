@@ -48,6 +48,8 @@ python3 tools_pc/verify_ascension_contracts.py
 python3 tools_pc/test_ascension_patchers.py
 ```
 
+On Windows, if `python3` is not available, use the Python launcher instead (`py -3`) or the environment's `python` command for the same two scripts.
+
 Both commands should finish with `PASS`. These checks do not replace an in-game smoke test, but they catch accidental regressions in the preset ranges, dedicated-crouch mappings, PT-BR control strings, patcher preflight, and repository hygiene without requiring a ROM.
 
 ## Compatibility rules
