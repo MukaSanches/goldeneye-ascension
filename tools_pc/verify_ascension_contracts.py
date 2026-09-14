@@ -10,6 +10,7 @@ It protects invariants that should remain true while Ascension evolves:
 * Classic does not enable the Ascension dedicated-crouch bridge.
 * Hybrid keeps dedicated crouch on C so Left Ctrl remains legacy fire.
 * Modern keeps dedicated crouch available on Ctrl or C.
+* Dedicated crouch safely handles an unavailable SDL keyboard state.
 * Core PT-BR Ascension control/UI translations remain present.
 * The Ascension controls guide keeps the preset/config fallback documented.
 * The validated patcher manifest passes its non-mutating preflight.
@@ -68,6 +69,7 @@ def main() -> int:
         "preset range": 'configRegisterInt("Input.ControlPreset", &s_controlPreset, 0, 2);',
         "dedicated crouch range": 'configRegisterInt("Input.DedicatedCrouch", &s_dedicatedCrouch, 0, 1);',
         "Classic dedicated-crouch guard": "if (!s_dedicatedCrouch || s_controlPreset == 0)",
+        "dedicated-crouch SDL null guard": "if (!ks) return 0;",
         "Hybrid dedicated-crouch C-only mapping": "if (s_controlPreset == 1) return ks[SDL_SCANCODE_C] != 0;",
         "Modern dedicated-crouch Ctrl/C mapping": "return ks[SDL_SCANCODE_LCTRL] || ks[SDL_SCANCODE_RCTRL] || ks[SDL_SCANCODE_C];",
     }
