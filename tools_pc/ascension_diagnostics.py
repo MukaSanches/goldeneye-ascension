@@ -38,6 +38,26 @@ def git_value(*args: str) -> str:
     return command_output(["git", *args]) if shutil.which("git") else "unavailable"
 
 
+def git_worktree_summary() -> str:
+    if not shutil.which("git"):
+        return "unavailable"
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain", "--untracked-files=no"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return "unavailable"
+    if result.returncode != 0:
+        return "unavailable"
+    return "modified" if result.stdout.strip() else "clean"
+
+
 def compiler_summary() -> str:
     for compiler in ("cc", "gcc", "clang"):
         if shutil.which(compiler):
@@ -52,6 +72,7 @@ def main() -> int:
     print(f"Python: {platform.python_version()}")
     print(f"Git branch: {git_value('rev-parse', '--abbrev-ref', 'HEAD')}")
     print(f"Git commit: {git_value('rev-parse', '--short=12', 'HEAD')}")
+    print(f"Git worktree: {git_worktree_summary()}")
     print(f"CMake: {command_output(['cmake', '--version']) if shutil.which('cmake') else 'unavailable'}")
     print(f"C/C++ toolchain: {compiler_summary()}")
 
