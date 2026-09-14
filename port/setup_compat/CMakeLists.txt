@@ -11,6 +11,7 @@ endif()
 add_library(ascension_setup_compat STATIC
     asc_setup.c
     asc_setup_native.c
+    asc_setup_semantic.c
 )
 
 target_include_directories(ascension_setup_compat PUBLIC
