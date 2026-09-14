@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """ROM-free regression test for the Ascension patcher pack.
 
-The test runs entirely in a temporary copy of the repository. It verifies two
+The test runs entirely in a temporary copy of the repository. It verifies three
 properties that make the low-risk pack safe to iterate on:
 
 1. Applying the complete pack twice is idempotent: the second run changes no
    file produced by the first run.
 2. Every ``*.ascension-before-*`` backup created by a patcher is non-empty,
    maps to a real source file, and remains unchanged on the second run.
+3. The Modern Controls bridge produced by the pack stays opt-in, menu-safe,
+   and uses GoldenEye's native crouch gesture rather than replacing gameplay
+   logic.
 
 Backups are intentionally checked against the state captured by each patcher,
 not against the state before the *whole* pack. Later patchers may legitimately
@@ -99,6 +102,31 @@ def verify_backups(root: Path) -> int:
     return 0
 
 
+def verify_modern_controls_bridge(root: Path) -> int:
+    input_path = root / "port" / "src" / "input.c"
+    if not input_path.is_file():
+        print("FAIL: missing port/src/input.c after patcher pack", file=sys.stderr)
+        return 1
+
+    source = input_path.read_text(encoding="utf-8")
+    required = {
+        "Ascension controls include": '#include "ascension_controls.h"',
+        "menu-safe opt-in crouch guard":
+            "int dedicatedCrouch = !menuMode && ascensionControlsDedicatedCrouchHeld();",
+        "legacy fire preserved outside dedicated crouch":
+            "(actHeld(ks, IA_FIRE) && !dedicatedCrouch)",
+        "native aim bridge": "actHeld(ks, IA_AIM) || dedicatedCrouch;",
+        "native stick-down crouch gesture": "if (dedicatedCrouch)\n            sy = -STICK_MAX;",
+    }
+    for label, needle in required.items():
+        if needle not in source:
+            print(f"FAIL: Modern Controls bridge contract changed: {label}", file=sys.stderr)
+            return 1
+
+    print("PASS: Modern Controls bridge remains opt-in, menu-safe, and native-gesture based")
+    return 0
+
+
 def main() -> int:
     if not (ROOT / PACK_REL).is_file():
         print(f"FAIL: missing {PACK_REL}", file=sys.stderr)
@@ -115,6 +143,8 @@ def main() -> int:
             return 1
 
         if verify_backups(sandbox) != 0:
+            return 1
+        if verify_modern_controls_bridge(sandbox) != 0:
             return 1
 
         after_first = snapshot(sandbox)
@@ -146,6 +176,7 @@ def main() -> int:
 
     print("PASS: Ascension patcher pack is idempotent")
     print("PASS: backups are stable across repeated application")
+    print("PASS: Modern Controls bridge safety contract is preserved")
     print("PASS: real checkout was not modified")
     return 0
 
