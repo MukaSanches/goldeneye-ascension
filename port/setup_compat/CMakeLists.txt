@@ -10,6 +10,7 @@ endif()
 
 add_library(ascension_setup_compat STATIC
     asc_setup.c
+    asc_setup_native.c
 )
 
 target_include_directories(ascension_setup_compat PUBLIC
