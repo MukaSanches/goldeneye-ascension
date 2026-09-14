@@ -6,6 +6,7 @@ It protects invariants that should remain true while Ascension evolves:
 
 * Classic remains the default control preset.
 * ControlPreset remains constrained to Classic/Hybrid/Modern (0..2).
+* DedicatedCrouch remains constrained to a boolean off/on value (0..1).
 * Classic does not enable the Ascension dedicated-crouch bridge.
 * Core PT-BR Ascension control/UI translations remain present.
 * The validated patcher manifest passes its non-mutating preflight.
@@ -57,6 +58,7 @@ def main() -> int:
     required_controls = {
         "Classic default": "static int s_controlPreset = 0;",
         "preset range": 'configRegisterInt("Input.ControlPreset", &s_controlPreset, 0, 2);',
+        "dedicated crouch range": 'configRegisterInt("Input.DedicatedCrouch", &s_dedicatedCrouch, 0, 1);',
         "Classic dedicated-crouch guard": "if (!s_dedicatedCrouch || s_controlPreset == 0)",
     }
     for label, needle in required_controls.items():
@@ -107,7 +109,7 @@ def main() -> int:
     print("PASS: Ascension static contracts verified")
     print(f"  branch: {branch}")
     print(f"  commit: {commit}")
-    print("  controls: Classic default; presets constrained to 0..2")
+    print("  controls: Classic default; presets 0..2; dedicated crouch 0..1")
     print("  localization: core PT-BR control coverage present")
     print("  patchers: preflight clean")
     print("  repository: no tracked ROM images or Ascension backup artifacts")
