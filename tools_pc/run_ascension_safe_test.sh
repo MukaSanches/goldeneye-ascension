@@ -27,11 +27,24 @@ if ! "$PYTHON_BIN" -c 'import sys; raise SystemExit(0 if sys.version_info.major 
 fi
 
 # Fail before patching the source tree when the build tool is unavailable.
-# build-pc.sh requires CMake, so discovering this prerequisite up front keeps
-# a local checkout unchanged when it cannot be built or tested anyway.
+# build-pc.sh documents CMake >= 3.16, so validate both presence and minimum
+# version before any Ascension patcher is allowed to modify local files.
 if ! command -v cmake >/dev/null 2>&1; then
-    echo "ERROR: CMake is required to build and test GoldenEye Ascension." >&2
+    echo "ERROR: CMake >= 3.16 is required to build and test GoldenEye Ascension." >&2
     echo "       Install CMake for your platform, then rerun this command." >&2
+    exit 2
+fi
+if ! "$PYTHON_BIN" -c '
+import re, subprocess, sys
+try:
+    text = subprocess.check_output(["cmake", "--version"], text=True, stderr=subprocess.STDOUT)
+except (OSError, subprocess.CalledProcessError):
+    raise SystemExit(1)
+m = re.search(r"cmake version\s+(\d+)\.(\d+)", text)
+raise SystemExit(0 if m and (int(m.group(1)), int(m.group(2))) >= (3, 16) else 1)
+' >/dev/null 2>&1; then
+    echo "ERROR: CMake >= 3.16 is required before Ascension can patch the tree." >&2
+    echo "       Detected: $(cmake --version 2>/dev/null | head -n 1 || echo unknown)" >&2
     exit 2
 fi
 
