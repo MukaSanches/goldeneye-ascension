@@ -47,12 +47,17 @@ def main() -> int:
     repl = anchor + '''\n    { .key="Ascension.MousePreset", .label="Mouse feel",\n      .help="Classic, Smooth, Modern or Raw PC mouse tuning.", .category=CAT_INPUT,\n      .kind=ROW_ENUM, .step=1, .names=kMousePreset, .resetValue=2 },\n\n    { .key="Ascension.GamepadPreset", .label="Gamepad preset",\n      .help="Classic, Modern, Invert Y or Custom gamepad tuning.", .category=CAT_INPUT,\n      .kind=ROW_ENUM, .step=1, .names=kPadPreset, .resetValue=1 },\n'''
     text = replace_once(text, anchor, repl, "mouse/gamepad preset rows")
 
-    marker = '''static int  s_showFps;\nstatic int  s_controlHintSeen;\n'''
-    replacement = '''static int  s_showFps;\nstatic int  s_controlHintSeen;\nstatic int  s_fovPreset = 0;\nstatic int  s_mousePreset = 2;\nstatic int  s_gamepadPreset = 1;\n'''
+    # Anchor on the state we own rather than assuming no earlier patcher has
+    # inserted another state variable between s_showFps and s_controlHintSeen.
+    marker = '''static int  s_controlHintSeen;\n'''
+    replacement = '''static int  s_controlHintSeen;\nstatic int  s_fovPreset = 0;\nstatic int  s_mousePreset = 2;\nstatic int  s_gamepadPreset = 1;\n'''
     text = replace_once(text, marker, replacement, "preset state")
 
-    marker = '''    configRegisterInt("Video.DisplayFPS", &s_showFps, 0, 1);\n    configRegisterInt("Ascension.ControlHintSeen", &s_controlHintSeen, 0, 1);\n'''
-    replacement = '''    configRegisterInt("Video.DisplayFPS", &s_showFps, 0, 1);\n    configRegisterInt("Ascension.ControlHintSeen", &s_controlHintSeen, 0, 1);\n    configRegisterInt("Ascension.FovPreset", &s_fovPreset, 0, 3);\n    configRegisterInt("Ascension.MousePreset", &s_mousePreset, 0, 4);\n    configRegisterInt("Ascension.GamepadPreset", &s_gamepadPreset, 0, 3);\n'''
+    # The overlay-polish patcher legitimately inserts its own registration
+    # between DisplayFPS and ControlHintSeen, so use the stable owned row as
+    # the composition point instead of an adjacency assumption.
+    marker = '''    configRegisterInt("Ascension.ControlHintSeen", &s_controlHintSeen, 0, 1);\n'''
+    replacement = '''    configRegisterInt("Ascension.ControlHintSeen", &s_controlHintSeen, 0, 1);\n    configRegisterInt("Ascension.FovPreset", &s_fovPreset, 0, 3);\n    configRegisterInt("Ascension.MousePreset", &s_mousePreset, 0, 4);\n    configRegisterInt("Ascension.GamepadPreset", &s_gamepadPreset, 0, 3);\n'''
     text = replace_once(text, marker, replacement, "preset config registration")
 
     hook = '''    if (strcmp(r->key, "Video.Fullscreen") == 0) {\n        videoRequestFullscreen((int)lround(v));\n    } else if (strncmp(r->key, "Video.", 6) == 0 && !r->restart) {\n        videoRequestLiveConfig();\n    }\n'''
