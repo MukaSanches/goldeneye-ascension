@@ -126,11 +126,12 @@ def main() -> int:
     require("if (rmb && !prevRmb)" in src and "optionsOverlayToggle();" in src,
             "RMB Back behavior missing")
 
-    # The native file-select remains visually authoritative. V2 only renders a
-    # restrained Ascension signature and one-time F10 discovery hint. A legacy
-    # extern left by V1 is harmless; the release gate is that no dossier chrome
-    # or save-slot metadata is rendered by the overlay.
-    require('"F10  OPTIONS"' in src, "minimal file-select discovery hint missing")
+    # The native file-select remains visually authoritative. Ascension signs it
+    # and keeps a small F10 discovery hint visible. Accept the original V2 copy
+    # when testing V2 alone and the newer persistent copy when follow-up patches
+    # are already stacked in CI.
+    require(('"F10  OPTIONS"' in src) or ('"F10  OPEN OPTIONS"' in src),
+            "minimal file-select discovery hint missing")
     require("MI6 CLASSIFIED ARCHIVES" not in src,
             "overlay still renders replacement file-select chrome")
 
