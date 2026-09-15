@@ -1,0 +1,175 @@
+name: Ascension UI Overhaul v2 validation
+
+on:
+  push:
+    branches: [ ascension-ui-overhaul-v2 ]
+  pull_request:
+    branches: [ ascension-ui-overhaul-v1, ascension-ui-overhaul-v2 ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ui-overhaul-v2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-gcc14:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false, fetch-depth: 1 }
+
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-14 g++-14 cmake python3 libsdl2-dev zlib1g-dev libgl1-mesa-dev
+
+      - name: Python syntax
+        run: python3 -m compileall -q tools_pc
+
+      - name: Rebuild validated V3 and UI V1 baseline
+        run: |
+          python3 tools_pc/apply_modern_controls_v2.py --check
+          python3 tools_pc/apply_modern_controls_v2.py --no-backup
+          python3 tools_pc/apply_modern_controls_v3.py --check
+          python3 tools_pc/apply_modern_controls_v3.py --no-backup
+          python3 tools_pc/apply_modern_menu_guard.py --check
+          python3 tools_pc/apply_modern_menu_guard.py
+          python3 tools_pc/apply_ui_overhaul_v1.py --check
+          python3 tools_pc/apply_ui_overhaul_v1.py --no-backup
+          python3 tools_pc/fix_ui_overhaul_text_state.py --check
+          python3 tools_pc/fix_ui_overhaul_text_state.py
+          python3 tools_pc/fix_ui_overhaul_text_state.py --check
+          python3 tools_pc/test_ui_overhaul_v1.py
+
+      - name: Apply V2 migration and prove idempotence
+        run: |
+          python3 tools_pc/apply_ui_overhaul_v2.py --check
+          python3 tools_pc/apply_ui_overhaul_v2.py --no-backup
+          python3 tools_pc/apply_ui_overhaul_v2.py --check
+          python3 tools_pc/apply_ui_overhaul_v2_locale.py --check
+          python3 tools_pc/apply_ui_overhaul_v2_locale.py --no-backup
+          python3 tools_pc/apply_ui_overhaul_v2_locale.py --check
+
+      - name: Regression and layout contracts
+        run: |
+          python3 tools_pc/test_modern_controls_v2.py
+          python3 tools_pc/test_modern_controls_v3.py
+          python3 tools_pc/test_ui_overhaul_v2.py
+          python3 tools_pc/verify_ascension_contracts.py
+          git diff --check
+
+      - name: ROM symbols
+        run: python3 scripts/gen_romassets.py u
+
+      - name: Configure GCC 14
+        run: cmake -S . -B build-ui-v2-gcc14 -DROMID=ntsc-final -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14
+
+      - name: Build GCC 14
+        run: cmake --build build-ui-v2-gcc14 -j"$(nproc)"
+
+      - name: Verify Linux binary
+        run: |
+          test -f build-ui-v2-gcc14/ge007.x86_64
+          file build-ui-v2-gcc14/ge007.x86_64
+
+  linux-gcc13:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false, fetch-depth: 1 }
+
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-13 g++-13 cmake python3 libsdl2-dev zlib1g-dev libgl1-mesa-dev
+
+      - name: Apply full stack and test
+        run: |
+          python3 tools_pc/apply_modern_controls_v2.py --check
+          python3 tools_pc/apply_modern_controls_v2.py --no-backup
+          python3 tools_pc/apply_modern_controls_v3.py --check
+          python3 tools_pc/apply_modern_controls_v3.py --no-backup
+          python3 tools_pc/apply_modern_menu_guard.py --check
+          python3 tools_pc/apply_modern_menu_guard.py
+          python3 tools_pc/apply_ui_overhaul_v1.py --check
+          python3 tools_pc/apply_ui_overhaul_v1.py --no-backup
+          python3 tools_pc/fix_ui_overhaul_text_state.py --check
+          python3 tools_pc/fix_ui_overhaul_text_state.py
+          python3 tools_pc/apply_ui_overhaul_v2.py --check
+          python3 tools_pc/apply_ui_overhaul_v2.py --no-backup
+          python3 tools_pc/apply_ui_overhaul_v2_locale.py --check
+          python3 tools_pc/apply_ui_overhaul_v2_locale.py --no-backup
+          python3 tools_pc/test_modern_controls_v2.py
+          python3 tools_pc/test_modern_controls_v3.py
+          python3 tools_pc/test_ui_overhaul_v2.py
+          git diff --check
+
+      - name: ROM symbols
+        run: python3 scripts/gen_romassets.py u
+
+      - name: Configure and build GCC 13
+        run: |
+          cmake -S . -B build-ui-v2-gcc13 -DROMID=ntsc-final -DCMAKE_C_COMPILER=gcc-13 -DCMAKE_CXX_COMPILER=g++-13
+          cmake --build build-ui-v2-gcc13 -j"$(nproc)"
+          test -f build-ui-v2-gcc13/ge007.x86_64
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 55
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false, fetch-depth: 1 }
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-python
+
+      - name: Python syntax
+        run: python -m compileall -q tools_pc
+
+      - name: Apply full stack
+        run: |
+          python tools_pc/apply_modern_controls_v2.py --check
+          python tools_pc/apply_modern_controls_v2.py --no-backup
+          python tools_pc/apply_modern_controls_v3.py --check
+          python tools_pc/apply_modern_controls_v3.py --no-backup
+          python tools_pc/apply_modern_menu_guard.py --check
+          python tools_pc/apply_modern_menu_guard.py
+          python tools_pc/apply_ui_overhaul_v1.py --check
+          python tools_pc/apply_ui_overhaul_v1.py --no-backup
+          python tools_pc/fix_ui_overhaul_text_state.py --check
+          python tools_pc/fix_ui_overhaul_text_state.py
+          python tools_pc/apply_ui_overhaul_v2.py --check
+          python tools_pc/apply_ui_overhaul_v2.py --no-backup
+          python tools_pc/apply_ui_overhaul_v2.py --check
+          python tools_pc/apply_ui_overhaul_v2_locale.py --check
+          python tools_pc/apply_ui_overhaul_v2_locale.py --no-backup
+          python tools_pc/apply_ui_overhaul_v2_locale.py --check
+
+      - name: Regression and layout contracts
+        run: |
+          python tools_pc/test_modern_controls_v2.py
+          python tools_pc/test_modern_controls_v3.py
+          python tools_pc/test_ui_overhaul_v2.py
+          "/c/Program Files/Git/bin/git.exe" diff --check
+
+      - name: ROM symbols and Windows build
+        run: |
+          python scripts/gen_romassets.py u
+          ./build-pc.sh ntsc-final
+          test -f build-pc/ge007.x86_64.exe
