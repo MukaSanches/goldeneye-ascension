@@ -6,12 +6,12 @@ adapter performs the native-abort refactor first, before the installer adds the
 shared helper body, so the original five-line sequence remains an unambiguous
 single anchor on a pristine tree.
 
-It also normalizes the quick-return menu guard to GoldenEye's real
-``MENU_RUN_STAGE`` enum. The original final installer accidentally emitted the
-port-only spelling ``GE_MENU_RUN_STAGE`` even though that alias does not exist in
-optionsoverlay.c. Keeping the compatibility repair here makes the safe installer
-able to fix both pristine trees and trees where the older patch was already
-applied.
+The quick-return menu guard is kept inside the port-owned overlay without
+pulling GoldenEye's internal menu enum header into that translation unit. The
+overlay already represents frontend context with small local GE_MENU_* aliases;
+this adapter therefore installs ``GE_MENU_RUN_STAGE = 11`` beside the existing
+file-select alias and uses it for the guard. Older generated trees that used the
+bare ``MENU_RUN_STAGE`` spelling are normalized to this local alias.
 
 The later runtime hotfix deliberately separates the convenience F10 return from
 GoldenEye's stock Abort Mission path. Once that migration is present, this safe
@@ -35,8 +35,10 @@ _SNPRINTF_PAGE_COUNT = (
     '(unsigned)watch_screen_index + 1U);'
 )
 _SPRINTF_PAGE_COUNT = 'sprintf(pageCount, "%u/5", (unsigned)watch_screen_index + 1U);'
-_BUGGY_RUN_STAGE_GUARD = "current_menu != GE_MENU_RUN_STAGE && current_menu != -1"
-_FIXED_RUN_STAGE_GUARD = "current_menu != MENU_RUN_STAGE && current_menu != -1"
+_LOCAL_RUN_STAGE_GUARD = "current_menu != GE_MENU_RUN_STAGE && current_menu != -1"
+_BARE_RUN_STAGE_GUARD = "current_menu != MENU_RUN_STAGE && current_menu != -1"
+_FILE_SELECT_DEFINE = "#define GE_MENU_FILE_SELECT 5"
+_RUN_STAGE_DEFINE = "#define GE_MENU_RUN_STAGE 11"
 _RUNTIME_FIX_MARKERS = (
     "int ascensionWatchIsActive(void)",
     "void ascensionWatchReturnToMainMenu(void)",
@@ -92,30 +94,42 @@ def patch_options_safe(text: str) -> str:
 
 
 def patch_overlay_safe(text: str) -> str:
-    """Install/repair the F10 quick-return guard without breaking idempotence.
-
-    The original installer considers its generated block an idempotence anchor,
-    so an already-fixed tree is temporarily normalized to the old spelling
-    before delegating. The result is always returned with the real game enum.
-    """
-    if text.count(_BUGGY_RUN_STAGE_GUARD) > 1 or text.count(_FIXED_RUN_STAGE_GUARD) > 1:
+    """Install/repair the F10 quick-return guard without game-header coupling."""
+    if text.count(_LOCAL_RUN_STAGE_GUARD) > 1 or text.count(_BARE_RUN_STAGE_GUARD) > 1:
         raise impl.PatchError("quick-return menu guard appears more than once")
 
+    # Normalize the older safe-adapter output before delegating to the original
+    # installer. The original final-watch patch emits the GE_MENU_RUN_STAGE
+    # spelling, so this also preserves its idempotence marker.
     canonical = text
-    if _FIXED_RUN_STAGE_GUARD in canonical and _BUGGY_RUN_STAGE_GUARD not in canonical:
+    if _BARE_RUN_STAGE_GUARD in canonical and _LOCAL_RUN_STAGE_GUARD not in canonical:
         canonical = canonical.replace(
-            _FIXED_RUN_STAGE_GUARD, _BUGGY_RUN_STAGE_GUARD, 1
+            _BARE_RUN_STAGE_GUARD, _LOCAL_RUN_STAGE_GUARD, 1
         )
 
     canonical = _ORIGINAL_PATCH_OVERLAY(canonical)
 
-    if _BUGGY_RUN_STAGE_GUARD not in canonical:
+    if _LOCAL_RUN_STAGE_GUARD not in canonical:
         raise impl.PatchError("quick-return menu guard missing after install")
+    if _BARE_RUN_STAGE_GUARD in canonical:
+        raise impl.PatchError("bare MENU_RUN_STAGE guard survived normalization")
 
-    fixed = canonical.replace(_BUGGY_RUN_STAGE_GUARD, _FIXED_RUN_STAGE_GUARD, 1)
-    if _BUGGY_RUN_STAGE_GUARD in fixed:
-        raise impl.PatchError("legacy GE_MENU_RUN_STAGE guard survived repair")
-    return fixed
+    # optionsoverlay.c intentionally uses port-local numeric aliases for the
+    # small amount of menu context it needs. Keep the run-stage constant beside
+    # GE_MENU_FILE_SELECT rather than importing bondconstants.h into the PC UI.
+    if _RUN_STAGE_DEFINE not in canonical:
+        count = canonical.count(_FILE_SELECT_DEFINE)
+        if count != 1:
+            raise impl.PatchError(
+                f"file-select menu alias: expected exactly one anchor, found {count}"
+            )
+        canonical = canonical.replace(
+            _FILE_SELECT_DEFINE,
+            _FILE_SELECT_DEFINE + "\n" + _RUN_STAGE_DEFINE,
+            1,
+        )
+
+    return canonical
 
 
 impl.patch_options = patch_options_safe

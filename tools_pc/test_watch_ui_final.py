@@ -95,10 +95,12 @@ def main() -> int:
             "F10 Gameplay page has quick return")
     require("PRESS AGAIN TO RETURN" in ov,
             "quick return requires explicit second activation")
-    require("current_menu != MENU_RUN_STAGE" in ov,
+    require("#define GE_MENU_RUN_STAGE 11" in ov,
+            "F10 overlay owns a narrow local run-stage alias")
+    require("current_menu != GE_MENU_RUN_STAGE && current_menu != -1" in ov,
             "F10 action refuses to re-abort from the normal front end")
-    require("GE_MENU_RUN_STAGE" not in ov,
-            "quick-return guard uses the real GoldenEye menu enum")
+    require("current_menu != MENU_RUN_STAGE && current_menu != -1" not in ov,
+            "quick-return guard does not depend on an undeclared game enum")
     require("s_open = 0;" in ov and "ascensionWatchReturnToMainMenu();" in ov,
             "confirmed return closes F10 then enters native front end")
 
