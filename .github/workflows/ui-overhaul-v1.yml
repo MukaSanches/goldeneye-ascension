@@ -37,13 +37,24 @@ jobs:
           python3 tools_pc/apply_modern_menu_guard.py
           python3 tools_pc/apply_ui_overhaul_v1.py --check
           python3 tools_pc/apply_ui_overhaul_v1.py
-          python3 tools_pc/apply_ui_overhaul_v1.py --check
+          python3 tools_pc/fix_ui_overhaul_text_state.py --check
+          python3 tools_pc/fix_ui_overhaul_text_state.py
+          python3 tools_pc/fix_ui_overhaul_text_state.py --check
       - name: Regression contracts
         run: |
           python3 tools_pc/test_modern_controls_v2.py
           python3 tools_pc/test_modern_controls_v3.py
           python3 tools_pc/test_ui_overhaul_v1.py
           python3 tools_pc/verify_ascension_contracts.py
+          python3 - <<'PY'
+          from pathlib import Path
+          s = Path('port/src/optionsoverlay.c').read_text(encoding='utf-8')
+          a = s.index('static Gfx *drawCategoryTabs')
+          b = s.index('\n}\n', a)
+          assert 'fillRect(' not in s[a:b], 'category text pass still contains geometry'
+          assert s.index('Active Q-Branch department highlight') < s.index('/* Header. */')
+          print('PASS: UI primitives are separated from text pass')
+          PY
           git diff --check
       - name: ROM symbols
         run: python3 scripts/gen_romassets.py u
@@ -82,7 +93,9 @@ jobs:
           python tools_pc/apply_modern_menu_guard.py
           python tools_pc/apply_ui_overhaul_v1.py --check
           python tools_pc/apply_ui_overhaul_v1.py
-          python tools_pc/apply_ui_overhaul_v1.py --check
+          python tools_pc/fix_ui_overhaul_text_state.py --check
+          python tools_pc/fix_ui_overhaul_text_state.py
+          python tools_pc/fix_ui_overhaul_text_state.py --check
           python tools_pc/test_modern_controls_v2.py
           python tools_pc/test_modern_controls_v3.py
           python tools_pc/test_ui_overhaul_v1.py
