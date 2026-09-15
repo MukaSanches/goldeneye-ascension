@@ -19,18 +19,19 @@ void inputNotifyClick(void);
 int  inputReleaseCapture(void);
 int  inputMouseCaptureActive(void);
 void inputSuspendForOverlay(void);
-
-/* V3 directional wheel: positive/negative notches retain their direction in
- * Modern; legacy modes keep the original forward-cycle behavior. */
 void inputPostWheel(int notches);
 void inputRescanPads(void);
 
-/* V4 live keyboard rebinding used by the F10 Controls page. configKey is one
- * of the existing Input.Bind.* keys, so persistence remains in ge007.ini and
- * no save/ROM format is touched. */
+/* Live F10 keyboard remapping. */
 const char *inputBindingDisplay(const char *configKey);
 int inputBindingSetScancode(const char *configKey, int scancode);
 int inputBindingReset(const char *configKey);
+
+/* Live F10 Modern gamepad remapping. Capture returns 1 after saving a button,
+ * 0 while no button is down, and -1 when controller 0 is unavailable. */
+const char *inputPadBindingDisplay(const char *configKey);
+int inputPadBindingCapturePressed(const char *configKey);
+int inputPadBindingReset(const char *configKey);
 
 #ifdef __cplusplus
 }

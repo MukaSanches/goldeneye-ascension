@@ -40,9 +40,7 @@ int ascensionControlsDisableAutoCenter(void);
 void ascensionControlsQueueDirectLook(double dx, double dy, int aiming);
 int ascensionControlsConsumeDirectLook(float *yawDegrees, float *pitchDegrees);
 
-/* V4: controller-0 twin-stick bridge. Raw SDL axes are shaped with a radial
- * deadzone, then movement is consumed through GoldenEye's native analogWalk /
- * analogStrafe channels. Look is a frame-scaled camera rate. */
+/* Modern V4 gamepad bridge. */
 int ascensionControlsModernGamepadEnabled(void);
 int ascensionControlsPadResponse(void);
 void ascensionControlsQueueGamepadAxes(int lx, int ly, int rx, int ry, int aiming);
@@ -50,8 +48,29 @@ int ascensionControlsConsumeGamepadMove(float *strafe, float *walk);
 int ascensionControlsConsumeGamepadLook(float *yawDegreesPerTick,
                                         float *pitchDegreesPerTick);
 
+/* Modern V4 configurable pad mapping. These use SDL's stable logical button
+ * and axis IDs but keep SDL types out of this public header. */
+const char *ascensionControlsPadBindingDisplay(const char *configKey);
+int ascensionControlsPadBindingSet(const char *configKey, int button);
+int ascensionControlsPadBindingReset(const char *configKey);
+int ascensionControlsRawGamepadButton(void *controller, int button);
+int ascensionControlsGamepadButton(void *controller, int logicalButton);
+int ascensionControlsGamepadAxis(void *controller, int logicalAxis);
+
 #ifdef __cplusplus
 }
+#endif
+
+/* input.c includes SDL before this header. Interpose only its normalized
+ * GameController reads so Modern can remap buttons/sticks while Classic,
+ * Hybrid, frontend and Q Watch transparently pass through to SDL unchanged.
+ * ascension_controls.c defines ASCENSION_CONTROLS_NO_SDL_HOOK so the wrapper
+ * implementation itself always reaches the real SDL functions. */
+#ifndef ASCENSION_CONTROLS_NO_SDL_HOOK
+#define SDL_GameControllerGetButton(controller, button) \
+    ascensionControlsGamepadButton((void *)(controller), (int)(button))
+#define SDL_GameControllerGetAxis(controller, axis) \
+    ascensionControlsGamepadAxis((void *)(controller), (int)(axis))
 #endif
 
 #endif /* ASCENSION_CONTROLS_H */

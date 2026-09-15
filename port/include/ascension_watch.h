@@ -5,14 +5,9 @@
 extern "C" {
 #endif
 
-/*
- * Ascension's narrow bridge into GoldenEye's native solo-watch flow.
- *
- * This deliberately does not expose save/progression internals. The
- * implementation in src/game/options.c reuses the exact mission-abort path
- * already used by the Q Watch, so a PC UI can return to the normal front end
- * without inventing a second state transition.
- */
+/* Narrow bridge into GoldenEye's native solo-watch flow. The implementation
+ * is installed by apply_watch_runtime_fix.py before Ascension 0.0.4 builds. */
+int ascensionWatchIsActive(void);
 void ascensionWatchReturnToMainMenu(void);
 
 #ifdef __cplusplus

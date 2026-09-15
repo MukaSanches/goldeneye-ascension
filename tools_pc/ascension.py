@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""Single entry point for preparing, validating and building Ascension.
-
-Examples (MSYS2 MINGW64 / Linux):
-  python tools_pc/ascension.py prepare
-  python tools_pc/ascension.py test
-  python tools_pc/ascension.py all
-"""
+"""Canonical prepare/test/build entry point for Ascension 0.0.4."""
 from __future__ import annotations
 
 import argparse
@@ -30,6 +24,7 @@ PATCHERS = [
     [PY, "tools_pc/apply_watch_ui_final_safe.py", "--no-backup"],
     [PY, "tools_pc/apply_watch_runtime_fix.py", "--no-backup"],
     [PY, "tools_pc/apply_modern_controls_v4.py", "--no-backup"],
+    [PY, "tools_pc/apply_modern_controls_v4_padbinds.py"],
 ]
 
 TESTS = [
@@ -42,6 +37,7 @@ TESTS = [
     [PY, "tools_pc/test_watch_ui_final.py"],
     [PY, "tools_pc/test_watch_runtime_fix.py"],
     [PY, "tools_pc/test_modern_controls_v4.py"],
+    [PY, "tools_pc/test_modern_controls_v4_padbinds.py"],
 ]
 
 
@@ -55,6 +51,7 @@ def prepare() -> None:
     for cmd in PATCHERS:
         run(cmd)
     run([PY, "tools_pc/apply_modern_controls_v4.py", "--check"])
+    run([PY, "tools_pc/apply_modern_controls_v4_padbinds.py", "--check"])
 
 
 def test() -> None:
@@ -90,19 +87,12 @@ def main() -> int:
     ap.add_argument("--target", default="ntsc-final")
     args = ap.parse_args()
 
-    if args.command == "prepare":
-        prepare()
-    elif args.command == "test":
-        test()
-    elif args.command == "assets":
-        assets()
-    elif args.command == "build":
-        build(args.target)
+    if args.command == "prepare": prepare()
+    elif args.command == "test": test()
+    elif args.command == "assets": assets()
+    elif args.command == "build": build(args.target)
     else:
-        prepare()
-        test()
-        assets()
-        build(args.target)
+        prepare(); test(); assets(); build(args.target)
 
     print("\nAscension 0.0.4 pipeline: PASS")
     return 0
