@@ -26,6 +26,7 @@ PATCHERS = [
     [PY, "tools_pc/apply_watch_runtime_fix.py", "--no-backup"],
     [PY, "tools_pc/apply_modern_controls_v4.py", "--no-backup"],
     [PY, "tools_pc/apply_modern_controls_v4_padbinds.py"],
+    [PY, "tools_pc/apply_universal_controller_layer.py"],
 ]
 
 TESTS = [
@@ -39,6 +40,7 @@ TESTS = [
     [PY, "tools_pc/test_watch_runtime_fix.py"],
     [PY, "tools_pc/test_modern_controls_v4.py"],
     [PY, "tools_pc/test_modern_controls_v4_padbinds.py"],
+    [PY, "tools_pc/test_universal_controller_layer.py"],
 ]
 
 
@@ -62,6 +64,7 @@ def prepare() -> None:
         run(cmd)
     run([PY, "tools_pc/apply_modern_controls_v4.py", "--check"])
     run([PY, "tools_pc/apply_modern_controls_v4_padbinds.py", "--check"])
+    run([PY, "tools_pc/apply_universal_controller_layer.py", "--check"])
 
 
 def test() -> None:
@@ -103,6 +106,14 @@ def test() -> None:
         raise SystemExit(
             "Ascension 0.0.4 regression gate failed: " + ", ".join(failed)
         )
+
+
+def controllerdb(*, optional: bool) -> None:
+    print("== Ascension 0.0.4: controller compatibility database ==")
+    cmd = [PY, "tools_pc/update_controller_db.py"]
+    if optional:
+        cmd.append("--optional")
+    run(cmd)
 
 
 def assets() -> None:
@@ -147,7 +158,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument(
         "command",
-        choices=["prepare", "test", "assets", "build", "all", "run", "play"],
+        choices=["prepare", "test", "controllerdb", "assets", "build", "all", "run", "play"],
     )
     ap.add_argument("--target", default="ntsc-final")
     args = ap.parse_args()
@@ -156,6 +167,8 @@ def main() -> int:
         prepare()
     elif args.command == "test":
         test()
+    elif args.command == "controllerdb":
+        controllerdb(optional=False)
     elif args.command == "assets":
         assets()
     elif args.command == "build":
@@ -163,7 +176,13 @@ def main() -> int:
     elif args.command == "run":
         launch()
     elif args.command == "play":
-        full_pipeline(args.target)
+        prepare()
+        # Best-effort only: offline play remains supported through SDL's built-in
+        # mappings plus Ascension's conservative raw-joystick fallback.
+        controllerdb(optional=True)
+        test()
+        assets()
+        build(args.target)
         print("\nAscension 0.0.4 pipeline: PASS")
         launch()
         return 0
