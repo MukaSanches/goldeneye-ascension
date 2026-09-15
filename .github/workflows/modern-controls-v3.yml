@@ -42,6 +42,9 @@ jobs:
         run: |
           python3 tools_pc/apply_modern_controls_v3.py --check
           python3 tools_pc/apply_modern_controls_v3.py --no-backup
+          python3 tools_pc/apply_modern_menu_guard.py --check
+          python3 tools_pc/apply_modern_menu_guard.py
+          python3 tools_pc/apply_modern_menu_guard.py --check
 
       - name: V3 randomized and regression tests
         run: |
@@ -78,12 +81,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc-13 g++-13 cmake python3 libsdl2-dev zlib1g-dev libgl1-mesa-dev
 
-      - name: Apply V2 + V3
+      - name: Apply V2 + V3 + menu guard
         run: |
           python3 tools_pc/apply_modern_controls_v2.py --check
           python3 tools_pc/apply_modern_controls_v2.py --no-backup
           python3 tools_pc/apply_modern_controls_v3.py --check
           python3 tools_pc/apply_modern_controls_v3.py --no-backup
+          python3 tools_pc/apply_modern_menu_guard.py --check
+          python3 tools_pc/apply_modern_menu_guard.py
+          python3 tools_pc/apply_modern_menu_guard.py --check
           python3 tools_pc/test_modern_controls_v2.py
           python3 tools_pc/test_modern_controls_v3.py
           python3 tools_pc/verify_ascension_contracts.py
@@ -129,12 +135,15 @@ jobs:
       - name: Python syntax
         run: python -m compileall -q tools_pc
 
-      - name: Apply V2 + V3 and run randomized contracts
+      - name: Apply V2 + V3 + menu guard and run randomized contracts
         run: |
           python tools_pc/apply_modern_controls_v2.py --check
           python tools_pc/apply_modern_controls_v2.py --no-backup
           python tools_pc/apply_modern_controls_v3.py --check
           python tools_pc/apply_modern_controls_v3.py --no-backup
+          python tools_pc/apply_modern_menu_guard.py --check
+          python tools_pc/apply_modern_menu_guard.py
+          python tools_pc/apply_modern_menu_guard.py --check
           python tools_pc/test_modern_controls_v2.py
           python tools_pc/test_modern_controls_v3.py
 
