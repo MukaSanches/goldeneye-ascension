@@ -45,17 +45,21 @@ jobs:
           python3 tools_pc/fix_ui_overhaul_text_state.py --check
           python3 tools_pc/test_ui_overhaul_v1.py
 
-      - name: Atomic V2 migration and idempotence
+      - name: Atomic V2 migration and F10 discovery
         run: |
           python3 tools_pc/install_ui_overhaul_v2.py --check
           python3 tools_pc/install_ui_overhaul_v2.py --no-backup
           python3 tools_pc/install_ui_overhaul_v2.py --check
+          python3 tools_pc/apply_persistent_f10_hint.py --check
+          python3 tools_pc/apply_persistent_f10_hint.py --no-backup
+          python3 tools_pc/apply_persistent_f10_hint.py --check
 
       - name: Regression and layout contracts
         run: |
           python3 tools_pc/test_modern_controls_v2.py
           python3 tools_pc/test_modern_controls_v3.py
           python3 tools_pc/test_ui_overhaul_v2.py
+          python3 tools_pc/test_persistent_f10_hint.py
           python3 tools_pc/verify_ascension_contracts.py
           git diff --check
 
@@ -100,9 +104,13 @@ jobs:
           python3 tools_pc/install_ui_overhaul_v2.py --check
           python3 tools_pc/install_ui_overhaul_v2.py --no-backup
           python3 tools_pc/install_ui_overhaul_v2.py --check
+          python3 tools_pc/apply_persistent_f10_hint.py --check
+          python3 tools_pc/apply_persistent_f10_hint.py --no-backup
+          python3 tools_pc/apply_persistent_f10_hint.py --check
           python3 tools_pc/test_modern_controls_v2.py
           python3 tools_pc/test_modern_controls_v3.py
           python3 tools_pc/test_ui_overhaul_v2.py
+          python3 tools_pc/test_persistent_f10_hint.py
           git diff --check
 
       - name: ROM symbols
@@ -110,7 +118,7 @@ jobs:
 
       - name: Configure and build GCC 13
         run: |
-          cmake -S . -B build-ui-v2-gcc13 -DROMID=ntsc-final -DCMAKE_C_COMPILER=gcc-13 -DCMAKE_CXX_COMPILER=g++-13
+          cmake -S . -B build-ui-v2-gcc13 -DROMID=ntsc-final -DCMAKE_C_COMPILER=gcc-13 -DCMAKE_CXX_COMPILER=g++-14
           cmake --build build-ui-v2-gcc13 -j"$(nproc)"
           test -f build-ui-v2-gcc13/ge007.x86_64
 
@@ -153,12 +161,16 @@ jobs:
           python tools_pc/install_ui_overhaul_v2.py --check
           python tools_pc/install_ui_overhaul_v2.py --no-backup
           python tools_pc/install_ui_overhaul_v2.py --check
+          python tools_pc/apply_persistent_f10_hint.py --check
+          python tools_pc/apply_persistent_f10_hint.py --no-backup
+          python tools_pc/apply_persistent_f10_hint.py --check
 
       - name: Regression and layout contracts
         run: |
           python tools_pc/test_modern_controls_v2.py
           python tools_pc/test_modern_controls_v3.py
           python tools_pc/test_ui_overhaul_v2.py
+          python tools_pc/test_persistent_f10_hint.py
           "/c/Program Files/Git/bin/git.exe" diff --check
 
       - name: ROM symbols and Windows build
