@@ -17,9 +17,23 @@ _NATIVE_ABORT = '''        D_800409A4 = 0;
         mission_failed_or_aborted = TRUE;
         deleteCurrentSelectedFolder();'''
 _DELEGATE = "        watchAbortMissionToFrontEnd();"
+_SNPRINTF_PAGE_COUNT = (
+    'snprintf(pageCount, sizeof(pageCount), "%u/5", '
+    '(unsigned)watch_screen_index + 1U);'
+)
+_SPRINTF_PAGE_COUNT = 'sprintf(pageCount, "%u/5", (unsigned)watch_screen_index + 1U);'
 
 
 def patch_options_safe(text: str) -> str:
+    # The main installer identifies its complete generated chrome block to stay
+    # idempotent. Local/CI builds use sprintf for compatibility with the rest of
+    # options.c, so normalize that one generated line back to the installer's
+    # canonical spelling while checking an already-integrated tree, then restore
+    # the C89-friendly spelling before returning. The caller therefore receives
+    # byte-for-byte identical text on a second application.
+    if _SPRINTF_PAGE_COUNT in text and _SNPRINTF_PAGE_COUNT not in text:
+        text = text.replace(_SPRINTF_PAGE_COUNT, _SNPRINTF_PAGE_COUNT, 1)
+
     if "static void watchAbortMissionToFrontEnd(void)" not in text:
         count = text.count(_NATIVE_ABORT)
         if count != 1:
@@ -31,11 +45,7 @@ def patch_options_safe(text: str) -> str:
     text = _ORIGINAL_PATCH_OPTIONS(text)
     # options.c already uses sprintf throughout; keep the generated page-count
     # copy on the same C89-friendly path instead of introducing snprintf here.
-    text = text.replace(
-        'snprintf(pageCount, sizeof(pageCount), "%u/5", (unsigned)watch_screen_index + 1U);',
-        'sprintf(pageCount, "%u/5", (unsigned)watch_screen_index + 1U);',
-        1,
-    )
+    text = text.replace(_SNPRINTF_PAGE_COUNT, _SPRINTF_PAGE_COUNT, 1)
     return text
 
 
