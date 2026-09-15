@@ -41,7 +41,7 @@ _RUNTIME_FIX_MARKERS = (
     "int ascensionWatchIsActive(void)",
     "void ascensionWatchReturnToMainMenu(void)",
     "frontChangeMenu(MENU_MISSION_SELECT, FALSE);",
-    "/* Ascension runtime fix: direct frontend return",
+    "mission_failed_or_aborted = FALSE;",
 )
 _FINAL_WATCH_MARKERS = (
     "static void watchAbortMissionToFrontEnd(void)",
