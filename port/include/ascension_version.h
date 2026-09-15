@@ -1,29 +1,17 @@
 #ifndef ASCENSION_VERSION_H
 #define ASCENSION_VERSION_H
 
-/*
- * Ascension identity/version is intentionally centralized here.
- * Keep runtime surfaces (window title, menu signature, future overlays)
- * derived from these macros so a release bump never drifts between screens.
- */
+/* Ascension identity/version is intentionally centralized here. */
 #define ASCENSION_NAME "Ascension"
-
 #define ASCENSION_VERSION_MAJOR 0
 #define ASCENSION_VERSION_MINOR 0
-#define ASCENSION_VERSION_PATCH 3
-#define ASCENSION_VERSION "0.0.3"
-
-/* Restrained signature that fits both the SDL title bar and the low-resolution
- * in-game footer without decorative separators that compete with GoldenEye. */
+#define ASCENSION_VERSION_PATCH 4
+#define ASCENSION_VERSION "0.0.4"
 #define ASCENSION_SIGNATURE ASCENSION_NAME " " ASCENSION_VERSION
 #define ASCENSION_WINDOW_TITLE ASCENSION_SIGNATURE
 
-/*
- * 0.0.3 localizes only Ascension-owned text. optionsoverlay.c declares the
- * original GoldenEye text renderer before including this header, so these
- * wrappers translate the string argument while preserving the renderer,
- * font, layout and display-list behavior. Other game text is untouched.
- */
+/* Ascension-owned UI is localized immediately before GoldenEye's existing
+ * text renderer. The renderer, font banks and game-owned text stay native. */
 #include "ascension_locale.h"
 
 #define textRender(gdl, x, y, text, chars, font, colour, width, height, yOffset, lineheight) \

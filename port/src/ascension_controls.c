@@ -7,9 +7,6 @@
 #include "config.h"
 #include "ascension_controls.h"
 
-/* 0 = Classic, 1 = Hybrid, 2 = Modern. Classic remains the safe default for
- * new configs; the F10 preset row opts into V2/V3 without mutating ROM/save
- * data or the original GoldenEye controller ABI. */
 static int s_controlPreset = ASCENSION_CONTROLS_CLASSIC;
 static int s_dedicatedCrouch = 1;
 
@@ -19,29 +16,53 @@ static int s_modernRawMouse = 1;
 static int s_modernMouseResponse = ASCENSION_MOUSE_PRECISION;
 static int s_modernWheelQueue = 1;
 
-/* Modern Controls V3 policy. Direct look bypasses the N64 stick-turn curve for
- * mouse camera motion only. Keyboard movement, weapons, collision, AI and all
- * N64 gameplay state remain authoritative in the original game code. */
+/* Modern Controls V3 policy. */
 static int s_modernDirectLook = 1;
-static int s_modernLookSensitivity = 100; /* percent of the tuned base */
-static int s_modernAdsScale = 65;          /* percent of hip-fire look */
+static int s_modernLookSensitivity = 100;
+static int s_modernAdsScale = 65;
 static int s_modernDirectionalWheel = 1;
 static int s_modernDisableAutoCenter = 1;
+
+/* Modern Controls V4 policy. These affect controller 0 only and are ignored
+ * outside the Modern preset. The legacy gamepad path is byte-for-byte owned by
+ * input.c when this bridge is disabled. */
+static int s_modernGamepad = 1;
+static int s_modernPadDeadzone = 14;          /* radial percent */
+static int s_modernPadResponse = ASCENSION_PAD_PRECISION;
+static int s_modernPadLookSensitivity = 100; /* percent */
+static int s_modernPadAdsScale = 65;          /* percent of hip-fire */
+static int s_modernPadInvertX = 0;
+static int s_modernPadInvertY = 0;
 
 /* Transient state is deliberately not serialized. */
 static int s_aimLatched = 0;
 static int s_prevPhysicalAim = 0;
 static double s_pendingYawDegrees = 0.0;
 static double s_pendingPitchDegrees = 0.0;
+static float s_padMoveX = 0.0f;
+static float s_padMoveY = 0.0f;
+static float s_padLookYaw = 0.0f;
+static float s_padLookPitch = 0.0f;
 
 #define ASCENSION_DIRECT_LOOK_DEG_PER_COUNT 0.12
 #define ASCENSION_DIRECT_LOOK_ACCUM_LIMIT   45.0
+/* Degrees applied at full stick for one nominal 60 Hz game tick. bondview2.c
+ * multiplies this rate by g_GlobalTimerDelta, keeping stick look rate-based. */
+#define ASCENSION_PAD_LOOK_DEG_PER_TICK      2.75
 
 static double clampDouble(double value, double lo, double hi)
 {
     if (value < lo) return lo;
     if (value > hi) return hi;
     return value;
+}
+
+static void clearPadTransient(void)
+{
+    s_padMoveX = 0.0f;
+    s_padMoveY = 0.0f;
+    s_padLookYaw = 0.0f;
+    s_padLookPitch = 0.0f;
 }
 
 PD_CONSTRUCTOR static void ascensionControlsConfigInit(void)
@@ -53,12 +74,20 @@ PD_CONSTRUCTOR static void ascensionControlsConfigInit(void)
     configRegisterInt("Input.ModernMouseResponse", &s_modernMouseResponse,
                       ASCENSION_MOUSE_LEGACY, ASCENSION_MOUSE_PRECISION);
     configRegisterInt("Input.ModernWheelQueue", &s_modernWheelQueue, 0, 1);
-
     configRegisterInt("Input.ModernDirectLook", &s_modernDirectLook, 0, 1);
     configRegisterInt("Input.ModernLookSensitivity", &s_modernLookSensitivity, 20, 300);
     configRegisterInt("Input.ModernAdsScale", &s_modernAdsScale, 20, 100);
     configRegisterInt("Input.ModernDirectionalWheel", &s_modernDirectionalWheel, 0, 1);
     configRegisterInt("Input.ModernDisableAutoCenter", &s_modernDisableAutoCenter, 0, 1);
+
+    configRegisterInt("Input.ModernGamepad", &s_modernGamepad, 0, 1);
+    configRegisterInt("Input.ModernPadDeadzone", &s_modernPadDeadzone, 0, 40);
+    configRegisterInt("Input.ModernPadResponse", &s_modernPadResponse,
+                      ASCENSION_PAD_LINEAR, ASCENSION_PAD_PRECISION);
+    configRegisterInt("Input.ModernPadLookSensitivity", &s_modernPadLookSensitivity, 20, 300);
+    configRegisterInt("Input.ModernPadAdsScale", &s_modernPadAdsScale, 20, 100);
+    configRegisterInt("Input.ModernPadInvertX", &s_modernPadInvertX, 0, 1);
+    configRegisterInt("Input.ModernPadInvertY", &s_modernPadInvertY, 0, 1);
 }
 
 int ascensionControlsPreset(void)
@@ -79,8 +108,6 @@ int ascensionControlsDedicatedCrouchHeld(void)
     const Uint8 *ks = SDL_GetKeyboardState(NULL);
     if (!ks) return 0;
 
-    /* Hybrid: C only, preserving legacy Left Ctrl fire.
-     * Modern: either Ctrl or C becomes a dedicated crouch hold. */
     if (s_controlPreset == ASCENSION_CONTROLS_HYBRID)
         return ks[SDL_SCANCODE_C] != 0;
 
@@ -94,6 +121,7 @@ void ascensionControlsResetTransient(void)
     s_prevPhysicalAim = 0;
     s_pendingYawDegrees = 0.0;
     s_pendingPitchDegrees = 0.0;
+    clearPadTransient();
 }
 
 int ascensionControlsResolveAim(int physicalAimHeld, int forceAimHeld, int menuMode)
@@ -112,18 +140,12 @@ int ascensionControlsResolveAim(int physicalAimHeld, int forceAimHeld, int menuM
         return physicalAimHeld || forceAimHeld;
     }
 
-    /* Toggle only on a fresh physical aim edge. Forced aim (crouch bridge) is
-     * intentionally excluded so crouching never flips the player's ADS latch. */
     if (physicalAimHeld && !s_prevPhysicalAim)
         s_aimLatched = !s_aimLatched;
     s_prevPhysicalAim = physicalAimHeld;
-
     return s_aimLatched || forceAimHeld;
 }
 
-/* Adaptive-precision response for raw mouse deltas. It only runs in Modern.
- * Small deltas are damped for pixel-level aiming, medium motion stays close to
- * linear, and large flicks retain/slightly gain speed. There is no dead zone. */
 double ascensionControlsShapeMouseDelta(double delta, int aiming)
 {
     if (!ascensionControlsIsModern() || s_modernMouseResponse == ASCENSION_MOUSE_LEGACY)
@@ -186,7 +208,8 @@ int ascensionControlsDirectionalWheelEnabled(void)
 
 int ascensionControlsDisableAutoCenter(void)
 {
-    return ascensionControlsDirectLookEnabled() && s_modernDisableAutoCenter;
+    return ascensionControlsIsModern() && s_modernDisableAutoCenter &&
+           (s_modernDirectLook || s_modernGamepad);
 }
 
 void ascensionControlsQueueDirectLook(double dx, double dy, int aiming)
@@ -199,16 +222,8 @@ void ascensionControlsQueueDirectLook(double dx, double dy, int aiming)
     double degreesPerCount = ASCENSION_DIRECT_LOOK_DEG_PER_COUNT * sensitivity * adsScale;
 
     s_pendingYawDegrees += dx * degreesPerCount;
-
-    /* input.c defines dy > 0 as "look down". GoldenEye's vv_verta convention
-     * is the opposite sign: its native positive analogPitch becomes a negative
-     * speedverta, and the default slightly-down pitch is -4 degrees. Convert
-     * at this boundary so Direct Look exactly matches the proven V2 direction. */
     s_pendingPitchDegrees -= dy * degreesPerCount;
 
-    /* A focus/capture transition must never create a giant camera snap. The
-     * normal input path drains SDL deltas too; this is an independent final
-     * safety bound on the host/game bridge. */
     s_pendingYawDegrees = clampDouble(s_pendingYawDegrees,
                                       -ASCENSION_DIRECT_LOOK_ACCUM_LIMIT,
                                        ASCENSION_DIRECT_LOOK_ACCUM_LIMIT);
@@ -233,4 +248,106 @@ int ascensionControlsConsumeDirectLook(float *yawDegrees, float *pitchDegrees)
     if (yawDegrees) *yawDegrees = (float)yaw;
     if (pitchDegrees) *pitchDegrees = (float)pitch;
     return yaw != 0.0 || pitch != 0.0;
+}
+
+int ascensionControlsModernGamepadEnabled(void)
+{
+    return ascensionControlsIsModern() && s_modernGamepad;
+}
+
+int ascensionControlsPadResponse(void)
+{
+    return s_modernPadResponse;
+}
+
+static void shapePadPair(int rawX, int rawY, float *outX, float *outY)
+{
+    double x = rawX < 0 ? (double)rawX / 32768.0 : (double)rawX / 32767.0;
+    double y = rawY < 0 ? (double)rawY / 32768.0 : (double)rawY / 32767.0;
+    double mag = sqrt(x * x + y * y);
+    double deadzone = (double)s_modernPadDeadzone / 100.0;
+
+    if (mag <= deadzone || mag <= 0.000001) {
+        *outX = 0.0f;
+        *outY = 0.0f;
+        return;
+    }
+
+    if (mag > 1.0) {
+        x /= mag;
+        y /= mag;
+        mag = 1.0;
+    }
+
+    double shaped = (mag - deadzone) / (1.0 - deadzone);
+    shaped = clampDouble(shaped, 0.0, 1.0);
+    if (s_modernPadResponse == ASCENSION_PAD_PRECISION)
+        shaped = pow(shaped, 1.45);
+
+    double scale = shaped / mag;
+    *outX = (float)(x * scale);
+    *outY = (float)(y * scale);
+}
+
+void ascensionControlsQueueGamepadAxes(int lx, int ly, int rx, int ry, int aiming)
+{
+    if (!ascensionControlsModernGamepadEnabled()) {
+        clearPadTransient();
+        return;
+    }
+
+    float moveX = 0.0f, moveY = 0.0f;
+    float lookX = 0.0f, lookY = 0.0f;
+    shapePadPair(lx, ly, &moveX, &moveY);
+    shapePadPair(rx, ry, &lookX, &lookY);
+
+    if (s_modernPadInvertX)
+        lookX = -lookX;
+    if (s_modernPadInvertY)
+        lookY = -lookY;
+
+    s_padMoveX = moveX;
+    s_padMoveY = -moveY; /* SDL up is negative; GoldenEye forward is positive. */
+
+    double sensitivity = (double)s_modernPadLookSensitivity / 100.0;
+    double adsScale = aiming ? (double)s_modernPadAdsScale / 100.0 : 1.0;
+    double degrees = ASCENSION_PAD_LOOK_DEG_PER_TICK * sensitivity * adsScale;
+    s_padLookYaw = (float)((double)lookX * degrees);
+    /* SDL down is positive; GoldenEye vv_verta decreases when looking down. */
+    s_padLookPitch = (float)(-(double)lookY * degrees);
+}
+
+int ascensionControlsConsumeGamepadMove(float *strafe, float *walk)
+{
+    float x = s_padMoveX;
+    float y = s_padMoveY;
+    s_padMoveX = 0.0f;
+    s_padMoveY = 0.0f;
+
+    if (strafe) *strafe = 0.0f;
+    if (walk) *walk = 0.0f;
+    if (!ascensionControlsModernGamepadEnabled())
+        return 0;
+
+    if (strafe) *strafe = x;
+    if (walk) *walk = y;
+    return fabsf(x) > 0.0001f || fabsf(y) > 0.0001f;
+}
+
+int ascensionControlsConsumeGamepadLook(float *yawDegreesPerTick,
+                                        float *pitchDegreesPerTick)
+{
+    float yaw = s_padLookYaw;
+    float pitch = s_padLookPitch;
+    s_padLookYaw = 0.0f;
+    s_padLookPitch = 0.0f;
+
+    if (yawDegreesPerTick) *yawDegreesPerTick = 0.0f;
+    if (pitchDegreesPerTick) *pitchDegreesPerTick = 0.0f;
+    if (!ascensionControlsModernGamepadEnabled())
+        return 0;
+
+    if (yawDegreesPerTick) *yawDegreesPerTick = yaw;
+    if (pitchDegreesPerTick) *pitchDegreesPerTick = pitch;
+    return fabsf(yaw) > 0.0001f || fabsf(pitch) > 0.0001f;
 }

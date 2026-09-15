@@ -17,14 +17,15 @@ enum AscensionMouseResponse {
     ASCENSION_MOUSE_PRECISION = 2,
 };
 
-/* Ascension PC-only gameplay helpers. The original N64 input ABI and gameplay
- * code remain authoritative; these helpers shape host-side input and expose a
- * narrowly-scoped PORT bridge for modern mouse look. */
+enum AscensionPadResponse {
+    ASCENSION_PAD_LINEAR    = 0,
+    ASCENSION_PAD_PRECISION = 1,
+};
+
 int ascensionControlsPreset(void);
 int ascensionControlsIsModern(void);
 int ascensionControlsDedicatedCrouchHeld(void);
 
-/* Modern V2 helpers. */
 int ascensionControlsResolveAim(int physicalAimHeld, int forceAimHeld, int menuMode);
 void ascensionControlsResetTransient(void);
 double ascensionControlsShapeMouseDelta(double delta, int aiming);
@@ -33,14 +34,21 @@ int ascensionControlsWheelQueueEnabled(void);
 int ascensionControlsMouseResponse(void);
 int ascensionControlsAimToggleEnabled(void);
 
-/* Modern V3 direct-look bridge. Mouse displacement is queued in degrees and
- * consumed exactly once by the PORT build of bondview2.c. Classic/Hybrid never
- * enter this path. */
 int ascensionControlsDirectLookEnabled(void);
 int ascensionControlsDirectionalWheelEnabled(void);
 int ascensionControlsDisableAutoCenter(void);
 void ascensionControlsQueueDirectLook(double dx, double dy, int aiming);
 int ascensionControlsConsumeDirectLook(float *yawDegrees, float *pitchDegrees);
+
+/* V4: controller-0 twin-stick bridge. Raw SDL axes are shaped with a radial
+ * deadzone, then movement is consumed through GoldenEye's native analogWalk /
+ * analogStrafe channels. Look is a frame-scaled camera rate. */
+int ascensionControlsModernGamepadEnabled(void);
+int ascensionControlsPadResponse(void);
+void ascensionControlsQueueGamepadAxes(int lx, int ly, int rx, int ry, int aiming);
+int ascensionControlsConsumeGamepadMove(float *strafe, float *walk);
+int ascensionControlsConsumeGamepadLook(float *yawDegreesPerTick,
+                                        float *pitchDegreesPerTick);
 
 #ifdef __cplusplus
 }

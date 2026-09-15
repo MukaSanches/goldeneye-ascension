@@ -1,0 +1,93 @@
+name: Ascension 0.0.4 validation
+
+on:
+  push:
+    branches: [ release/ascension-0.0.4 ]
+  pull_request:
+    branches: [ release/ascension-0.0.4 ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ascension-004-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-python
+
+      - name: Prepare Ascension 0.0.4
+        run: python tools_pc/ascension.py prepare
+
+      - name: Regression contracts
+        run: python tools_pc/ascension.py test
+
+      - name: Explicit Windows diff check
+        run: '"/c/Program Files/Git/bin/git.exe" diff --check'
+
+      - name: Regenerate ROM symbols
+        run: python tools_pc/ascension.py assets
+
+      - name: Build Windows
+        run: python tools_pc/ascension.py build
+
+      - name: Verify executable
+        run: test -f build-pc/ge007.x86_64.exe
+
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        gcc: [13, 14]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-${{ matrix.gcc }} g++-${{ matrix.gcc }} cmake python3 libsdl2-dev zlib1g-dev libgl1-mesa-dev
+
+      - name: Prepare Ascension 0.0.4
+        run: python3 tools_pc/ascension.py prepare
+
+      - name: Regression contracts
+        run: python3 tools_pc/ascension.py test
+
+      - name: Regenerate ROM symbols
+        run: python3 tools_pc/ascension.py assets
+
+      - name: Build Linux
+        env:
+          CC: gcc-${{ matrix.gcc }}
+          CXX: g++-${{ matrix.gcc }}
+        run: ./build-pc.sh ntsc-final
+
+      - name: Verify executable
+        run: test -f build-pc/ge007.x86_64
