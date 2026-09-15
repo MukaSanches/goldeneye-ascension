@@ -45,14 +45,11 @@ jobs:
           python3 tools_pc/fix_ui_overhaul_text_state.py --check
           python3 tools_pc/test_ui_overhaul_v1.py
 
-      - name: Apply V2 migration and prove idempotence
+      - name: Atomic V2 migration and idempotence
         run: |
-          python3 tools_pc/apply_ui_overhaul_v2.py --check
-          python3 tools_pc/apply_ui_overhaul_v2.py --no-backup
-          python3 tools_pc/apply_ui_overhaul_v2.py --check
-          python3 tools_pc/apply_ui_overhaul_v2_locale.py --check
-          python3 tools_pc/apply_ui_overhaul_v2_locale.py --no-backup
-          python3 tools_pc/apply_ui_overhaul_v2_locale.py --check
+          python3 tools_pc/install_ui_overhaul_v2.py --check
+          python3 tools_pc/install_ui_overhaul_v2.py --no-backup
+          python3 tools_pc/install_ui_overhaul_v2.py --check
 
       - name: Regression and layout contracts
         run: |
@@ -100,10 +97,9 @@ jobs:
           python3 tools_pc/apply_ui_overhaul_v1.py
           python3 tools_pc/fix_ui_overhaul_text_state.py --check
           python3 tools_pc/fix_ui_overhaul_text_state.py
-          python3 tools_pc/apply_ui_overhaul_v2.py --check
-          python3 tools_pc/apply_ui_overhaul_v2.py --no-backup
-          python3 tools_pc/apply_ui_overhaul_v2_locale.py --check
-          python3 tools_pc/apply_ui_overhaul_v2_locale.py --no-backup
+          python3 tools_pc/install_ui_overhaul_v2.py --check
+          python3 tools_pc/install_ui_overhaul_v2.py --no-backup
+          python3 tools_pc/install_ui_overhaul_v2.py --check
           python3 tools_pc/test_modern_controls_v2.py
           python3 tools_pc/test_modern_controls_v3.py
           python3 tools_pc/test_ui_overhaul_v2.py
@@ -142,7 +138,7 @@ jobs:
       - name: Python syntax
         run: python -m compileall -q tools_pc
 
-      - name: Apply full stack
+      - name: Apply full stack atomically
         run: |
           python tools_pc/apply_modern_controls_v2.py --check
           python tools_pc/apply_modern_controls_v2.py --no-backup
@@ -154,12 +150,9 @@ jobs:
           python tools_pc/apply_ui_overhaul_v1.py
           python tools_pc/fix_ui_overhaul_text_state.py --check
           python tools_pc/fix_ui_overhaul_text_state.py
-          python tools_pc/apply_ui_overhaul_v2.py --check
-          python tools_pc/apply_ui_overhaul_v2.py --no-backup
-          python tools_pc/apply_ui_overhaul_v2.py --check
-          python tools_pc/apply_ui_overhaul_v2_locale.py --check
-          python tools_pc/apply_ui_overhaul_v2_locale.py --no-backup
-          python tools_pc/apply_ui_overhaul_v2_locale.py --check
+          python tools_pc/install_ui_overhaul_v2.py --check
+          python tools_pc/install_ui_overhaul_v2.py --no-backup
+          python tools_pc/install_ui_overhaul_v2.py --check
 
       - name: Regression and layout contracts
         run: |
