@@ -7,6 +7,7 @@
 #include "ascension_steam_audio.h"
 
 #define FRAME 128
+#define SOURCE_FRAME 16
 
 static int loadfn(void *lib, const char *name, void *dst, size_t size)
 {
@@ -30,20 +31,37 @@ int main(int argc, char **argv)
     ASC_iplVirtualSurroundEffectCreateFn effectCreate = NULL;
     ASC_iplVirtualSurroundEffectReleaseFn effectRelease = NULL;
     ASC_iplVirtualSurroundEffectApplyFn effectApply = NULL;
+    ASC_iplBinauralEffectCreateFn binauralCreate = NULL;
+    ASC_iplBinauralEffectReleaseFn binauralRelease = NULL;
+    ASC_iplBinauralEffectResetFn binauralReset = NULL;
+    ASC_iplBinauralEffectApplyFn binauralApply = NULL;
     ASC_IPLContext context = NULL;
     ASC_IPLHRTF hrtf = NULL;
+    ASC_IPLHRTF sourceHrtf = NULL;
     ASC_IPLVirtualSurroundEffect effect = NULL;
+    ASC_IPLBinauralEffect binaural = NULL;
     ASC_IPLContextSettings contextSettings;
     ASC_IPLAudioSettings audioSettings;
+    ASC_IPLAudioSettings sourceAudioSettings;
     ASC_IPLHRTFSettings hrtfSettings;
     ASC_IPLVirtualSurroundEffectSettings effectSettings;
     ASC_IPLVirtualSurroundEffectParams params;
+    ASC_IPLBinauralEffectSettings binauralSettings;
+    ASC_IPLBinauralEffectParams binauralParams;
     float inL[FRAME] = {0}, inR[FRAME] = {0}, outL[FRAME] = {0}, outR[FRAME] = {0};
     float *inPlanes[2] = {inL, inR};
     float *outPlanes[2] = {outL, outR};
     ASC_IPLAudioBuffer inBuffer = {2, FRAME, inPlanes};
     ASC_IPLAudioBuffer outBuffer = {2, FRAME, outPlanes};
-    double energy = 0.0;
+    float sourceIn[SOURCE_FRAME] = {0};
+    float sourceOutL[SOURCE_FRAME] = {0};
+    float sourceOutR[SOURCE_FRAME] = {0};
+    float *sourceInPlanes[1] = {sourceIn};
+    float *sourceOutPlanes[2] = {sourceOutL, sourceOutR};
+    ASC_IPLAudioBuffer sourceInBuffer = {1, SOURCE_FRAME, sourceInPlanes};
+    ASC_IPLAudioBuffer sourceOutBuffer = {2, SOURCE_FRAME, sourceOutPlanes};
+    double virtualEnergy = 0.0;
+    double binauralEnergy = 0.0;
     int i;
 
     if (!lib) {
@@ -59,6 +77,10 @@ int main(int argc, char **argv)
     LOAD(effectCreate, "iplVirtualSurroundEffectCreate");
     LOAD(effectRelease, "iplVirtualSurroundEffectRelease");
     LOAD(effectApply, "iplVirtualSurroundEffectApply");
+    LOAD(binauralCreate, "iplBinauralEffectCreate");
+    LOAD(binauralRelease, "iplBinauralEffectRelease");
+    LOAD(binauralReset, "iplBinauralEffectReset");
+    LOAD(binauralApply, "iplBinauralEffectApply");
 #undef LOAD
 
     memset(&contextSettings, 0, sizeof(contextSettings));
@@ -74,8 +96,6 @@ int main(int argc, char **argv)
     audioSettings.frameSize = FRAME;
     memset(&hrtfSettings, 0, sizeof(hrtfSettings));
     hrtfSettings.type = ASC_IPL_HRTFTYPE_DEFAULT;
-    /* Steam Audio's public contract requires a positive linear volume; 1.0 is
-       its neutral value and is also used by Valve's virtual-surround benchmark. */
     hrtfSettings.volume = 1.0f;
     hrtfSettings.normType = ASC_IPL_HRTFNORMTYPE_RMS;
     if (hrtfCreate(context, &audioSettings, &hrtfSettings, &hrtf) != ASC_IPL_STATUS_SUCCESS || !hrtf) {
@@ -96,8 +116,6 @@ int main(int argc, char **argv)
         return 6;
     }
 
-    /* A non-symmetric stereo impulse is enough to prove the DSP executed and
-       produced finite binaural output rather than simply loading the DLL. */
     inL[0] = 0.75f;
     inR[0] = 0.20f;
     params.hrtf = hrtf;
@@ -105,26 +123,88 @@ int main(int argc, char **argv)
 
     for (i = 0; i < FRAME; ++i) {
         if (!isfinite(outL[i]) || !isfinite(outR[i])) {
-            fprintf(stderr, "Steam Audio produced non-finite output at frame %d\n", i);
+            fprintf(stderr, "Steam Audio virtual surround produced non-finite output at frame %d\n", i);
             effectRelease(&effect);
             hrtfRelease(&hrtf);
             contextRelease(&context);
             SDL_UnloadObject(lib);
             return 7;
         }
-        energy += fabs((double)outL[i]) + fabs((double)outR[i]);
+        virtualEnergy += fabs((double)outL[i]) + fabs((double)outR[i]);
+    }
+    if (virtualEnergy < 1e-6) {
+        fprintf(stderr, "Steam Audio virtual surround smoke produced silent output\n");
+        effectRelease(&effect);
+        hrtfRelease(&hrtf);
+        contextRelease(&context);
+        SDL_UnloadObject(lib);
+        return 8;
     }
 
+    /* Exercise the exact low-latency format used by the in-game physical
+     * voices: mono, 22.05 kHz, 16 samples, bilinear HRTF, source to the right. */
+    sourceAudioSettings.samplingRate = 22050;
+    sourceAudioSettings.frameSize = SOURCE_FRAME;
+    if (hrtfCreate(context, &sourceAudioSettings, &hrtfSettings, &sourceHrtf) != ASC_IPL_STATUS_SUCCESS || !sourceHrtf) {
+        fprintf(stderr, "Steam Audio source HRTF creation failed\n");
+        effectRelease(&effect);
+        hrtfRelease(&hrtf);
+        contextRelease(&context);
+        SDL_UnloadObject(lib);
+        return 9;
+    }
+
+    memset(&binauralSettings, 0, sizeof(binauralSettings));
+    binauralSettings.hrtf = sourceHrtf;
+    if (binauralCreate(context, &sourceAudioSettings, &binauralSettings, &binaural) != ASC_IPL_STATUS_SUCCESS || !binaural) {
+        fprintf(stderr, "Steam Audio binaural effect creation failed\n");
+        hrtfRelease(&sourceHrtf);
+        effectRelease(&effect);
+        hrtfRelease(&hrtf);
+        contextRelease(&context);
+        SDL_UnloadObject(lib);
+        return 10;
+    }
+
+    sourceIn[0] = 0.75f;
+    memset(&binauralParams, 0, sizeof(binauralParams));
+    binauralParams.direction.x = 1.0f;
+    binauralParams.direction.y = 0.0f;
+    binauralParams.direction.z = 0.0f;
+    binauralParams.interpolation = ASC_IPL_HRTFINTERPOLATION_BILINEAR;
+    binauralParams.spatialBlend = 1.0f;
+    binauralParams.hrtf = sourceHrtf;
+    binauralParams.peakDelays = NULL;
+    binauralReset(binaural);
+    binauralApply(binaural, &binauralParams, &sourceInBuffer, &sourceOutBuffer);
+
+    for (i = 0; i < SOURCE_FRAME; ++i) {
+        if (!isfinite(sourceOutL[i]) || !isfinite(sourceOutR[i])) {
+            fprintf(stderr, "Steam Audio binaural source produced non-finite output at frame %d\n", i);
+            binauralRelease(&binaural);
+            hrtfRelease(&sourceHrtf);
+            effectRelease(&effect);
+            hrtfRelease(&hrtf);
+            contextRelease(&context);
+            SDL_UnloadObject(lib);
+            return 11;
+        }
+        binauralEnergy += fabs((double)sourceOutL[i]) + fabs((double)sourceOutR[i]);
+    }
+
+    binauralRelease(&binaural);
+    hrtfRelease(&sourceHrtf);
     effectRelease(&effect);
     hrtfRelease(&hrtf);
     contextRelease(&context);
     SDL_UnloadObject(lib);
 
-    if (energy < 1e-6) {
-        fprintf(stderr, "Steam Audio DSP smoke produced silent output\n");
-        return 8;
+    if (binauralEnergy < 1e-6) {
+        fprintf(stderr, "Steam Audio binaural source smoke produced silent output\n");
+        return 12;
     }
 
-    printf("Steam Audio 4.8.1 ABI/runtime/HRTF smoke: PASS (energy=%.6f)\n", energy);
+    printf("Steam Audio 4.8.1 ABI/runtime smoke: PASS (virtual=%.6f, binaural=%.6f)\n",
+           virtualEnergy, binauralEnergy);
     return 0;
 }
