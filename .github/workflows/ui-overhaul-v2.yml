@@ -1,17 +1,17 @@
-name: Ascension UI Overhaul v2 validation
+name: Ascension Final Q Watch validation
 
 on:
   push:
-    branches: [ ascension-ui-overhaul-v2 ]
+    branches: [ ascension-watch-final-v1 ]
   pull_request:
-    branches: [ ascension-ui-overhaul-v1, ascension-ui-overhaul-v2 ]
+    branches: [ ascension-ui-overhaul-v2, ascension-watch-final-v1 ]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ui-overhaul-v2-${{ github.ref }}
+  group: watch-final-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -30,7 +30,7 @@ jobs:
       - name: Python syntax
         run: python3 -m compileall -q tools_pc
 
-      - name: Rebuild validated V3 and UI V1 baseline
+      - name: Rebuild validated Ascension stack
         run: |
           python3 tools_pc/apply_modern_controls_v2.py --check
           python3 tools_pc/apply_modern_controls_v2.py --no-backup
@@ -42,11 +42,6 @@ jobs:
           python3 tools_pc/apply_ui_overhaul_v1.py
           python3 tools_pc/fix_ui_overhaul_text_state.py --check
           python3 tools_pc/fix_ui_overhaul_text_state.py
-          python3 tools_pc/fix_ui_overhaul_text_state.py --check
-          python3 tools_pc/test_ui_overhaul_v1.py
-
-      - name: Atomic V2 migration, discovery and campaign access
-        run: |
           python3 tools_pc/install_ui_overhaul_v2.py --check
           python3 tools_pc/install_ui_overhaul_v2.py --no-backup
           python3 tools_pc/install_ui_overhaul_v2.py --check
@@ -56,14 +51,19 @@ jobs:
           python3 tools_pc/apply_unlock_all_missions.py --check
           python3 tools_pc/apply_unlock_all_missions.py --no-backup
           python3 tools_pc/apply_unlock_all_missions.py --check
+          python3 tools_pc/apply_watch_ui_final.py --check
+          python3 tools_pc/apply_watch_ui_final.py --no-backup
+          python3 tools_pc/apply_watch_ui_final.py --check
 
-      - name: Regression and layout contracts
+      - name: Regression and watch contracts
         run: |
           python3 tools_pc/test_modern_controls_v2.py
           python3 tools_pc/test_modern_controls_v3.py
+          python3 tools_pc/test_ui_overhaul_v1.py
           python3 tools_pc/test_ui_overhaul_v2.py
           python3 tools_pc/test_persistent_f10_hint.py
           python3 tools_pc/test_unlock_all_missions.py
+          python3 tools_pc/test_watch_ui_final.py
           python3 tools_pc/verify_ascension_contracts.py
           git diff --check
 
@@ -71,15 +71,15 @@ jobs:
         run: python3 scripts/gen_romassets.py u
 
       - name: Configure GCC 14
-        run: cmake -S . -B build-ui-v2-gcc14 -DROMID=ntsc-final -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14
+        run: cmake -S . -B build-watch-final-gcc14 -DROMID=ntsc-final -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14
 
       - name: Build GCC 14
-        run: cmake --build build-ui-v2-gcc14 -j"$(nproc)"
+        run: cmake --build build-watch-final-gcc14 -j"$(nproc)"
 
       - name: Verify Linux binary
         run: |
-          test -f build-ui-v2-gcc14/ge007.x86_64
-          file build-ui-v2-gcc14/ge007.x86_64
+          test -f build-watch-final-gcc14/ge007.x86_64
+          file build-watch-final-gcc14/ge007.x86_64
 
   linux-gcc13:
     runs-on: ubuntu-24.04
@@ -114,11 +114,15 @@ jobs:
           python3 tools_pc/apply_unlock_all_missions.py --check
           python3 tools_pc/apply_unlock_all_missions.py --no-backup
           python3 tools_pc/apply_unlock_all_missions.py --check
+          python3 tools_pc/apply_watch_ui_final.py --check
+          python3 tools_pc/apply_watch_ui_final.py --no-backup
+          python3 tools_pc/apply_watch_ui_final.py --check
           python3 tools_pc/test_modern_controls_v2.py
           python3 tools_pc/test_modern_controls_v3.py
           python3 tools_pc/test_ui_overhaul_v2.py
           python3 tools_pc/test_persistent_f10_hint.py
           python3 tools_pc/test_unlock_all_missions.py
+          python3 tools_pc/test_watch_ui_final.py
           git diff --check
 
       - name: ROM symbols
@@ -126,9 +130,9 @@ jobs:
 
       - name: Configure and build GCC 13
         run: |
-          cmake -S . -B build-ui-v2-gcc13 -DROMID=ntsc-final -DCMAKE_C_COMPILER=gcc-13 -DCMAKE_CXX_COMPILER=g++-13
-          cmake --build build-ui-v2-gcc13 -j"$(nproc)"
-          test -f build-ui-v2-gcc13/ge007.x86_64
+          cmake -S . -B build-watch-final-gcc13 -DROMID=ntsc-final -DCMAKE_C_COMPILER=gcc-13 -DCMAKE_CXX_COMPILER=g++-13
+          cmake --build build-watch-final-gcc13 -j"$(nproc)"
+          test -f build-watch-final-gcc13/ge007.x86_64
 
   windows:
     runs-on: windows-latest
@@ -175,14 +179,18 @@ jobs:
           python tools_pc/apply_unlock_all_missions.py --check
           python tools_pc/apply_unlock_all_missions.py --no-backup
           python tools_pc/apply_unlock_all_missions.py --check
+          python tools_pc/apply_watch_ui_final.py --check
+          python tools_pc/apply_watch_ui_final.py --no-backup
+          python tools_pc/apply_watch_ui_final.py --check
 
-      - name: Regression and layout contracts
+      - name: Regression and watch contracts
         run: |
           python tools_pc/test_modern_controls_v2.py
           python tools_pc/test_modern_controls_v3.py
           python tools_pc/test_ui_overhaul_v2.py
           python tools_pc/test_persistent_f10_hint.py
           python tools_pc/test_unlock_all_missions.py
+          python tools_pc/test_watch_ui_final.py
           "/c/Program Files/Git/bin/git.exe" diff --check
 
       - name: ROM symbols and Windows build
