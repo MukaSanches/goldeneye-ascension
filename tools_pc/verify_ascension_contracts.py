@@ -2,23 +2,8 @@
 """Static safety checks for GoldenEye Ascension.
 
 This verifier intentionally does not need a ROM and does not launch the game.
-It protects invariants that should remain true while Ascension evolves:
-
-* Classic remains the default control preset.
-* Dedicated crouch remains enabled by default but inert under Classic.
-* ControlPreset remains constrained to Classic/Hybrid/Modern (0..2).
-* DedicatedCrouch remains constrained to a boolean off/on value (0..1).
-* Classic does not enable the Ascension dedicated-crouch bridge.
-* Hybrid keeps dedicated crouch on C so Left Ctrl remains legacy fire.
-* Modern keeps dedicated crouch available on Ctrl or C.
-* Dedicated crouch safely handles an unavailable SDL keyboard state.
-* Core PT-BR Ascension control/UI translations remain present.
-* The Ascension controls guide keeps the preset/config fallback documented.
-* The validated patcher manifest passes its non-mutating preflight.
-* ROM images and reversible patcher backups are never tracked by Git.
-* Generated Python bytecode/cache artifacts are never tracked by Git.
-
-It is safe to run locally or in CI from any checkout of the repository.
+It protects semantic invariants rather than one exact source spelling, so later
+control layers can replace numeric preset literals with named enums safely.
 """
 from __future__ import annotations
 
@@ -52,6 +37,11 @@ def git_lines(*args: str) -> list[str]:
     return [line for line in result.stdout.splitlines() if line]
 
 
+def has_any(source: str, variants: tuple[str, ...]) -> bool:
+    normalized = " ".join(source.split())
+    return any(" ".join(v.split()) in normalized for v in variants)
+
+
 def main() -> int:
     if not CONTROLS.is_file():
         return fail(f"missing {CONTROLS.relative_to(ROOT)}")
@@ -66,17 +56,32 @@ def main() -> int:
     normalized_source = " ".join(source.split())
 
     required_controls = {
-        "Classic default": "static int s_controlPreset = 0;",
         "dedicated crouch default": "static int s_dedicatedCrouch = 1;",
         "preset range": 'configRegisterInt("Input.ControlPreset", &s_controlPreset, 0, 2);',
         "dedicated crouch range": 'configRegisterInt("Input.DedicatedCrouch", &s_dedicatedCrouch, 0, 1);',
-        "Classic dedicated-crouch guard": "if (!s_dedicatedCrouch || s_controlPreset == 0)",
         "dedicated-crouch SDL null guard": "if (!ks) return 0;",
-        "Hybrid dedicated-crouch C-only mapping": "if (s_controlPreset == 1) return ks[SDL_SCANCODE_C] != 0;",
         "Modern dedicated-crouch Ctrl/C mapping": "return ks[SDL_SCANCODE_LCTRL] || ks[SDL_SCANCODE_RCTRL] || ks[SDL_SCANCODE_C];",
     }
     for label, needle in required_controls.items():
         if " ".join(needle.split()) not in normalized_source:
+            return fail(f"control contract changed: {label}")
+
+    semantic_variants = {
+        "Classic default": (
+            "static int s_controlPreset = 0;",
+            "static int s_controlPreset = ASCENSION_CONTROLS_CLASSIC;",
+        ),
+        "Classic dedicated-crouch guard": (
+            "if (!s_dedicatedCrouch || s_controlPreset == 0)",
+            "if (!s_dedicatedCrouch || s_controlPreset == ASCENSION_CONTROLS_CLASSIC)",
+        ),
+        "Hybrid dedicated-crouch C-only mapping": (
+            "if (s_controlPreset == 1) return ks[SDL_SCANCODE_C] != 0;",
+            "if (s_controlPreset == ASCENSION_CONTROLS_HYBRID) return ks[SDL_SCANCODE_C] != 0;",
+        ),
+    }
+    for label, variants in semantic_variants.items():
+        if not has_any(source, variants):
             return fail(f"control contract changed: {label}")
 
     locale = LOCALE.read_text(encoding="utf-8")
