@@ -12,6 +12,11 @@ port-only spelling ``GE_MENU_RUN_STAGE`` even though that alias does not exist i
 optionsoverlay.c. Keeping the compatibility repair here makes the safe installer
 able to fix both pristine trees and trees where the older patch was already
 applied.
+
+The later runtime hotfix deliberately separates the convenience F10 return from
+GoldenEye's stock Abort Mission path. Once that migration is present, this safe
+entry point recognizes the fully-installed final-watch state and leaves the game
+side byte-for-byte unchanged rather than trying to reconstruct the older bridge.
 """
 from __future__ import annotations
 
@@ -32,9 +37,36 @@ _SNPRINTF_PAGE_COUNT = (
 _SPRINTF_PAGE_COUNT = 'sprintf(pageCount, "%u/5", (unsigned)watch_screen_index + 1U);'
 _BUGGY_RUN_STAGE_GUARD = "current_menu != GE_MENU_RUN_STAGE && current_menu != -1"
 _FIXED_RUN_STAGE_GUARD = "current_menu != MENU_RUN_STAGE && current_menu != -1"
+_RUNTIME_FIX_MARKERS = (
+    "int ascensionWatchIsActive(void)",
+    "void ascensionWatchReturnToMainMenu(void)",
+    "frontChangeMenu(MENU_MISSION_SELECT, FALSE);",
+    "/* Ascension runtime fix: direct frontend return",
+)
+_FINAL_WATCH_MARKERS = (
+    "static void watchAbortMissionToFrontEnd(void)",
+    "ascensionDrawWatchChrome",
+    "Q WATCH / STATUS",
+    "Q WATCH / EQUIPMENT",
+    "Q WATCH / CONTROLS",
+    "Q WATCH / SYSTEM",
+    "Q WATCH / BRIEFING",
+)
 
 
 def patch_options_safe(text: str) -> str:
+    # Runtime-fix state is a later, intentional evolution of the final-watch
+    # bridge. Re-running the older generator must never overwrite it.
+    if all(marker in text for marker in _RUNTIME_FIX_MARKERS):
+        missing = [m for m in _FINAL_WATCH_MARKERS if m not in text]
+        if missing:
+            raise impl.PatchError(
+                "runtime-fixed watch is missing final-watch markers: " + ", ".join(missing)
+            )
+        if "deleteCurrentSelectedFolder()" not in text:
+            raise impl.PatchError("stock Abort Mission helper was lost")
+        return text
+
     # The main installer identifies its complete generated chrome block to stay
     # idempotent. Local/CI builds use sprintf for compatibility with the rest of
     # options.c, so normalize that one generated line back to the installer's
