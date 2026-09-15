@@ -89,9 +89,15 @@ def main() -> int:
     require("s_open = 0;" in ov and "ascensionWatchReturnToMainMenu();" in ov,
             "confirmed return closes F10 then enters native front end")
 
+    # Delimit only the quick-return action. ACTION_RESTART legitimately calls
+    # sysRestart() immediately after it, and must not be mistaken for the menu
+    # action itself.
     return_action = ov.find('if (r->action == ACTION_RETURN_MENU)')
     require(return_action >= 0, "quick-return implementation block is present")
-    return_block = ov[return_action:return_action + 900]
+    restart_action = ov.find('if (r->action == ACTION_RESTART)', return_action)
+    require(restart_action > return_action,
+            "process restart remains a separate action after quick return")
+    return_block = ov[return_action:restart_action]
     require("sysRestart()" not in return_block,
             "quick return is not implemented as a process restart")
     require("configSave();" in return_block,
