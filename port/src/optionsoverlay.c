@@ -89,6 +89,7 @@ enum RowAction {
 static const char *const kOnOff[]     = { "OFF", "ON", NULL };
 static const char *const kTexFilter[] = { "NEAREST", "BILINEAR", "3-POINT", NULL };
 static const char *const kCapture[]   = { "ALWAYS GRAB", "CLICK-TO-LOCK", NULL };
+static const char *const kControlPreset[] = { "CLASSIC", "HYBRID", "MODERN", NULL };
 static const char *const kLanguage[]  = { "ENGLISH", "PORTUGUESE (BRAZIL)", NULL };
 static const int kMsaaSeq[] = { 1, 2, 4, 8 };
 
@@ -163,6 +164,12 @@ static struct Row rows[] = {
       .kind=ROW_SLIDER, .step=5, .uiMin=70, .uiMax=120, .resetValue=100 },
 
     /* INPUT */
+    { .key="Input.ControlPreset", .label="Control preset",
+      .help="Choose Classic, Hybrid or Modern Ascension controls.",
+      .category=CAT_INPUT,
+      .kind=ROW_ENUM, .step=1, .names=kControlPreset,
+      .uiMin=0, .uiMax=2, .resetValue=2 },
+
     { .key="Input.MouseAimSpeed",  .label="Mouse aim speed",
       .help="Aim sensitivity. Range 1-100.", .category=CAT_INPUT,
       .kind=ROW_SLIDER, .step=1, .uiMin=1, .uiMax=100, .resetValue=16 },

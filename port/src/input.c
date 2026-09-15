@@ -80,6 +80,7 @@
 #include "config.h"
 #include "input.h"
 #include "optionsoverlay.h"
+#include "ascension_controls.h"
 
 /* N64 button bits (from PR/os.h -- duplicated here to avoid pulling os.h,
  * whose `u8 errno;` field collides with <errno.h>'s macro). */
@@ -621,11 +622,26 @@ unsigned inputComputePad(int idx, signed char *stick_x, signed char *stick_y)
         if (actHeld(ks, IA_TURN_L))   sx = -STICK_MAX;       /* keyboard turn */
         if (actHeld(ks, IA_TURN_R))   sx =  STICK_MAX;
 
-        if ((mb & SDL_BUTTON(SDL_BUTTON_LEFT)) || actHeld(ks, IA_FIRE))
+        /* Ascension Modern Controls v1: dedicated crouch is translated into
+         * GoldenEye's native 1.1 aim+stick-down gesture. This deliberately
+         * keeps bondview2.c as the gameplay authority, so weapon crouch
+         * restrictions and the original crouch state machine remain intact. */
+        int dedicatedCrouch = !menuMode && ascensionControlsDedicatedCrouchHeld();
+
+        /* In Modern, Left Ctrl is a crouch key. Do not also emit the legacy
+         * keyboard-fire binding on the same poll. LMB remains fire. Hybrid's
+         * crouch key is C, therefore legacy Left Ctrl fire is unaffected. */
+        if ((mb & SDL_BUTTON(SDL_BUTTON_LEFT)) ||
+            (actHeld(ks, IA_FIRE) && !dedicatedCrouch))
             button |= GE_CONT_G;
-        int aimHeld = (mb & SDL_BUTTON(SDL_BUTTON_RIGHT)) || actHeld(ks, IA_AIM);
+
+        int aimHeld = (mb & SDL_BUTTON(SDL_BUTTON_RIGHT)) ||
+                      actHeld(ks, IA_AIM) || dedicatedCrouch;
         if (aimHeld)
             button |= GE_CONT_R;
+
+        if (dedicatedCrouch)
+            sy = -STICK_MAX;
         if (actHeld(ks, IA_ACTION))
             button |= GE_CONT_A;
         if (wheelPulse > 0) {           /* mouse-wheel weapon cycle -> A pulse */
