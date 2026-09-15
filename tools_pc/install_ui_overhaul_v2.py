@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Atomic installer for Ascension UI Overhaul V2.
 
-This is the public migration entry point. It normalizes the V1 input behavior
-that changed between iterations, applies the V2 renderer migration and its
-PT-BR copy as a single fail-closed operation, then writes only after every
-postcondition succeeds.
+This is the public migration entry point. It normalizes the one V1 mouse
+binding that changed between iterations, preserves V1's already page-bounded
+vertical navigation, applies the V2 renderer migration and PT-BR copy as a
+single fail-closed operation, then writes only after every postcondition
+succeeds.
 """
 from __future__ import annotations
 
@@ -41,55 +42,27 @@ V2_RMB = '''        if (rmb && !prevRmb) {
             return;
         }'''
 
-V1_MOVE_SELECTION = '''static void moveSelection(int delta)
-{
-    int next = s_sel + delta;
-    if (next < 0) next = 0;
-    if (next >= NUM_ROWS) next = NUM_ROWS - 1;
-    if (next != s_sel) {
-        s_sel = next;
-        clearPendingAction();
-        ensureSelectionVisible();
-    }
-}'''
-
-V2_MOVE_SELECTION = '''static void moveSelection(int delta)
-{
-    /* Q Watch pages are real pages: vertical navigation never falls through
-     * into another category. At either edge focus wraps inside the page,
-     * matching GoldenEye's predictable linear menu behavior. */
-    int first, last;
+# V1 already scopes vertical focus to the active department. V2 retains that
+# behavior and changes only presentation plus the PC-standard RMB Back action.
+PAGE_BOUNDED_NAV = '''    int first, last;
     categoryBounds(rows[s_sel].category, &first, &last);
-    if (first < 0 || last < first)
-        return;
-
+    if (first < 0) return;
     int next = s_sel + delta;
-    if (next < first) next = last;
-    if (next > last) next = first;
-    if (next != s_sel) {
-        s_sel = next;
-        clearPendingAction();
-        ensureSelectionVisible();
-    }
-}'''
-
-
-def replace_migration(text: str, old: str, new: str, label: str) -> str:
-    if new in text:
-        return text
-    count = text.count(old)
-    if count != 1:
-        raise InstallError(f"{label} migration anchor expected once, found {count}")
-    return text.replace(old, new, 1)
+    if (next < first) next = first;
+    if (next > last) next = last;'''
 
 
 def normalize_v1_input(text: str) -> str:
     if "Ascension UI Overhaul V2 - Q Watch compact settings" in text:
         return text
-    text = replace_migration(text, V1_RMB, V2_RMB, "V1 RMB")
-    text = replace_migration(text, V1_MOVE_SELECTION, V2_MOVE_SELECTION,
-                             "V1 vertical navigation")
-    return text
+    if PAGE_BOUNDED_NAV not in text:
+        raise InstallError("V1 page-bounded navigation contract missing")
+    if V2_RMB in text:
+        return text
+    count = text.count(V1_RMB)
+    if count != 1:
+        raise InstallError(f"V1 RMB migration anchor expected once, found {count}")
+    return text.replace(V1_RMB, V2_RMB, 1)
 
 
 def main() -> int:
@@ -117,7 +90,7 @@ def main() -> int:
         "Q WATCH / SYSTEM CONFIGURATION",
         "tabCategoryAt",
         V2_RMB,
-        V2_MOVE_SELECTION,
+        PAGE_BOUNDED_NAV,
     ]
     for needle in required:
         if needle not in updated_ov:
