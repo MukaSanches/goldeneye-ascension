@@ -27,6 +27,7 @@ PATCHERS = [
     [PY, "tools_pc/apply_modern_controls_v4.py", "--no-backup"],
     [PY, "tools_pc/apply_modern_controls_v4_padbinds.py"],
     [PY, "tools_pc/apply_universal_controller_layer.py"],
+    [PY, "tools_pc/apply_audio_remaster.py"],
 ]
 
 TESTS = [
@@ -41,6 +42,7 @@ TESTS = [
     [PY, "tools_pc/test_modern_controls_v4.py"],
     [PY, "tools_pc/test_modern_controls_v4_padbinds.py"],
     [PY, "tools_pc/test_universal_controller_layer.py"],
+    [PY, "tools_pc/test_audio_remaster.py"],
 ]
 
 
@@ -65,6 +67,7 @@ def prepare() -> None:
     run([PY, "tools_pc/apply_modern_controls_v4.py", "--check"])
     run([PY, "tools_pc/apply_modern_controls_v4_padbinds.py", "--check"])
     run([PY, "tools_pc/apply_universal_controller_layer.py", "--check"])
+    run([PY, "tools_pc/apply_audio_remaster.py", "--check"])
 
 
 def test() -> None:
@@ -116,6 +119,12 @@ def controllerdb(*, optional: bool) -> None:
     run(cmd)
 
 
+def steamaudio(*, stage: bool) -> None:
+    action = "stage" if stage else "ensure"
+    print(f"== Ascension Audio Remaster: Steam Audio 4.8.1 {action} ==")
+    run([PY, "tools_pc/ensure_steam_audio.py", action])
+
+
 def assets() -> None:
     print("== Ascension 0.0.4: ROM symbol generation ==")
     run([PY, "scripts/gen_romassets.py", "u"])
@@ -150,15 +159,17 @@ def launch() -> None:
 def full_pipeline(target: str) -> None:
     prepare()
     test()
+    steamaudio(stage=False)
     assets()
     build(target)
+    steamaudio(stage=True)
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument(
         "command",
-        choices=["prepare", "test", "controllerdb", "assets", "build", "all", "run", "play"],
+        choices=["prepare", "test", "controllerdb", "steamaudio", "assets", "build", "all", "run", "play"],
     )
     ap.add_argument("--target", default="ntsc-final")
     args = ap.parse_args()
@@ -169,6 +180,8 @@ def main() -> int:
         test()
     elif args.command == "controllerdb":
         controllerdb(optional=False)
+    elif args.command == "steamaudio":
+        steamaudio(stage=False)
     elif args.command == "assets":
         assets()
     elif args.command == "build":
@@ -177,19 +190,22 @@ def main() -> int:
         launch()
     elif args.command == "play":
         prepare()
-        # Best-effort only: offline play remains supported through SDL's built-in
-        # mappings plus Ascension's conservative raw-joystick fallback.
+        # Controller DB remains best-effort/offline-capable. Steam Audio is not:
+        # this audio branch deliberately requires the pinned Valve runtime for
+        # its full remaster path and stages it beside the executable.
         controllerdb(optional=True)
         test()
+        steamaudio(stage=False)
         assets()
         build(args.target)
-        print("\nAscension 0.0.4 pipeline: PASS")
+        steamaudio(stage=True)
+        print("\nAscension 0.0.4 + Audio Remaster pipeline: PASS")
         launch()
         return 0
     else:
         full_pipeline(args.target)
 
-    print("\nAscension 0.0.4 pipeline: PASS")
+    print("\nAscension 0.0.4 + Audio Remaster pipeline: PASS")
     return 0
 
 
