@@ -53,6 +53,8 @@ jobs:
           python tools_pc/apply_persistent_f10_hint.py --no-backup
           python tools_pc/apply_unlock_all_missions.py --no-backup
           python tools_pc/apply_watch_ui_final_safe.py --no-backup
+          python tools_pc/apply_watch_runtime_fix.py --no-backup
+          python tools_pc/apply_watch_runtime_fix.py --check
 
       - name: Release contracts
         run: |
@@ -63,6 +65,7 @@ jobs:
           python tools_pc/test_persistent_f10_hint.py
           python tools_pc/test_unlock_all_missions.py
           python tools_pc/test_watch_ui_final.py
+          python tools_pc/test_watch_runtime_fix.py
           git diff --check
 
       - name: Regenerate ROM symbols
