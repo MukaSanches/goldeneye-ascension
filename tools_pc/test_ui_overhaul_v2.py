@@ -89,9 +89,9 @@ def main() -> int:
         "SDL_SCANCODE_S",
         "SDL_SCANCODE_A",
         "SDL_SCANCODE_D",
-        "Q Watch pages are real pages",
-        "if (next < first) next = last;",
-        "if (next > last) next = first;",
+        "categoryBounds(rows[s_sel].category, &first, &last);",
+        "if (next < first) next = first;",
+        "if (next > last) next = last;",
     ]
     for marker in markers:
         require(marker in src, f"missing V2 marker: {marker}")
