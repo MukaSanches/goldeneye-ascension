@@ -3,7 +3,8 @@
 
 The SDK binary is intentionally not committed. This helper downloads Valve's
 official Steam Audio 4.8.1 release once, verifies the published SHA-256, extracts
-only the platform runtime library, and stages it beside the built executable.
+only the platform runtime library plus its license, and stages them beside the
+built executable.
 """
 from __future__ import annotations
 
@@ -24,6 +25,7 @@ SDK_URL = "https://github.com/ValveSoftware/steam-audio/releases/download/v4.8.1
 SDK_SHA256 = "4a0aa5ec1176f38f0b0993a37c2259d9e86f27e22d5e24f83ec4c3cb9a1d5449"
 CACHE_DIR = ROOT / "third_party" / "steam-audio" / ".cache"
 SDK_DIR = ROOT / "third_party" / "steam-audio" / VERSION
+LICENSE_NAME = "STEAM-AUDIO-LICENSE.md"
 
 
 def target() -> tuple[str, str, str]:
@@ -84,11 +86,21 @@ def download_zip(dest: Path) -> None:
     print("Steam Audio SDK archive SHA-256: PASS")
 
 
+def _extract_member(zf: zipfile.ZipFile, member: str, out: Path) -> None:
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with zf.open(member) as src, out.open("wb") as dst:
+        shutil.copyfileobj(src, dst)
+    if out.stat().st_size == 0:
+        out.unlink(missing_ok=True)
+        raise SystemExit(f"Steam Audio SDK extracted an empty file: {member}")
+
+
 def ensure() -> Path:
     platform_dir, lib_name, suffix = target()
     out_dir = SDK_DIR / platform_dir
     out = out_dir / lib_name
-    if out.exists() and out.stat().st_size > 0:
+    license_out = SDK_DIR / LICENSE_NAME
+    if out.exists() and out.stat().st_size > 0 and license_out.exists() and license_out.stat().st_size > 0:
         print(f"Steam Audio {VERSION}: runtime already present: {out.relative_to(ROOT)}")
         return out
 
@@ -97,19 +109,24 @@ def ensure() -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     with zipfile.ZipFile(archive, "r") as zf:
-        candidates = [name for name in zf.namelist() if name.replace("\\", "/").endswith(suffix)]
+        normalized = [(name, name.replace("\\", "/")) for name in zf.namelist()]
+        candidates = [name for name, norm in normalized if norm.endswith(suffix)]
         if not candidates:
             raise SystemExit(f"Steam Audio SDK archive does not contain {suffix}")
-        if len(candidates) > 1:
-            candidates.sort(key=len)
-        member = candidates[0]
-        with zf.open(member) as src, out.open("wb") as dst:
-            shutil.copyfileobj(src, dst)
+        candidates.sort(key=len)
+        _extract_member(zf, candidates[0], out)
 
-    if out.stat().st_size == 0:
-        out.unlink(missing_ok=True)
-        raise SystemExit("Steam Audio runtime extracted as an empty file")
+        licenses = [
+            name for name, norm in normalized
+            if norm.lower().endswith("/license.md") or norm.lower() == "license.md"
+        ]
+        if not licenses:
+            raise SystemExit("Steam Audio SDK archive does not contain LICENSE.md")
+        licenses.sort(key=len)
+        _extract_member(zf, licenses[0], license_out)
+
     print(f"Steam Audio {VERSION}: extracted {out.relative_to(ROOT)}")
+    print(f"Steam Audio {VERSION}: extracted {license_out.relative_to(ROOT)}")
     return out
 
 
@@ -119,7 +136,9 @@ def stage() -> Path:
     build_dir.mkdir(parents=True, exist_ok=True)
     dest = build_dir / lib.name
     shutil.copy2(lib, dest)
+    shutil.copy2(SDK_DIR / LICENSE_NAME, build_dir / LICENSE_NAME)
     print(f"Steam Audio {VERSION}: staged {dest.relative_to(ROOT)}")
+    print(f"Steam Audio {VERSION}: staged build-pc/{LICENSE_NAME}")
     return dest
 
 
