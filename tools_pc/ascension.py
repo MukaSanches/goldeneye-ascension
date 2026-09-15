@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Canonical prepare/test/build entry point for Ascension 0.0.4."""
+"""Canonical prepare/test/build/play entry point for Ascension 0.0.4."""
 from __future__ import annotations
 
 import argparse
@@ -119,9 +119,36 @@ def build(target: str) -> None:
         run(["./build-pc.sh", target], env=os.environ.copy())
 
 
+def launch() -> None:
+    candidates = [
+        ROOT / "build-pc" / "ge007.x86_64.exe",
+        ROOT / "build-pc" / "ge007.x86_64",
+    ]
+    executable = next((path for path in candidates if path.exists()), None)
+    if executable is None:
+        raise SystemExit(
+            "Ascension executable not found under build-pc/. "
+            "Run the build first or use: python tools_pc/ascension.py play"
+        )
+
+    print(f"== Ascension 0.0.4: launching {executable.name} ==")
+    print("NOTE: runtime still requires your legally owned ROM-derived data/ assets.")
+    run([str(executable)], env=os.environ.copy())
+
+
+def full_pipeline(target: str) -> None:
+    prepare()
+    test()
+    assets()
+    build(target)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("command", choices=["prepare", "test", "assets", "build", "all"])
+    ap.add_argument(
+        "command",
+        choices=["prepare", "test", "assets", "build", "all", "run", "play"],
+    )
     ap.add_argument("--target", default="ntsc-final")
     args = ap.parse_args()
 
@@ -133,11 +160,15 @@ def main() -> int:
         assets()
     elif args.command == "build":
         build(args.target)
+    elif args.command == "run":
+        launch()
+    elif args.command == "play":
+        full_pipeline(args.target)
+        print("\nAscension 0.0.4 pipeline: PASS")
+        launch()
+        return 0
     else:
-        prepare()
-        test()
-        assets()
-        build(args.target)
+        full_pipeline(args.target)
 
     print("\nAscension 0.0.4 pipeline: PASS")
     return 0
