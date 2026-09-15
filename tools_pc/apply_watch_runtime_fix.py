@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OPTIONS = ROOT / "src/game/options.c"
 VIDEO = ROOT / "port/src/video.c"
 HEADER = ROOT / "port/include/ascension_watch.h"
+WATCH_GUARD_MARKER = "/* Ascension watch capture guard:"
 
 
 class PatchError(RuntimeError):
@@ -113,7 +114,7 @@ def patch_video(text: str) -> str:
             1,
         )
 
-    if "/* Ascension watch capture guard */" in text:
+    if WATCH_GUARD_MARKER in text:
         return text
 
     # Keep the anchor limited to the Escape branch but ignore its outer
@@ -169,7 +170,7 @@ def main() -> int:
     contracts = (
         (updated[OPTIONS], "int ascensionWatchIsActive(void)"),
         (updated[OPTIONS], "frontChangeMenu(MENU_MISSION_SELECT, FALSE);"),
-        (updated[VIDEO], "/* Ascension watch capture guard */"),
+        (updated[VIDEO], WATCH_GUARD_MARKER),
         (updated[HEADER], "int ascensionWatchIsActive(void);"),
     )
     for haystack, needle in contracts:
