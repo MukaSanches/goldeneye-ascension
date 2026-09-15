@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  linux-gcc-v3:
+  linux-gcc14-v3:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -53,18 +53,18 @@ jobs:
       - name: Regenerate ROM symbols
         run: python3 scripts/gen_romassets.py u
 
-      - name: Configure GCC
-        run: cmake -S . -B build-v3-gcc -DROMID=ntsc-final -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14
+      - name: Configure GCC 14
+        run: cmake -S . -B build-v3-gcc14 -DROMID=ntsc-final -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14
 
-      - name: Build GCC
-        run: cmake --build build-v3-gcc -j"$(nproc)"
+      - name: Build GCC 14
+        run: cmake --build build-v3-gcc14 -j"$(nproc)"
 
-      - name: Verify GCC binary
+      - name: Verify GCC 14 binary
         run: |
-          test -f build-v3-gcc/ge007.x86_64
-          file build-v3-gcc/ge007.x86_64
+          test -f build-v3-gcc14/ge007.x86_64
+          file build-v3-gcc14/ge007.x86_64
 
-  linux-clang-v3:
+  linux-gcc13-v3:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -76,28 +76,32 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang-18 cmake python3 libsdl2-dev zlib1g-dev libgl1-mesa-dev
+          sudo apt-get install -y gcc-13 g++-13 cmake python3 libsdl2-dev zlib1g-dev libgl1-mesa-dev
 
-      - name: Apply and test V3
+      - name: Apply V2 + V3
         run: |
+          python3 tools_pc/apply_modern_controls_v2.py --check
           python3 tools_pc/apply_modern_controls_v2.py --no-backup
+          python3 tools_pc/apply_modern_controls_v3.py --check
           python3 tools_pc/apply_modern_controls_v3.py --no-backup
+          python3 tools_pc/test_modern_controls_v2.py
           python3 tools_pc/test_modern_controls_v3.py
+          python3 tools_pc/verify_ascension_contracts.py
           git diff --check
 
       - name: Regenerate ROM symbols
         run: python3 scripts/gen_romassets.py u
 
-      - name: Configure Clang
-        run: cmake -S . -B build-v3-clang -DROMID=ntsc-final -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18
+      - name: Configure GCC 13
+        run: cmake -S . -B build-v3-gcc13 -DROMID=ntsc-final -DCMAKE_C_COMPILER=gcc-13 -DCMAKE_CXX_COMPILER=g++-13
 
-      - name: Build Clang
-        run: cmake --build build-v3-clang -j"$(nproc)"
+      - name: Build GCC 13
+        run: cmake --build build-v3-gcc13 -j"$(nproc)"
 
-      - name: Verify Clang binary
+      - name: Verify GCC 13 binary
         run: |
-          test -f build-v3-clang/ge007.x86_64
-          file build-v3-clang/ge007.x86_64
+          test -f build-v3-gcc13/ge007.x86_64
+          file build-v3-gcc13/ge007.x86_64
 
   windows-v3:
     runs-on: windows-latest
