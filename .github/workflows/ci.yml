@@ -18,9 +18,6 @@ on:
     # checks stayed "expected" forever, wedging every docs PR (M-44).
   workflow_dispatch:
 
-# Minimal token: CI only reads the repo and uploads build artifacts, neither of
-# which needs write access. Fork PRs run untrusted build scripts on the runner,
-# so keep the granted scope as small as possible and never expose secrets here.
 permissions:
   contents: read
 
@@ -28,40 +25,14 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# Jobs:
-#
-#   linux-build   — ubuntu, system GCC. Actually compiles + links (unlike
-#                   validate), then packages the Linux bundle (exe + README +
-#                   licenses + prepare-assets, NO ROM / assets / bundled libs)
-#                   via tools_pc/bundle-linux.sh and uploads it. Surfaces
-#                   GCC-on-Linux strictness gaps MinGW misses. Not a runtime
-#                   claim; not a required check yet.
-#
-#   validate      — ubuntu, configure-only. Byte-compiles the tooling,
-#                   regenerates the US ROM-asset symbol file, and CMake-
-#                   configures ntsc-final (REGION_DEFS, the source list, and
-#                   that SDL2 / zlib / OpenGL are discoverable). No ROM is used.
-#                   Does NOT compile; running on ubuntu is NOT a claim the port
-#                   works on Linux.
-#
-#   windows-build — windows/MSYS2, the real supported platform. Compiles and
-#                   links the full executable, then packages the distributable
-#                   bundle (exe + runtime DLLs + README + licenses, NO ROM /
-#                   assets) via tools_pc/bundle-win.sh and uploads it. Neither
-#                   the ROM nor extracted assets are needed to BUILD (they are
-#                   runtime-only), so CI builds but never runs the port.
-#
-#   release       — tags only (v*). Downloads the Windows + Linux bundles and
-#                   attaches both to a DRAFT pre-release for that tag. Draft, so
-#                   a human does the ROM smoke-test on each platform and hits
-#                   Publish. This is the only job granted contents: write.
+# The repository's Ascension release branches are intentionally patcher-first:
+# the committed C tree stays close to upstream and tools_pc/ascension.py applies
+# the release stack deterministically. For PRs whose base is the 0.0.4 release
+# branch, the ordinary CI therefore prepares that stack before configure/build.
+# This condition is deliberately narrow: main/master/upstream CI behavior is
+# unchanged.
 
 jobs:
-  # Did this change touch anything outside docs / licenses? No workflow-level
-  # paths-ignore exists (see the `on:` comments), so this job is the single
-  # place a docs-only push OR pull request is filtered out — a PR is diffed
-  # against its base sha, a branch push against `github.event.before`. Tag
-  # builds always run. Docs globs: **.md, docs/**, LICENSE, NOTICE.
   changes:
     runs-on: ubuntu-22.04
     outputs:
@@ -119,17 +90,15 @@ jobs:
       - name: Validate Ascension test runner shell syntax
         run: bash -n tools_pc/run_ascension_safe_test.sh
 
-      # Generated dev-docs stay in sync with the tree (speed-ups plan Step 4).
       - name: Check generated dev indexes are current
         run: |
           python3 tools_pc/gen_findings_index.py --check
           python3 tools_pc/gen_env_probes.py --check
 
-      # US only. gen_romassets.py resolves every symbol for the US region from
-      # the committed CSVs with no ROM present; PAL/JP each need a handful of
-      # region-specific prop/font offsets that only come from that region's ROM
-      # (see docs/building.md — PAL/JP builders generate romassets_e/j.s
-      # locally). No ROM is used or required here.
+      - name: Prepare Ascension 0.0.4 release stack
+        if: github.event_name == 'pull_request' && github.base_ref == 'release/ascension-0.0.4'
+        run: python3 tools_pc/ascension.py prepare
+
       - name: Regenerate ROM-asset symbol file (US)
         run: |
           python3 scripts/gen_romassets.py u
@@ -138,16 +107,6 @@ jobs:
       - name: CMake configure (ntsc-final)
         run: cmake -S . -B build-ntsc -DROMID=ntsc-final
 
-  # Linux (Ubuntu, system GCC) compile job. Unlike `validate` this actually
-  # runs `cmake --build`, so it surfaces the GCC-on-Linux strictness gaps that
-  # MinGW does not flag. The port has never been run on Linux — a green build
-  # here is a "does it compile + link" signal only, not a runtime claim.
-  # Not a required check yet; flip it to required once it is reliably green.
-  #
-  # Toolchain: ubuntu-24.04 + gcc-14. The port is developed on MinGW GCC 16;
-  # pinning a recent GCC here keeps the first bring-up focused on real
-  # portability gaps rather than a decade of accumulated old-GCC pedantry.
-  # (A "does it build on the GCC a typical distro ships" pass can come later.)
   linux-build:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -155,10 +114,6 @@ jobs:
     env:
       CC: gcc-14
       CXX: g++-14
-      # CMakeLists.txt opt-in enables CMAKE_{C,CXX}_COMPILER_LAUNCHER=ccache
-      # when ccache is on PATH (b4de1c68, speed-ups plan Step 5). Game
-      # sources are frozen (1:1 with the decomp), so after the first run only
-      # touched port/ files miss cache -- near-total hit rate.
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_MAXSIZE: 500M
     steps:
@@ -181,6 +136,10 @@ jobs:
             ccache-linux-${{ hashFiles('CMakeLists.txt') }}-
             ccache-linux-
 
+      - name: Prepare Ascension 0.0.4 release stack
+        if: github.event_name == 'pull_request' && github.base_ref == 'release/ascension-0.0.4'
+        run: python3 tools_pc/ascension.py prepare
+
       - name: Regenerate ROM-asset symbol file (US)
         run: python3 scripts/gen_romassets.py u
 
@@ -199,10 +158,6 @@ jobs:
           ls -la build-linux/ge007* || true
           file build-linux/ge007* || true
 
-      # Package the Linux bundle on every run so the release path stays
-      # exercised. No shared libs are bundled — the README tells the user to
-      # install SDL2 / zlib / libGL from their distro. Same ROM / size guards
-      # as the Windows bundle.
       - name: Package Linux bundle
         run: |
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
@@ -222,13 +177,6 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  # Real Windows (MSYS2 MINGW64) build — the only platform the port is
-  # developed and tested on. This compiles and LINKS the full executable.
-  #
-  # No ROM and no extracted assets are needed to build: the compiled asset set
-  # is a handful of committed pure-data .c files plus the generated
-  # address-constant romassets_<region>.s. The ROM (.z64) and the ROM-derived
-  # blobs are runtime-only dependencies — CI cannot run the game, only build it.
   windows-build:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -237,10 +185,6 @@ jobs:
       run:
         shell: msys2 {0}
     env:
-      # Same opt-in ccache CMakeLists.txt already wires up (Step 5). Note:
-      # this cache path is read/written by the JS actions/cache step outside
-      # the msys2 shell too, so it stays a plain workspace-relative path
-      # rather than an msys /c/... form.
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_MAXSIZE: 500M
     steps:
@@ -271,6 +215,10 @@ jobs:
             ccache-windows-${{ hashFiles('CMakeLists.txt') }}-
             ccache-windows-
 
+      - name: Prepare Ascension 0.0.4 release stack
+        if: github.event_name == 'pull_request' && github.base_ref == 'release/ascension-0.0.4'
+        run: python tools_pc/ascension.py prepare
+
       - name: Regenerate ROM-asset symbol file (US)
         run: python scripts/gen_romassets.py u
 
@@ -280,10 +228,6 @@ jobs:
       - name: ccache stats
         run: ccache -s
 
-      # Package the distributable bundle on every run so the release path is
-      # always exercised. On a tag build VERSION is the tag; otherwise it is a
-      # throwaway CI string. bundle-win.sh hard-fails if a ROM image or an
-      # oversized blob ends up inside the bundle.
       - name: Package Windows bundle
         run: |
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
@@ -303,14 +247,6 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      # CI builds and packages the executable but does not run it — running the
-      # port needs a ROM, which CI does not provide. Runtime checks (the
-      # -level_09 soak, a golden-frame diff) would run on a self-hosted runner
-      # instead. Not planned.
-
-  # Tags only. Attach the packaged Windows + Linux bundles to a DRAFT
-  # pre-release so a human can do the ROM smoke-test on each platform before
-  # publishing. This job — and only this job — gets contents: write.
   release:
     if: github.ref_type == 'tag'
     needs: [ changes, validate, windows-build, linux-build ]
