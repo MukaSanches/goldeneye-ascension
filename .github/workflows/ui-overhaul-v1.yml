@@ -1,0 +1,93 @@
+name: Ascension UI Overhaul v1 validation
+
+on:
+  push:
+    branches: [ ascension-ui-overhaul-v1 ]
+  pull_request:
+    branches: [ ascension-modern-controls-v3, ascension-ui-overhaul-v1 ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ui-overhaul-v1-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false, fetch-depth: 1 }
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake python3 libsdl2-dev zlib1g-dev libgl1-mesa-dev
+      - name: Python syntax
+        run: python3 -m compileall -q tools_pc
+      - name: Build validated V3 + corrected menu pointer + UI
+        run: |
+          python3 tools_pc/apply_modern_controls_v2.py --check
+          python3 tools_pc/apply_modern_controls_v2.py --no-backup
+          python3 tools_pc/apply_modern_controls_v3.py --check
+          python3 tools_pc/apply_modern_controls_v3.py --no-backup
+          python3 tools_pc/apply_modern_menu_guard.py --check
+          python3 tools_pc/apply_modern_menu_guard.py
+          python3 tools_pc/apply_ui_overhaul_v1.py --check
+          python3 tools_pc/apply_ui_overhaul_v1.py
+          python3 tools_pc/apply_ui_overhaul_v1.py --check
+      - name: Regression contracts
+        run: |
+          python3 tools_pc/test_modern_controls_v2.py
+          python3 tools_pc/test_modern_controls_v3.py
+          python3 tools_pc/test_ui_overhaul_v1.py
+          python3 tools_pc/verify_ascension_contracts.py
+          git diff --check
+      - name: ROM symbols
+        run: python3 scripts/gen_romassets.py u
+      - name: Configure and build
+        run: |
+          cmake -S . -B build-ui -DROMID=ntsc-final
+          cmake --build build-ui -j"$(nproc)"
+          test -f build-ui/ge007.x86_64
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 50
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false, fetch-depth: 1 }
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-python
+      - name: Apply stack and test
+        run: |
+          python tools_pc/apply_modern_controls_v2.py --check
+          python tools_pc/apply_modern_controls_v2.py --no-backup
+          python tools_pc/apply_modern_controls_v3.py --check
+          python tools_pc/apply_modern_controls_v3.py --no-backup
+          python tools_pc/apply_modern_menu_guard.py --check
+          python tools_pc/apply_modern_menu_guard.py
+          python tools_pc/apply_ui_overhaul_v1.py --check
+          python tools_pc/apply_ui_overhaul_v1.py
+          python tools_pc/test_modern_controls_v2.py
+          python tools_pc/test_modern_controls_v3.py
+          python tools_pc/test_ui_overhaul_v1.py
+          git diff --check
+      - name: ROM symbols and Windows build
+        run: |
+          python scripts/gen_romassets.py u
+          ./build-pc.sh ntsc-final
+          test -f build-pc/ge007.x86_64.exe
