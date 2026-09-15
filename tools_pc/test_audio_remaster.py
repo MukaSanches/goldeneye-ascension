@@ -11,6 +11,7 @@ ENGINE = ROOT / "port" / "src" / "ascension_audio_remaster.c"
 ABI = ROOT / "port" / "include" / "ascension_steam_audio.h"
 PATCHER = ROOT / "tools_pc" / "apply_audio_remaster.py"
 BOOTSTRAP = ROOT / "tools_pc" / "ensure_steam_audio.py"
+BUNDLER = ROOT / "tools_pc" / "bundle-win.sh"
 
 
 def require(condition: bool, message: str) -> None:
@@ -24,6 +25,7 @@ def main() -> int:
     abi = ABI.read_text(encoding="utf-8")
     patcher = PATCHER.read_text(encoding="utf-8")
     bootstrap = BOOTSTRAP.read_text(encoding="utf-8")
+    bundler = BUNDLER.read_text(encoding="utf-8")
 
     require('#include "ascension_audio_remaster.h"' in audio, "audio.c must include remaster bridge")
     require("ascensionAudioRemasterInit(have.freq);" in audio, "remaster must initialize at real device rate")
@@ -55,12 +57,26 @@ def main() -> int:
     require("GE_ASCENSION_AUDIO_BYPASS" in engine, "developer A/B bypass must remain available")
     require("mastering fallback active" in engine, "missing DLL must never make the game silent")
 
-    # Published Valve v4.8.1 SDK archive digest. Prevent silent supply-chain drift.
+    # Supply-chain pinning: SDK binary uses GitHub's release SHA-256 and the
+    # license comes from the exact v4.8.1 tag commit with Git blob validation.
     require(
         'SDK_SHA256 = "4a0aa5ec1176f38f0b0993a37c2259d9e86f27e22d5e24f83ec4c3cb9a1d5449"' in bootstrap,
         "Steam Audio SDK checksum must remain pinned",
     )
+    require('VALVE_TAG_COMMIT = "0da18255cca520771f363ee01f100572b39a308e"' in bootstrap,
+            "Steam Audio license source commit must remain pinned")
+    require('LICENSE_GIT_BLOB_SHA1 = "d645695673349e3947e8e5ae42332d0ac3164cd7"' in bootstrap,
+            "Steam Audio license blob must remain verified")
     require("steamaudio_4.8.1.zip" in bootstrap, "Steam Audio SDK version must remain pinned")
+
+    # Distribution must remain zero-install: dynamically loaded phonon.dll and
+    # its license are copied into every Windows bundle automatically.
+    require('cp build-pc/phonon.dll "$OUT/phonon.dll"' in bundler,
+            "Windows bundle must include Steam Audio runtime")
+    require("LICENSE-Steam-Audio-Apache-2.0.md" in bundler,
+            "Windows bundle must include Steam Audio license")
+    require("unresolved runtime dependencies" in bundler,
+            "Windows bundler must reject incomplete Steam Audio dependency closure")
 
     # Mathematical sanity of the transparent peak curve used by the C engine:
     # monotonic, symmetric, sub-clipping, and not a destructive compressor.
