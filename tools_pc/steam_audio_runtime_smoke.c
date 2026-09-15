@@ -66,6 +66,7 @@ int main(int argc, char **argv)
     contextSettings.simdLevel = ASC_IPL_SIMDLEVEL_SSE2;
     if (contextCreate(&contextSettings, &context) != ASC_IPL_STATUS_SUCCESS || !context) {
         fprintf(stderr, "Steam Audio context creation failed\n");
+        SDL_UnloadObject(lib);
         return 4;
     }
 
@@ -73,11 +74,14 @@ int main(int argc, char **argv)
     audioSettings.frameSize = FRAME;
     memset(&hrtfSettings, 0, sizeof(hrtfSettings));
     hrtfSettings.type = ASC_IPL_HRTFTYPE_DEFAULT;
-    hrtfSettings.volume = 0.0f;
+    /* Steam Audio's public contract requires a positive linear volume; 1.0 is
+       its neutral value and is also used by Valve's virtual-surround benchmark. */
+    hrtfSettings.volume = 1.0f;
     hrtfSettings.normType = ASC_IPL_HRTFNORMTYPE_RMS;
     if (hrtfCreate(context, &audioSettings, &hrtfSettings, &hrtf) != ASC_IPL_STATUS_SUCCESS || !hrtf) {
         fprintf(stderr, "Steam Audio HRTF creation failed\n");
         contextRelease(&context);
+        SDL_UnloadObject(lib);
         return 5;
     }
 
@@ -88,6 +92,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "Steam Audio virtual surround creation failed\n");
         hrtfRelease(&hrtf);
         contextRelease(&context);
+        SDL_UnloadObject(lib);
         return 6;
     }
 
