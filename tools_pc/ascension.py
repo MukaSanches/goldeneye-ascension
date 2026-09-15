@@ -11,6 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PY = sys.executable
+REPORT = ROOT / "ascension-0.0.4-test-report.txt"
 
 PATCHERS = [
     [PY, "tools_pc/apply_modern_controls_v2.py", "--no-backup"],
@@ -41,9 +42,18 @@ TESTS = [
 ]
 
 
+def cmd_text(cmd: list[str]) -> str:
+    return " ".join(cmd)
+
+
 def run(cmd: list[str], *, env: dict[str, str] | None = None) -> None:
-    print("\n+", " ".join(cmd), flush=True)
+    print("\n+", cmd_text(cmd), flush=True)
     subprocess.run(cmd, cwd=ROOT, env=env, check=True)
+
+
+def run_code(cmd: list[str], *, env: dict[str, str] | None = None) -> int:
+    print("\n+", cmd_text(cmd), flush=True)
+    return subprocess.run(cmd, cwd=ROOT, env=env, check=False).returncode
 
 
 def prepare() -> None:
@@ -56,19 +66,43 @@ def prepare() -> None:
 
 def test() -> None:
     print("== Ascension 0.0.4: regression contracts ==")
-    run([PY, "-m", "compileall", "-q", "tools_pc"])
+    results: list[tuple[str, int]] = []
+
+    syntax_cmd = [PY, "-m", "compileall", "-q", "tools_pc"]
+    results.append((cmd_text(syntax_cmd), run_code(syntax_cmd)))
+
     for cmd in TESTS:
-        run(cmd)
+        results.append((cmd_text(cmd), run_code(cmd)))
 
     git = shutil.which("git")
     if git:
-        run([git, "diff", "--check"])
+        diff_cmd = [git, "diff", "--check"]
+        results.append((cmd_text(diff_cmd), run_code(diff_cmd)))
     else:
         win_git = Path("/c/Program Files/Git/bin/git.exe")
         if win_git.exists():
-            run([str(win_git), "diff", "--check"])
+            diff_cmd = [str(win_git), "diff", "--check"]
+            results.append((cmd_text(diff_cmd), run_code(diff_cmd)))
         else:
-            print("NOTE: git not in PATH; diff --check skipped locally.")
+            results.append(("git diff --check", 125))
+            print("NOTE: git not in PATH; diff --check unavailable locally.")
+
+    lines = ["Ascension 0.0.4 regression report", "=" * 36, ""]
+    failed: list[str] = []
+    for name, code in results:
+        state = "PASS" if code == 0 else ("SKIP" if code == 125 else "FAIL")
+        lines.append(f"{state:4}  {name}")
+        if code not in (0, 125):
+            failed.append(name)
+    lines.append("")
+    lines.append(f"Result: {'PASS' if not failed else 'FAIL'}")
+    REPORT.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print("\n" + REPORT.read_text(encoding="utf-8"), flush=True)
+
+    if failed:
+        raise SystemExit(
+            "Ascension 0.0.4 regression gate failed: " + ", ".join(failed)
+        )
 
 
 def assets() -> None:
@@ -78,7 +112,11 @@ def assets() -> None:
 
 def build(target: str) -> None:
     print(f"== Ascension 0.0.4: build {target} ==")
-    run(["./build-pc.sh", target], env=os.environ.copy())
+    bash = shutil.which("bash")
+    if bash:
+        run([bash, "build-pc.sh", target], env=os.environ.copy())
+    else:
+        run(["./build-pc.sh", target], env=os.environ.copy())
 
 
 def main() -> int:
@@ -87,12 +125,19 @@ def main() -> int:
     ap.add_argument("--target", default="ntsc-final")
     args = ap.parse_args()
 
-    if args.command == "prepare": prepare()
-    elif args.command == "test": test()
-    elif args.command == "assets": assets()
-    elif args.command == "build": build(args.target)
+    if args.command == "prepare":
+        prepare()
+    elif args.command == "test":
+        test()
+    elif args.command == "assets":
+        assets()
+    elif args.command == "build":
+        build(args.target)
     else:
-        prepare(); test(); assets(); build(args.target)
+        prepare()
+        test()
+        assets()
+        build(args.target)
 
     print("\nAscension 0.0.4 pipeline: PASS")
     return 0

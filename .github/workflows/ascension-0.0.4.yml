@@ -44,6 +44,14 @@ jobs:
       - name: Regression contracts
         run: python tools_pc/ascension.py test
 
+      - name: Upload Windows regression report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ascension-004-regression-windows
+          path: ascension-0.0.4-test-report.txt
+          if-no-files-found: ignore
+
       - name: Explicit Windows diff check
         run: '"/c/Program Files/Git/bin/git.exe" diff --check'
 
@@ -79,6 +87,14 @@ jobs:
 
       - name: Regression contracts
         run: python3 tools_pc/ascension.py test
+
+      - name: Upload Linux regression report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ascension-004-regression-linux-gcc${{ matrix.gcc }}
+          path: ascension-0.0.4-test-report.txt
+          if-no-files-found: ignore
 
       - name: Regenerate ROM symbols
         run: python3 tools_pc/ascension.py assets
