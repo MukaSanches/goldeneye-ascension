@@ -59,7 +59,17 @@ jobs:
         run: python tools_pc/ascension.py assets
 
       - name: Build Windows
-        run: python tools_pc/ascension.py build
+        run: |
+          set -o pipefail
+          python tools_pc/ascension.py build 2>&1 | tee ascension-0.0.4-build-windows.log
+
+      - name: Upload Windows build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ascension-004-build-windows
+          path: ascension-0.0.4-build-windows.log
+          if-no-files-found: ignore
 
       - name: Verify executable
         run: test -f build-pc/ge007.x86_64.exe
@@ -103,7 +113,17 @@ jobs:
         env:
           CC: gcc-${{ matrix.gcc }}
           CXX: g++-${{ matrix.gcc }}
-        run: bash build-pc.sh ntsc-final
+        run: |
+          set -o pipefail
+          bash build-pc.sh ntsc-final 2>&1 | tee ascension-0.0.4-build-linux-gcc${{ matrix.gcc }}.log
+
+      - name: Upload Linux build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ascension-004-build-linux-gcc${{ matrix.gcc }}
+          path: ascension-0.0.4-build-linux-gcc${{ matrix.gcc }}.log
+          if-no-files-found: ignore
 
       - name: Verify executable
         run: test -f build-pc/ge007.x86_64
