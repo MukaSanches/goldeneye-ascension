@@ -74,6 +74,44 @@ jobs:
       - name: Verify executable
         run: test -f build-pc/ge007.x86_64.exe
 
+      - name: Stage Windows RC test package
+        run: |
+          set -euo pipefail
+          stage="dist/ascension-0.0.4-rc1-windows"
+          rm -rf "$stage"
+          mkdir -p "$stage"
+          cp build-pc/ge007.x86_64.exe "$stage/"
+
+          # Copy the common MinGW runtime dependencies so the candidate can be
+          # launched from Explorer instead of requiring an MSYS2 shell in PATH.
+          for dll in SDL2.dll zlib1.dll libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll; do
+            if [ -f "/mingw64/bin/$dll" ]; then
+              cp "/mingw64/bin/$dll" "$stage/"
+            fi
+          done
+
+          # Also collect any additional MinGW DLL that this exact executable
+          # resolves to. Windows system DLLs are intentionally not bundled.
+          ldd build-pc/ge007.x86_64.exe \
+            | awk '{ for (i = 1; i <= NF; ++i) if ($i ~ /^\/mingw64\/bin\/.*\.dll$/) print $i }' \
+            | sort -u \
+            | while read -r dll; do
+                [ -f "$dll" ] && cp -n "$dll" "$stage/"
+              done
+
+          cp docs/dev/ascension-0.0.4-test-windows.txt "$stage/LEIA-ME-TESTE.txt"
+          cp docs/dev/ascension-0.0.4.md "$stage/RELEASE-NOTES.md"
+          printf '%s\n' "$GITHUB_SHA" > "$stage/BUILD-COMMIT.txt"
+          sha256sum "$stage/ge007.x86_64.exe" > "$stage/SHA256SUMS.txt"
+
+      - name: Upload Windows RC test package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ascension-0.0.4-rc1-windows
+          path: dist/ascension-0.0.4-rc1-windows
+          if-no-files-found: error
+          compression-level: 9
+
   linux:
     runs-on: ubuntu-latest
     timeout-minutes: 45
