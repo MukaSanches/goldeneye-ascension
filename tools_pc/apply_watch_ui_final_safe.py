@@ -5,12 +5,20 @@ The main installer intentionally contains strong idempotence checks. This small
 adapter performs the native-abort refactor first, before the installer adds the
 shared helper body, so the original five-line sequence remains an unambiguous
 single anchor on a pristine tree.
+
+It also normalizes the quick-return menu guard to GoldenEye's real
+``MENU_RUN_STAGE`` enum. The original final installer accidentally emitted the
+port-only spelling ``GE_MENU_RUN_STAGE`` even though that alias does not exist in
+optionsoverlay.c. Keeping the compatibility repair here makes the safe installer
+able to fix both pristine trees and trees where the older patch was already
+applied.
 """
 from __future__ import annotations
 
 import apply_watch_ui_final as impl
 
 _ORIGINAL_PATCH_OPTIONS = impl.patch_options
+_ORIGINAL_PATCH_OVERLAY = impl.patch_overlay
 _NATIVE_ABORT = '''        D_800409A4 = 0;
         set_missionstate(MISSION_STATE_0);
         bossRunTitleStage();
@@ -22,6 +30,8 @@ _SNPRINTF_PAGE_COUNT = (
     '(unsigned)watch_screen_index + 1U);'
 )
 _SPRINTF_PAGE_COUNT = 'sprintf(pageCount, "%u/5", (unsigned)watch_screen_index + 1U);'
+_BUGGY_RUN_STAGE_GUARD = "current_menu != GE_MENU_RUN_STAGE && current_menu != -1"
+_FIXED_RUN_STAGE_GUARD = "current_menu != MENU_RUN_STAGE && current_menu != -1"
 
 
 def patch_options_safe(text: str) -> str:
@@ -49,7 +59,35 @@ def patch_options_safe(text: str) -> str:
     return text
 
 
+def patch_overlay_safe(text: str) -> str:
+    """Install/repair the F10 quick-return guard without breaking idempotence.
+
+    The original installer considers its generated block an idempotence anchor,
+    so an already-fixed tree is temporarily normalized to the old spelling
+    before delegating. The result is always returned with the real game enum.
+    """
+    if text.count(_BUGGY_RUN_STAGE_GUARD) > 1 or text.count(_FIXED_RUN_STAGE_GUARD) > 1:
+        raise impl.PatchError("quick-return menu guard appears more than once")
+
+    canonical = text
+    if _FIXED_RUN_STAGE_GUARD in canonical and _BUGGY_RUN_STAGE_GUARD not in canonical:
+        canonical = canonical.replace(
+            _FIXED_RUN_STAGE_GUARD, _BUGGY_RUN_STAGE_GUARD, 1
+        )
+
+    canonical = _ORIGINAL_PATCH_OVERLAY(canonical)
+
+    if _BUGGY_RUN_STAGE_GUARD not in canonical:
+        raise impl.PatchError("quick-return menu guard missing after install")
+
+    fixed = canonical.replace(_BUGGY_RUN_STAGE_GUARD, _FIXED_RUN_STAGE_GUARD, 1)
+    if _BUGGY_RUN_STAGE_GUARD in fixed:
+        raise impl.PatchError("legacy GE_MENU_RUN_STAGE guard survived repair")
+    return fixed
+
+
 impl.patch_options = patch_options_safe
+impl.patch_overlay = patch_overlay_safe
 
 if __name__ == "__main__":
     raise SystemExit(impl.main())
