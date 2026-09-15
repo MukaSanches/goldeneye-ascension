@@ -49,6 +49,12 @@ def patch_overlay(s: str) -> str:
     if "Input.ModernDirectLook" not in s:
         raise PatchError("Modern Controls V3 F10 rows are not applied")
 
+    # Idempotent fast-path after the full dossier renderer has already landed.
+    if ("Active rows only -- this is the biggest UX improvement" in s and
+            "CAT_SYSTEM" in s and "sidebarCategoryAt" in s and
+            "MI6 CLASSIFIED ARCHIVES" in s):
+        return s
+
     # ------------------------------------------------------------------
     # Design system + dynamic file-select context.
     # ------------------------------------------------------------------
@@ -323,9 +329,10 @@ static void jumpCategory(int dir)
     ensureSelectionVisible();
 }''', "category-scoped navigation")
 
-    # Replace old horizontal tabs with the dossier's vertical department rail.
+    # Replace the existing category label and horizontal tabs with the dossier's
+    # vertical department rail.
     s = regex_once(s,
-        r'static Gfx \*drawCategoryTabs\(Gfx \*gdl, int active\)\n\{.*?\n\}',
+        r'static const char \*categoryName\(int cat\)\n\{.*?\n\}',
 '''static const char *categoryName(int cat)
 {
     switch (cat) {
@@ -334,9 +341,11 @@ static void jumpCategory(int dir)
     case CAT_GAMEPLAY: return "FIELD";
     default:           return "SYSTEM";
     }
-}
+}''', "four department labels")
 
-static const char *categorySub(int cat)
+    s = regex_once(s,
+        r'static Gfx \*drawCategoryTabs\(Gfx \*gdl, int active\)\n\{.*?\n\}',
+'''static const char *categorySub(int cat)
 {
     switch (cat) {
     case CAT_DISPLAY:  return "VISUAL SYSTEMS";
@@ -357,8 +366,7 @@ static Gfx *drawCategoryTabs(Gfx *gdl, int active)
             gdl = fillRect(gdl, OV_SIDE_X0, y - 4, OV_SIDE_X0 + 2, y + 24,
                            214, 184, 95, 255);
         }
-        gdl = drawText(gdl, OV_SIDE_X0 + 8, y,
-                       categoryName(cat), col);
+        gdl = drawText(gdl, OV_SIDE_X0 + 8, y, categoryName(cat), col);
         gdl = drawText(gdl, OV_SIDE_X0 + 8, y + 11,
                        categorySub(cat), cat == active ? ASC_UI_GOLD_DIM : 0x666A67FFu);
     }
