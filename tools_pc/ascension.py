@@ -125,7 +125,7 @@ def assets() -> None:
 
 def build(target: str) -> None:
     print(f"== Ascension 0.0.4: build {target} ==")
-    run(["./build-pc.sh", target], env=os.environ.copy())
+    run(["bash", "build-pc.sh", target], env=os.environ.copy())
 
 
 def main() -> int:
