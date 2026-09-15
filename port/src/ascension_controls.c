@@ -199,7 +199,12 @@ void ascensionControlsQueueDirectLook(double dx, double dy, int aiming)
     double degreesPerCount = ASCENSION_DIRECT_LOOK_DEG_PER_COUNT * sensitivity * adsScale;
 
     s_pendingYawDegrees += dx * degreesPerCount;
-    s_pendingPitchDegrees += dy * degreesPerCount;
+
+    /* input.c defines dy > 0 as "look down". GoldenEye's vv_verta convention
+     * is the opposite sign: its native positive analogPitch becomes a negative
+     * speedverta, and the default slightly-down pitch is -4 degrees. Convert
+     * at this boundary so Direct Look exactly matches the proven V2 direction. */
+    s_pendingPitchDegrees -= dy * degreesPerCount;
 
     /* A focus/capture transition must never create a giant camera snap. The
      * normal input path drains SDL deltas too; this is an independent final
