@@ -87,7 +87,7 @@ jobs:
         env:
           CC: gcc-${{ matrix.gcc }}
           CXX: g++-${{ matrix.gcc }}
-        run: ./build-pc.sh ntsc-final
+        run: bash build-pc.sh ntsc-final
 
       - name: Verify executable
         run: test -f build-pc/ge007.x86_64
