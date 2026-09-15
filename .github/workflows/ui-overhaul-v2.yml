@@ -118,7 +118,7 @@ jobs:
 
       - name: Configure and build GCC 13
         run: |
-          cmake -S . -B build-ui-v2-gcc13 -DROMID=ntsc-final -DCMAKE_C_COMPILER=gcc-13 -DCMAKE_CXX_COMPILER=g++-14
+          cmake -S . -B build-ui-v2-gcc13 -DROMID=ntsc-final -DCMAKE_C_COMPILER=gcc-13 -DCMAKE_CXX_COMPILER=g++-13
           cmake --build build-ui-v2-gcc13 -j"$(nproc)"
           test -f build-ui-v2-gcc13/ge007.x86_64
 
