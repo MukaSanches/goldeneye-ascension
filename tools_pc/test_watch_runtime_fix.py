@@ -54,7 +54,7 @@ def main() -> int:
             "SDL video shell can query native watch state")
     esc = function_block(vid,
                          "ev.key.keysym.sym == SDLK_ESCAPE && !ev.key.repeat",
-                         "case SDL_TEXTINPUT")
+                         "case SDL_MOUSEBUTTONDOWN:")
     require("ascensionWatchIsActive()" in esc,
             "Escape checks Q Watch before releasing capture")
     require("inputReleaseCapture();" in esc,
