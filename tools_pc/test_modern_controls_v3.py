@@ -41,6 +41,8 @@ require("port/src/ascension_controls.c", [
     "ASCENSION_DIRECT_LOOK_DEG_PER_COUNT",
     "ASCENSION_DIRECT_LOOK_ACCUM_LIMIT",
     "if (!ascensionControlsDirectLookEnabled())",
+    "s_pendingYawDegrees += dx * degreesPerCount",
+    "s_pendingPitchDegrees -= dy * degreesPerCount",
 ])
 
 require("port/src/input.c", [
@@ -105,8 +107,11 @@ for name, path, fn in [
     if again != original:
         raise SystemExit(f"FAIL V3 idempotence: {name} changes on second application")
 
-# Randomized direct-look policy model. Preserve sign, ADS must never be faster
-# than hip-fire, and the accumulator must remain bounded against focus spikes.
+# Randomized direct-look policy model. Horizontal mouse sign is preserved.
+# Vertical input follows input.c's convention (positive = mouse down) while
+# GoldenEye vv_verta uses negative degrees for looking down, so pitch is
+# intentionally sign-inverted at the host/game boundary. ADS must never be
+# faster than hip-fire and the accumulator stays bounded against focus spikes.
 BASE = 0.12
 LIMIT = 45.0
 rng = random.Random(0xA5C3E11)
@@ -114,16 +119,28 @@ for _ in range(100_000):
     delta = rng.uniform(-5000.0, 5000.0)
     sens = rng.randint(20, 300) / 100.0
     ads = rng.randint(20, 100) / 100.0
-    hip = max(-LIMIT, min(LIMIT, delta * BASE * sens))
-    aimed = max(-LIMIT, min(LIMIT, delta * BASE * sens * ads))
-    if delta > 0 and (hip < 0 or aimed < 0):
-        raise SystemExit("FAIL direct-look sign preservation")
-    if delta < 0 and (hip > 0 or aimed > 0):
-        raise SystemExit("FAIL direct-look sign preservation")
-    if abs(hip) > LIMIT + 1e-9 or abs(aimed) > LIMIT + 1e-9:
+
+    yaw_hip = max(-LIMIT, min(LIMIT, delta * BASE * sens))
+    yaw_ads = max(-LIMIT, min(LIMIT, delta * BASE * sens * ads))
+    pitch_hip = max(-LIMIT, min(LIMIT, -delta * BASE * sens))
+    pitch_ads = max(-LIMIT, min(LIMIT, -delta * BASE * sens * ads))
+
+    if delta > 0 and (yaw_hip < 0 or yaw_ads < 0):
+        raise SystemExit("FAIL horizontal direct-look sign preservation")
+    if delta < 0 and (yaw_hip > 0 or yaw_ads > 0):
+        raise SystemExit("FAIL horizontal direct-look sign preservation")
+
+    # Positive dy means mouse-down/look-down; native vv_verta must decrease.
+    if delta > 0 and (pitch_hip > 0 or pitch_ads > 0):
+        raise SystemExit("FAIL vertical direct-look native pitch convention")
+    if delta < 0 and (pitch_hip < 0 or pitch_ads < 0):
+        raise SystemExit("FAIL vertical direct-look native pitch convention")
+
+    if max(abs(yaw_hip), abs(yaw_ads), abs(pitch_hip), abs(pitch_ads)) > LIMIT + 1e-9:
         raise SystemExit("FAIL direct-look accumulator bound")
-    if abs(delta * BASE * sens) <= LIMIT and abs(aimed) > abs(hip) + 1e-9:
-        raise SystemExit("FAIL ADS sensitivity exceeds hip-fire")
+    if abs(delta * BASE * sens) <= LIMIT:
+        if abs(yaw_ads) > abs(yaw_hip) + 1e-9 or abs(pitch_ads) > abs(pitch_hip) + 1e-9:
+            raise SystemExit("FAIL ADS sensitivity exceeds hip-fire")
 
 # Randomized signed ring-buffer model mirroring the C FIFO. Compare it against
 # a simple reference queue so wraparound, overflow and alternating directions
@@ -182,6 +199,6 @@ if hook_pos < 0 or apply_after_hook < 0 or hook_pos > apply_after_hook:
     raise SystemExit("FAIL direct-look hook order")
 
 print("Modern Controls V3 contracts: PASS")
-print("  100000 randomized direct-look cases: PASS")
+print("  100000 randomized direct-look cases (yaw + native pitch sign): PASS")
 print("  10000 randomized signed-wheel streams: PASS")
 print("  idempotence/scope/order contracts: PASS")
