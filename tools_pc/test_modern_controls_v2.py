@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Static/regression contracts for the generated Modern Controls V2 bridge."""
 from pathlib import Path
-import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -22,12 +21,12 @@ require("port/include/ascension_controls.h", [
 ])
 
 require("port/src/ascension_controls.c", [
-    'configRegisterInt("Input.ControlPreset"',
+    'configRegisterInt("Input.ControlPreset", &s_controlPreset, 0, 2);',
     'configRegisterInt("Input.ModernAimToggle"',
     'configRegisterInt("Input.ModernRawMouse"',
     'configRegisterInt("Input.ModernMouseResponse"',
     'configRegisterInt("Input.ModernWheelQueue"',
-    "s_controlPreset = ASCENSION_CONTROLS_CLASSIC",
+    "static int s_controlPreset = 0;",
     "if (!ascensionControlsIsModern() || s_modernMouseResponse == ASCENSION_MOUSE_LEGACY)",
 ])
 
