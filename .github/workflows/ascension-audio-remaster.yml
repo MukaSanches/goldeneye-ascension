@@ -2,7 +2,7 @@ name: Ascension Audio Remaster validation
 
 on:
   push:
-    branches: [ feature/ascension-audio-remaster ]
+    branches: [ feature/ascension-audio-remaster, feature/ascension-audio-3d-world ]
   pull_request:
     branches: [ release/ascension-0.0.4-controller-universal ]
   workflow_dispatch:
