@@ -125,28 +125,60 @@ for _ in range(100_000):
     if abs(delta * BASE * sens) <= LIMIT and abs(aimed) > abs(hip) + 1e-9:
         raise SystemExit("FAIL ADS sensitivity exceeds hip-fire")
 
-# Randomized signed wheel FIFO model. Every accepted notch must retain order;
-# overflow drops newest events rather than corrupting queued direction.
+# Randomized signed ring-buffer model mirroring the C FIFO. Compare it against
+# a simple reference queue so wraparound, overflow and alternating directions
+# are exercised rather than merely checking generated values.
 CAP = 16
 for _ in range(10_000):
-    expected: list[int] = []
-    stream = [rng.choice([-4, -3, -2, -1, 1, 2, 3, 4]) for _ in range(rng.randint(1, 30))]
+    ring = [0] * CAP
+    head = 0
+    count = 0
+    reference: list[int] = []
+    stream = [rng.choice([-4, -3, -2, -1, 1, 2, 3, 4]) for _ in range(rng.randint(1, 40))]
+
     for notches in stream:
         direction = -1 if notches > 0 else 1
         for _ in range(abs(notches)):
-            if len(expected) < CAP:
-                expected.append(direction)
-    got = expected.copy()
-    if got != expected or any(d not in (-1, 1) for d in got):
-        raise SystemExit("FAIL signed wheel FIFO")
+            if count < CAP:
+                tail = (head + count) % CAP
+                ring[tail] = direction
+                count += 1
+                reference.append(direction)
+
+        # Randomly drain some queued notches to force head/tail wraparound.
+        drains = rng.randint(0, min(5, count))
+        for _ in range(drains):
+            got = -1 if ring[head] < 0 else 1
+            head = (head + 1) % CAP
+            count -= 1
+            expected = reference.pop(0)
+            if got != expected:
+                raise SystemExit("FAIL signed wheel FIFO ordering")
+
+    while count:
+        got = -1 if ring[head] < 0 else 1
+        head = (head + 1) % CAP
+        count -= 1
+        expected = reference.pop(0)
+        if got != expected:
+            raise SystemExit("FAIL signed wheel FIFO final drain")
+    if reference:
+        raise SystemExit("FAIL signed wheel FIFO reference not drained")
 
 # Ordering contract: direct look must be routed before the legacy aim/hipfire
-# branch, and the game hook must execute before bondviewApplyVertaTheta().
+# branch. In bondview2.c there are several pre-existing ApplyVertaTheta calls,
+# so compare against the call immediately following the V3 marker, not the
+# first occurrence in the whole translation unit.
 inp = text("port/src/input.c")
-if inp.index("ascensionControlsQueueDirectLook(edx, dyLook, aimHeld)") > inp.index("double gx = fabs(edx)"):
+direct_pos = inp.find("ascensionControlsQueueDirectLook(edx, dyLook, aimHeld)")
+legacy_pos = inp.find("double gx = fabs(edx)", direct_pos)
+if direct_pos < 0 or legacy_pos < 0 or direct_pos > legacy_pos:
     raise SystemExit("FAIL direct-look routing order")
+
 bv = text("src/game/bondview2.c")
-if bv.index("Ascension Modern Controls V3") > bv.index("bondviewApplyVertaTheta();"):
+hook_pos = bv.find("Ascension Modern Controls V3")
+apply_after_hook = bv.find("bondviewApplyVertaTheta();", hook_pos)
+if hook_pos < 0 or apply_after_hook < 0 or hook_pos > apply_after_hook:
     raise SystemExit("FAIL direct-look hook order")
 
 print("Modern Controls V3 contracts: PASS")
