@@ -1,15 +1,6 @@
 #ifndef ASCENSION_STEAM_AUDIO_H
 #define ASCENSION_STEAM_AUDIO_H
 
-/*
- * Minimal ABI bridge for Valve Steam Audio 4.8.1.
- *
- * Ascension loads phonon dynamically at runtime so the core port remains
- * buildable with the existing MinGW/Linux toolchain and does not need Valve's
- * import library. The declarations below mirror the public Apache-2.0 C API
- * types used by Ascension's virtual-surround path only.
- */
-
 #include <stddef.h>
 
 #if defined(_WIN32)
@@ -63,6 +54,7 @@ typedef void (ASC_IPLCALL *ASC_IPLFreeFunction)(void *memoryBlock);
 typedef struct _IPLContext_t *ASC_IPLContext;
 typedef struct _IPLHRTF_t *ASC_IPLHRTF;
 typedef struct _IPLVirtualSurroundEffect_t *ASC_IPLVirtualSurroundEffect;
+typedef struct _IPLBinauralEffect_t *ASC_IPLBinauralEffect;
 
 typedef struct {
     ASC_IPLuint32 version;
@@ -120,6 +112,11 @@ typedef enum {
     ASC_IPL_HRTFNORMTYPE_RMS
 } ASC_IPLHRTFNormType;
 
+typedef enum {
+    ASC_IPL_HRTFINTERPOLATION_NEAREST,
+    ASC_IPL_HRTFINTERPOLATION_BILINEAR
+} ASC_IPLHRTFInterpolation;
+
 typedef struct {
     ASC_IPLHRTFType type;
     const char *sofaFileName;
@@ -138,6 +135,18 @@ typedef struct {
     ASC_IPLHRTF hrtf;
 } ASC_IPLVirtualSurroundEffectParams;
 
+typedef struct {
+    ASC_IPLHRTF hrtf;
+} ASC_IPLBinauralEffectSettings;
+
+typedef struct {
+    ASC_IPLVector3 direction;
+    ASC_IPLHRTFInterpolation interpolation;
+    ASC_IPLfloat32 spatialBlend;
+    ASC_IPLHRTF hrtf;
+    ASC_IPLfloat32 *peakDelays;
+} ASC_IPLBinauralEffectParams;
+
 #define ASC_STEAMAUDIO_VERSION_MAJOR 4u
 #define ASC_STEAMAUDIO_VERSION_MINOR 8u
 #define ASC_STEAMAUDIO_VERSION_PATCH 1u
@@ -154,5 +163,11 @@ typedef ASC_IPLerror (ASC_IPLCALL *ASC_iplVirtualSurroundEffectCreateFn)(ASC_IPL
 typedef void (ASC_IPLCALL *ASC_iplVirtualSurroundEffectReleaseFn)(ASC_IPLVirtualSurroundEffect *);
 typedef void (ASC_IPLCALL *ASC_iplVirtualSurroundEffectResetFn)(ASC_IPLVirtualSurroundEffect);
 typedef ASC_IPLAudioEffectState (ASC_IPLCALL *ASC_iplVirtualSurroundEffectApplyFn)(ASC_IPLVirtualSurroundEffect, ASC_IPLVirtualSurroundEffectParams *, ASC_IPLAudioBuffer *, ASC_IPLAudioBuffer *);
+typedef ASC_IPLerror (ASC_IPLCALL *ASC_iplBinauralEffectCreateFn)(ASC_IPLContext, ASC_IPLAudioSettings *, ASC_IPLBinauralEffectSettings *, ASC_IPLBinauralEffect *);
+typedef void (ASC_IPLCALL *ASC_iplBinauralEffectReleaseFn)(ASC_IPLBinauralEffect *);
+typedef void (ASC_IPLCALL *ASC_iplBinauralEffectResetFn)(ASC_IPLBinauralEffect);
+typedef ASC_IPLAudioEffectState (ASC_IPLCALL *ASC_iplBinauralEffectApplyFn)(ASC_IPLBinauralEffect, ASC_IPLBinauralEffectParams *, ASC_IPLAudioBuffer *, ASC_IPLAudioBuffer *);
+typedef ASC_IPLAudioEffectState (ASC_IPLCALL *ASC_iplBinauralEffectGetTailFn)(ASC_IPLBinauralEffect, ASC_IPLAudioBuffer *);
+typedef ASC_IPLint32 (ASC_IPLCALL *ASC_iplBinauralEffectGetTailSizeFn)(ASC_IPLBinauralEffect);
 
 #endif
