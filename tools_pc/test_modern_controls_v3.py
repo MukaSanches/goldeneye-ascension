@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Regression and property checks for Modern Controls V3.
 
-Run after V2 + V3 bridges have been applied to the checkout.
+Run after V2 + V3 bridges have been applied to the checkout. When a later
+Modern-controls generation deliberately extends the V3 blocks, this suite
+continues to validate the V3 behavioral contracts while the later generation
+owns idempotence of the extended source shape.
 """
 from __future__ import annotations
 
@@ -87,25 +90,43 @@ for forbidden in ["assets/", "ge007.eep", ".z64", "src/game/chrai", "src/game/ch
     if f'ROOT / "{forbidden}' in patcher_body:
         raise SystemExit(f"FAIL V3 patcher scope: forbidden write target {forbidden}")
 
-# Idempotence: apply patch functions twice in memory to the already-patched
-# files. A second pass must be byte-identical.
-spec = importlib.util.spec_from_file_location(
-    "v3patch", ROOT / "tools_pc/apply_modern_controls_v3.py"
+# On a pure V3 tree the V3 patcher itself must be idempotent. V4 deliberately
+# extends the V3 input/camera blocks, so byte-exact V3 reapplication is no
+# longer a meaningful invariant there; V4's own suites own idempotence of that
+# extended source shape. We still validate every V3 behavior below.
+bv_now = text("src/game/bondview2.c")
+v4_extended = (
+    "Ascension Modern Controls V4" in bv_now
+    or "ascensionControlsConsumeGamepadLook" in bv_now
 )
-if spec is None or spec.loader is None:
-    raise SystemExit("FAIL: cannot import V3 patcher")
-mod = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(mod)
-for name, path, fn in [
-    ("input", "port/src/input.c", mod.patch_input),
-    ("bondview", "src/game/bondview2.c", mod.patch_bondview),
-    ("overlay", "port/src/optionsoverlay.c", mod.patch_overlay),
-    ("locale", "port/src/ascension_locale.c", mod.patch_locale),
-]:
-    original = text(path)
-    again = fn(original)
-    if again != original:
-        raise SystemExit(f"FAIL V3 idempotence: {name} changes on second application")
+if not v4_extended:
+    spec = importlib.util.spec_from_file_location(
+        "v3patch", ROOT / "tools_pc/apply_modern_controls_v3.py"
+    )
+    if spec is None or spec.loader is None:
+        raise SystemExit("FAIL: cannot import V3 patcher")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    for name, path, fn in [
+        ("input", "port/src/input.c", mod.patch_input),
+        ("bondview", "src/game/bondview2.c", mod.patch_bondview),
+        ("overlay", "port/src/optionsoverlay.c", mod.patch_overlay),
+        ("locale", "port/src/ascension_locale.c", mod.patch_locale),
+    ]:
+        original = text(path)
+        again = fn(original)
+        if again != original:
+            raise SystemExit(f"FAIL V3 idempotence: {name} changes on second application")
+else:
+    require("src/game/bondview2.c", [
+        "ascensionControlsConsumeGamepadLook",
+        "ascensionControlsConsumeDirectLook(&ascYaw, &ascPitch)",
+    ])
+    require("port/src/input.c", [
+        "ascensionControlsQueueDirectLook(edx, dyLook, aimHeld)",
+        "wheelQueuePush",
+        "wheelQueuePop",
+    ])
 
 # Randomized direct-look policy model. Horizontal mouse sign is preserved.
 # Vertical input follows input.c's convention (positive = mouse down) while
@@ -201,4 +222,7 @@ if hook_pos < 0 or apply_after_hook < 0 or hook_pos > apply_after_hook:
 print("Modern Controls V3 contracts: PASS")
 print("  100000 randomized direct-look cases (yaw + native pitch sign): PASS")
 print("  10000 randomized signed-wheel streams: PASS")
-print("  idempotence/scope/order contracts: PASS")
+if v4_extended:
+    print("  V3 baseline preserved under V4 extension: PASS")
+else:
+    print("  idempotence/scope/order contracts: PASS")
