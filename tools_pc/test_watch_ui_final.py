@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OPTIONS = ROOT / "src/game/options.c"
 OVERLAY = ROOT / "port/src/optionsoverlay.c"
 LOCALE = ROOT / "port/src/ascension_locale.c"
-PATCHER = ROOT / "tools_pc/apply_watch_ui_final.py"
+PATCHER = ROOT / "tools_pc/apply_watch_ui_final_safe.py"
 
 
 def require(cond: bool, msg: str) -> None:
@@ -88,8 +88,14 @@ def main() -> int:
             "F10 action refuses to re-abort from the normal front end")
     require("s_open = 0;" in ov and "ascensionWatchReturnToMainMenu();" in ov,
             "confirmed return closes F10 then enters native front end")
-    require("sysRestart()" not in ov[ov.find("ACTION_RETURN_MENU"):ov.find("ACTION_RETURN_MENU") + 1200],
+
+    return_action = ov.find('if (r->action == ACTION_RETURN_MENU)')
+    require(return_action >= 0, "quick-return implementation block is present")
+    return_block = ov[return_action:return_action + 900]
+    require("sysRestart()" not in return_block,
             "quick return is not implemented as a process restart")
+    require("configSave();" in return_block,
+            "quick return persists port settings before leaving gameplay")
 
     for marker in (
         '"Return to main menu", "Voltar ao menu principal"',
@@ -99,11 +105,11 @@ def main() -> int:
     ):
         require(marker in loc, f"PT-BR final watch copy exists: {marker}")
 
-    # Idempotence on the fully-integrated tree is mandatory.
+    # Idempotence must use the same safe entry point used by CI and local users.
     mod = load_module(PATCHER)
-    require(mod.patch_options(opt) == opt, "watch patch is idempotent")
-    require(mod.patch_overlay(ov) == ov, "quick-return patch is idempotent")
-    require(mod.patch_locale(loc) == loc, "final watch locale patch is idempotent")
+    require(mod.patch_options_safe(opt) == opt, "watch patch is idempotent")
+    require(mod.impl.patch_overlay(ov) == ov, "quick-return patch is idempotent")
+    require(mod.impl.patch_locale(loc) == loc, "final watch locale patch is idempotent")
 
     # Simple semantic model for the dangerous action: first press never exits;
     # second press exits only while gameplay is active.
