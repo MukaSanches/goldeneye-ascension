@@ -79,6 +79,8 @@ docs/dev/notes/
 # PC port (see CMakeLists.txt / port/)
 build-pc/
 tools_pc/*.exe
+# Valve Steam Audio SDK is downloaded/verified by tools_pc/ensure_steam_audio.py.
+/third_party/steam-audio/
 # Local source backups created by Ascension's reversible patchers.
 *.ascension-before-*
 data/
