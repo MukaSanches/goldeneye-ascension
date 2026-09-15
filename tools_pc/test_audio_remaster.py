@@ -8,6 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 AUDIO = ROOT / "port" / "src" / "audio.c"
 ENGINE = ROOT / "port" / "src" / "ascension_audio_remaster.c"
+MIXER = ROOT / "port" / "src" / "mixer.c"
 ABI = ROOT / "port" / "include" / "ascension_steam_audio.h"
 PATCHER = ROOT / "tools_pc" / "apply_audio_remaster.py"
 BOOTSTRAP = ROOT / "tools_pc" / "ensure_steam_audio.py"
@@ -22,6 +23,7 @@ def require(condition: bool, message: str) -> None:
 def main() -> int:
     audio = AUDIO.read_text(encoding="utf-8")
     engine = ENGINE.read_text(encoding="utf-8")
+    mixer = MIXER.read_text(encoding="utf-8")
     abi = ABI.read_text(encoding="utf-8")
     patcher = PATCHER.read_text(encoding="utf-8")
     bootstrap = BOOTSTRAP.read_text(encoding="utf-8")
@@ -33,14 +35,13 @@ def main() -> int:
     require("ascensionAudioRemasterProcess((const int16_t *)buf, len)" in audio, "final SDL queue must route through remaster")
     require("SDL_QueueAudio(dev, ascensionBuf" in audio, "remastered buffer must be queued")
 
-    # Non-negotiable architectural invariants: do not replace Rare's mixer and
-    # do not touch ROM/game audio assets from this feature.
+    # Non-negotiable architectural invariants: do not patch Rare's gameplay or
+    # depend on ROM/game audio assets for Ascension's DSP layer.
     require("src/audi.c" not in patcher, "audio remaster patcher must stay in port/src/audio.c")
     require("src/snd.c" not in patcher, "audio remaster must not patch Rare's sound player")
     require("assets/music" not in engine and "assets/" not in engine, "remaster must not depend on game assets")
 
-    # Steam Audio is not just named: the engine must construct and apply the
-    # actual HRTF virtual-surround effect from the pinned ABI.
+    # Steam Audio 4.8.1 base/fallback path.
     for token in (
         "iplContextCreate",
         "iplHRTFCreate",
@@ -52,13 +53,50 @@ def main() -> int:
     ):
         require(token in abi or token in engine, f"missing Steam Audio contract token: {token}")
 
-    require("0.68f * s_audio.wetL" in engine, "HRTF path must materially contribute to output")
-    require("ASC_AUDIO_FRAME 128" in engine, "fixed low-latency DSP frame must remain 128 samples")
+    require("0.68f * s_audio.wetL" in engine, "post-mix fallback HRTF must materially contribute")
+    require("ASC_AUDIO_FRAME 128" in engine, "post-mix fallback frame must remain 128 samples")
     require("GE_ASCENSION_AUDIO_BYPASS" in engine, "developer A/B bypass must remain available")
     require("mastering fallback active" in engine, "missing DLL must never make the game silent")
 
-    # Supply-chain pinning: SDK binary uses GitHub's release SHA-256 and the
-    # license comes from the exact v4.8.1 tag commit with Git blob validation.
+    # Source-object path: this is the new preferred renderer. One binaural
+    # effect is maintained per physical voice and all objects are pre-created,
+    # so the real-time mixer never allocates Steam Audio state.
+    for token in (
+        "IPLBinauralEffect",
+        "IPLBinauralEffectParams",
+        "IPL_HRTFINTERPOLATION_BILINEAR",
+        "iplBinauralEffectCreate",
+        "iplBinauralEffectReset",
+        "iplBinauralEffectApply",
+    ):
+        require(token in abi.replace("ASC_", "") or token.replace("IPL_", "ASC_IPL_") in abi or token in engine,
+                f"missing per-source Steam Audio contract token: {token}")
+
+    require("ASC_SOURCE_EFFECTS 64" in engine, "source renderer must keep an independent effect pool")
+    require("ASCENSION_AUDIO_SOURCE_FRAME" in engine, "source renderer must use the low-latency frame contract")
+    require("ASC_IPL_HRTFINTERPOLATION_BILINEAR" in engine, "moving sources must use high-quality HRTF interpolation")
+    require("GE_ASCENSION_SOURCE_HRTF" in engine, "source HRTF must have an emergency A/B fallback switch")
+    require("ascensionAudioSourceProcess" in engine, "source renderer entry point must exist")
+    require("isfinite(outLeft[i])" in engine and "isfinite(outRight[i])" in engine,
+            "source frame must be validated before replacing legacy audio")
+
+    # Mixer safety/science contracts. GoldenEye's legacy contribution is mixed
+    # first. The HRTF stage computes a delta only after successful processing.
+    # Horizontal azimuth is recovered from the game's equal-power L/R gains:
+    # alpha=atan2(R,L), azimuth=2*alpha-pi/2, +X right / -Z forward.
+    require('#include "ascension_audio_remaster.h"' in mixer, "mixer must expose source HRTF bridge")
+    require("ascensionAudioSourceHrtfActive()" in mixer, "mixer must gate optional source HRTF")
+    require("atan2f(sumR, sumL)" in mixer, "mixer must invert equal-power pan mathematically")
+    require("sqrtf(gl * gl + gr * gr)" in mixer, "mixer must recover pre-pan source magnitude")
+    require("dirX = sinf(azimuth)" in mixer and "dirZ = -cosf(azimuth)" in mixer,
+            "mixer must map azimuth into Steam Audio coordinates")
+    require("ascensionAudioSourceProcess" in mixer, "mixer must render each source independently")
+    require("mixL[idx] += ascFloatContribution(hrtfL[k]) - legacyL[k]" in mixer,
+            "successful HRTF must replace only the original direct contribution")
+    require("dry[0][i] = mixerClamp16" in mixer and "dry[1][i] = mixerClamp16" in mixer,
+            "legacy dry mix must always be rendered before optional replacement")
+
+    # Supply-chain pinning.
     require(
         'SDK_SHA256 = "4a0aa5ec1176f38f0b0993a37c2259d9e86f27e22d5e24f83ec4c3cb9a1d5449"' in bootstrap,
         "Steam Audio SDK checksum must remain pinned",
@@ -69,8 +107,7 @@ def main() -> int:
             "Steam Audio license blob must remain verified")
     require("steamaudio_4.8.1.zip" in bootstrap, "Steam Audio SDK version must remain pinned")
 
-    # Distribution must remain zero-install: dynamically loaded phonon.dll and
-    # its license are copied into every Windows bundle automatically.
+    # Distribution remains zero-install.
     require('cp build-pc/phonon.dll "$OUT/phonon.dll"' in bundler,
             "Windows bundle must include Steam Audio runtime")
     require("LICENSE-Steam-Audio-Apache-2.0.md" in bundler,
@@ -78,8 +115,6 @@ def main() -> int:
     require("unresolved runtime dependencies" in bundler,
             "Windows bundler must reject incomplete Steam Audio dependency closure")
 
-    # Mathematical sanity of the transparent peak curve used by the C engine:
-    # monotonic, symmetric, sub-clipping, and not a destructive compressor.
     def soft_peak(x: float) -> float:
         y = 1.07 * x
         y = y / (1.0 + 0.085 * abs(y))
@@ -93,7 +128,7 @@ def main() -> int:
     require(soft_peak(0.25) > 0.25, "quiet/mid-level signal should receive subtle make-up gain")
     require(math.isfinite(soft_peak(1.0)), "soft peak curve must stay finite")
 
-    print("Ascension Audio Remaster regression contract: PASS")
+    print("Ascension Audio Remaster + per-source HRTF regression contract: PASS")
     return 0
 
 
