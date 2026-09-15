@@ -17,9 +17,14 @@ enum AscensionMouseResponse {
     ASCENSION_MOUSE_PRECISION = 2,
 };
 
+enum AscensionCrouchMode {
+    ASCENSION_CROUCH_HOLD   = 0,
+    ASCENSION_CROUCH_TOGGLE = 1,
+};
+
 /* Ascension PC-only gameplay helpers. The original N64 input ABI and gameplay
- * code remain authoritative; these helpers only shape host-side input before
- * it is translated to the native GoldenEye controller state. */
+ * code remain authoritative; these helpers shape host-side input and expose a
+ * narrowly-scoped PORT bridge for modern mouse look. */
 int ascensionControlsPreset(void);
 int ascensionControlsIsModern(void);
 int ascensionControlsDedicatedCrouchHeld(void);
@@ -32,6 +37,16 @@ int ascensionControlsWantsRawMouse(void);
 int ascensionControlsWheelQueueEnabled(void);
 int ascensionControlsMouseResponse(void);
 int ascensionControlsAimToggleEnabled(void);
+
+/* Modern V3 direct-look bridge. Mouse displacement is queued in degrees and
+ * consumed exactly once by the PORT build of bondview2.c. Classic/Hybrid never
+ * enter this path. */
+int ascensionControlsDirectLookEnabled(void);
+int ascensionControlsDirectionalWheelEnabled(void);
+int ascensionControlsDisableAutoCenter(void);
+int ascensionControlsCrouchMode(void);
+void ascensionControlsQueueDirectLook(double dx, double dy, int aiming);
+int ascensionControlsConsumeDirectLook(float *yawDegrees, float *pitchDegrees);
 
 #ifdef __cplusplus
 }
