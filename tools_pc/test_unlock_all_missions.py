@@ -7,6 +7,7 @@ import random
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+FRONT = ROOT / "src/game/front.c"
 FILE2 = ROOT / "src/game/file2.c"
 OVERLAY = ROOT / "port/src/optionsoverlay.c"
 LOCALE = ROOT / "port/src/ascension_locale.c"
@@ -29,25 +30,18 @@ def load_module(path: Path, name: str):
     return mod
 
 
-def model_native_or_override(*, valid: bool, completed: bool, level: int,
-                             difficulty: int, native_status: int,
-                             override: bool) -> int:
-    LOCKED, UNLOCKED, COMPLETED = 0, 1, 3
-    DAM, AZTEC, EGYPT, LEVEL_MAX = 0, 18, 19, 20
-    AGENT, SECRET, OO, DIFF_007, DIFF_MAX = 0, 1, 2, 3, 4
-
-    if not valid or not (DAM <= level < LEVEL_MAX) or not (AGENT <= difficulty < DIFF_MAX):
-        return LOCKED
-    if completed:
-        return COMPLETED
-    if (level == AZTEC and difficulty < SECRET) or (level == EGYPT and difficulty < OO):
-        return LOCKED
+def model_highest_difficulty(*, valid_stage: bool, mode_007_unlocked: bool,
+                             override: bool, native_result: int) -> int:
+    if not valid_stage:
+        return -1
+    cap = 3 if mode_007_unlocked else 2
     if override:
-        return UNLOCKED
-    return native_status
+        return cap
+    return native_result
 
 
 def main() -> int:
+    front = FRONT.read_text(encoding="utf-8")
     file2 = FILE2.read_text(encoding="utf-8")
     overlay = OVERLAY.read_text(encoding="utf-8")
     locale = LOCALE.read_text(encoding="utf-8")
@@ -62,39 +56,48 @@ def main() -> int:
             "ascensionCampaignUnlockAllMissions" in policy_h,
             "campaign policy has a narrow public API")
 
-    forbidden_policy_writes = (
+    forbidden_writes = (
         "fileWriteSave", "fileUnlockStageInFolderAtDifficulty",
         "fileSetDifficultyStageTime", "fileSetSaveCheatUnlocked",
         "joyGamePakLongWrite",
     )
-    for needle in forbidden_policy_writes:
+    for needle in forbidden_writes:
         require(needle not in policy_c,
                 f"policy does not mutate save state via {needle}")
 
-    require('#include "ascension_campaign.h"' in file2,
-            "native progression imports port policy only on PC path")
-    require("ascensionCampaignUnlockAllMissions()" in file2,
-            "native unlock query contains reversible access override")
+    require('#include "ascension_campaign.h"' in front,
+            "solo frontend imports campaign policy")
+    require("ascensionCampaignUnlockAllMissions()" in front,
+            "solo mission availability contains reversible override")
 
-    fn = file2.split("STAGESTATUS fileIsStageUnlockedAtDifficulty", 1)[1]
-    fn = fn.split("void fileOverwriteSaveSlotWithNewSave", 1)[0]
-    pos_completed = fn.find("fileGetSaveStageCompletedForDifficulty")
-    pos_aztec = fn.find("levelid == SP_LEVEL_AZTEC")
+    fn = front.split("s32 get_highest_unlocked_difficulty_for_level", 1)[1]
+    fn = fn.split("//********************************************************************************************************\n//MISSION SELECT", 1)[0]
+    pos_guard = fn.find("stage_id >= 0")
+    pos_cap = fn.find("num = DIFFICULTY_00")
+    pos_007 = fn.find("fileIs007ModeUnlocked")
     pos_override = fn.find("ascensionCampaignUnlockAllMissions")
-    pos_scan = fn.find("still cant find it, do a search")
-    require(-1 not in (pos_completed, pos_aztec, pos_override, pos_scan),
-            "all ordering landmarks exist")
-    require(pos_completed < pos_aztec < pos_override < pos_scan,
-            "completed state and bonus gates precede override")
+    pos_native = fn.find("for (difficulty=num; difficulty >= 0; difficulty--)")
+    require(-1 not in (pos_guard, pos_cap, pos_007, pos_override, pos_native),
+            "solo availability ordering landmarks exist")
+    require(pos_guard < pos_cap < pos_007 < pos_override < pos_native,
+            "override preserves stage validity and 007 gate")
 
-    override_slice = fn[pos_override:pos_scan]
-    require("return STAGESTATUS_UNLOCKED;" in override_slice,
-            "override grants access without faking completion")
-    require("STAGESTATUS_COMPLETED" not in override_slice,
-            "override never reports fake COMPLETED state")
-    for needle in forbidden_policy_writes:
+    override_slice = fn[pos_override:pos_native]
+    require("return num;" in override_slice,
+            "override returns current native difficulty cap")
+    for needle in forbidden_writes:
         require(needle not in override_slice,
-                f"override block contains no {needle} write")
+                f"solo override contains no {needle} write")
+
+    # Critical scope contract: fileIsStageUnlockedAtDifficulty is shared by
+    # multiplayer stage/character unlock paths. The Ascension option must never
+    # be injected there.
+    global_fn = file2.split("STAGESTATUS fileIsStageUnlockedAtDifficulty", 1)[1]
+    global_fn = global_fn.split("void fileOverwriteSaveSlotWithNewSave", 1)[0]
+    require("ascensionCampaignUnlockAllMissions" not in global_fn,
+            "global progression API remains untouched")
+    require('"ascension_campaign.h"' not in file2,
+            "file2 has no Ascension campaign dependency")
 
     require('key="Ascension.UnlockAllMissions"' in overlay,
             "F10 exposes All Missions setting")
@@ -108,57 +111,50 @@ def main() -> int:
             "reset/default restores native progression")
     require('"All missions", "Todas as missoes"' in locale,
             "PT-BR label exists")
-    require('"Unlock every mission without changing saved completion."' in locale,
+    require('"Show every solo mission without marking it completed."' in locale,
             "context help is localized")
 
-    # The patcher itself must be idempotent on an already-integrated tree.
     mod = load_module(PATCHER, "asc_unlock_all_patch")
-    require(mod.patch_file2(file2) == file2,
-            "file2 integration is idempotent")
+    require(mod.patch_front(front) == front,
+            "front-end integration is idempotent")
     require(mod.patch_overlay(overlay) == overlay,
             "F10 integration is idempotent")
     require(mod.patch_locale(locale) == locale,
             "locale integration is idempotent")
 
-    # Model the semantics over many combinations. OFF must be a pure pass-through
-    # to native progression; ON may only turn a normally eligible locked/unlocked
-    # mission into UNLOCKED. Completed and native bonus-stage restrictions win.
+    # Property test the exact intended semantics. OFF is transparent. ON opens
+    # every valid solo mission at the highest difficulty already globally
+    # available to the save (00 by default; 007 only if 007 mode is native-unlocked).
     rng = random.Random(0x007A5C)
-    LOCKED, UNLOCKED, COMPLETED = 0, 1, 3
     for _ in range(100000):
         valid = bool(rng.getrandbits(1))
-        level = rng.randint(-3, 23)
-        diff = rng.randint(-2, 6)
-        completed = bool(rng.getrandbits(1))
-        native = rng.choice((LOCKED, UNLOCKED))
+        mode_007 = bool(rng.getrandbits(1))
+        cap = 3 if mode_007 else 2
+        native = rng.randint(-1, cap)
 
-        off = model_native_or_override(valid=valid, completed=completed,
-                                       level=level, difficulty=diff,
-                                       native_status=native, override=False)
-        on = model_native_or_override(valid=valid, completed=completed,
-                                      level=level, difficulty=diff,
-                                      native_status=native, override=True)
+        off = model_highest_difficulty(valid_stage=valid,
+                                       mode_007_unlocked=mode_007,
+                                       override=False,
+                                       native_result=native)
+        on = model_highest_difficulty(valid_stage=valid,
+                                      mode_007_unlocked=mode_007,
+                                      override=True,
+                                      native_result=native)
 
-        # For cases that reach native progression, OFF is exactly native.
-        if valid and 0 <= level < 20 and 0 <= diff < 4 and not completed and not (
-            (level == 18 and diff < 1) or (level == 19 and diff < 2)
-        ):
-            require(off == native, "OFF path preserves native result") if False else None
+        if valid:
             if off != native:
                 raise SystemExit("FAIL: randomized OFF path changed native progression")
-            if on != UNLOCKED:
-                raise SystemExit("FAIL: randomized ON path failed to grant access")
+            if on != cap:
+                raise SystemExit("FAIL: randomized ON path did not expose full solo access")
+        else:
+            if off != -1 or on != -1:
+                raise SystemExit("FAIL: randomized invalid-stage guard changed")
 
-        if completed and valid and 0 <= level < 20 and 0 <= diff < 4:
-            if on != COMPLETED or off != COMPLETED:
-                raise SystemExit("FAIL: randomized completed-state preservation")
-
-        if valid and ((level == 18 and diff == 0) or
-                      (level == 19 and diff in (0, 1))):
-            if on != LOCKED:
-                raise SystemExit("FAIL: randomized bonus difficulty gate changed")
+        if not mode_007 and on > 2:
+            raise SystemExit("FAIL: randomized override unlocked 007 mode")
 
     print("PASS: 100000 randomized reversible-access cases")
+    print("PASS: multiplayer/global progression scope isolation")
     print("Ascension All Missions contracts: ALL PASS")
     return 0
 
