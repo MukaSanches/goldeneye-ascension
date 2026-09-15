@@ -57,9 +57,12 @@ def main() -> int:
     require('"F10 SYSTEM"' in opt,
             "watch exposes the PC system layer without replacing native pages")
 
-    # The quick exit and stock Abort Mission must converge on one native path.
+    # Stock GoldenEye Abort Mission keeps its original semantics. The later
+    # F10 convenience return is deliberately separate because reusing Abort
+    # Mission was shown at runtime to enter the failure/restart flow and touch
+    # selected-folder state.
     require("static void watchAbortMissionToFrontEnd(void)" in opt,
-            "single native abort/front-end helper exists")
+            "stock Abort Mission helper exists")
     helper = opt.split("static void watchAbortMissionToFrontEnd(void)", 1)[1]
     helper = helper.split("#ifdef PORT", 1)[0]
     for marker in (
@@ -68,17 +71,25 @@ def main() -> int:
         "mission_failed_or_aborted = TRUE",
         "deleteCurrentSelectedFolder()",
     ):
-        require(marker in helper, f"native abort primitive retained: {marker}")
+        require(marker in helper, f"stock Abort Mission primitive retained: {marker}")
     require("fileWriteSave" not in helper and "fileUnlockStage" not in helper,
-            "quick return does not invent save/progression writes")
-    require("getPlayerCount() != 1" in opt,
-            "quick return is hard-gated to solo")
-
-    # There must only be one copy of the native abort sequence after refactor.
-    require(opt.count("bossRunTitleStage();") == 1,
-            "front-end transition has one authoritative implementation")
+            "stock helper does not invent save/progression writes")
     require("watchAbortMissionToFrontEnd();" in opt,
-            "stock Q Watch abort delegates to shared path")
+            "stock Q Watch Abort Mission delegates to its helper")
+    require("getPlayerCount() != 1" in opt,
+            "PC convenience return is hard-gated to solo")
+
+    runtime_fixed = "int ascensionWatchIsActive(void)" in opt
+    if runtime_fixed:
+        require("frontChangeMenu(MENU_MISSION_SELECT, FALSE);" in opt,
+                "convenience return queues the native mission selector")
+        require("mission_failed_or_aborted = FALSE;" in opt,
+                "convenience return avoids mission-failed routing")
+        require(opt.count("bossRunTitleStage();") == 2,
+                "stock abort and convenience return have isolated frontend transitions")
+    else:
+        require(opt.count("bossRunTitleStage();") == 1,
+                "pre-hotfix watch has one shared frontend transition")
 
     require("ACTION_RETURN_MENU" in ov and 'key="__ReturnMenu"' in ov,
             "F10 Gameplay page has quick return")
