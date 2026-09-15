@@ -89,6 +89,9 @@ def main() -> int:
         "SDL_SCANCODE_S",
         "SDL_SCANCODE_A",
         "SDL_SCANCODE_D",
+        "Q Watch pages are real pages",
+        "if (next < first) next = last;",
+        "if (next > last) next = first;",
     ]
     for marker in markers:
         require(marker in src, f"missing V2 marker: {marker}")
@@ -161,6 +164,7 @@ def main() -> int:
     print(f"Layout matrix: PASS ({len(cases)} viewport classes)")
     print("Fast3D geometry/text-state isolation: PASS")
     print("Mouse + keyboard navigation contract: PASS")
+    print("Page-bounded focus navigation: PASS")
     print("GoldenEye-native typography contract: PASS")
     print("PT-BR editorial copy contract: PASS")
     return 0
