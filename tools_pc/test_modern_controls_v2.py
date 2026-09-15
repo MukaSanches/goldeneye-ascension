@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Static/regression contracts for the generated Modern Controls V2 bridge."""
+"""Static/regression contracts for the generated Modern Controls V2 bridge.
+
+The test intentionally accepts both the original numeric spelling of Classic
+and the enum spelling used by later Ascension control layers. The invariant is
+that Classic remains the default; formatting/refactoring must not create a
+false regression.
+"""
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,9 +32,16 @@ require("port/src/ascension_controls.c", [
     'configRegisterInt("Input.ModernRawMouse"',
     'configRegisterInt("Input.ModernMouseResponse"',
     'configRegisterInt("Input.ModernWheelQueue"',
-    "static int s_controlPreset = 0;",
     "if (!ascensionControlsIsModern() || s_modernMouseResponse == ASCENSION_MOUSE_LEGACY)",
 ])
+
+controls = (ROOT / "port/src/ascension_controls.c").read_text(encoding="utf-8")
+classic_defaults = (
+    "static int s_controlPreset = 0;",
+    "static int s_controlPreset = ASCENSION_CONTROLS_CLASSIC;",
+)
+if not any(default in controls for default in classic_defaults):
+    raise SystemExit("FAIL port/src/ascension_controls.c: Classic is no longer the default preset")
 
 require("port/src/input.c", [
     "ascensionControlsWantsRawMouse()",
