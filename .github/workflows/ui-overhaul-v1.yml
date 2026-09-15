@@ -82,10 +82,11 @@ jobs:
           python tools_pc/apply_modern_menu_guard.py
           python tools_pc/apply_ui_overhaul_v1.py --check
           python tools_pc/apply_ui_overhaul_v1.py
+          python tools_pc/apply_ui_overhaul_v1.py --check
           python tools_pc/test_modern_controls_v2.py
           python tools_pc/test_modern_controls_v3.py
           python tools_pc/test_ui_overhaul_v1.py
-          git diff --check
+          "/c/Program Files/Git/bin/git.exe" diff --check
       - name: ROM symbols and Windows build
         run: |
           python scripts/gen_romassets.py u
