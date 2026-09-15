@@ -4,8 +4,8 @@
 The SDK binary is intentionally not committed. This helper downloads Valve's
 official Steam Audio 4.8.1 release once, verifies GitHub's published SHA-256,
 extracts only the platform runtime library, and stages it beside the executable.
-The Apache-2.0 license text is tracked in tools_pc/dist so packaging does not
-rely on the binary SDK archive containing documentation files.
+The matching Apache-2.0 license is fetched from the immutable v4.8.1 commit and
+verified against GitHub's exact blob SHA-1 before it is staged.
 """
 from __future__ import annotations
 
@@ -24,10 +24,12 @@ ROOT = Path(__file__).resolve().parents[1]
 VERSION = "4.8.1"
 SDK_URL = "https://github.com/ValveSoftware/steam-audio/releases/download/v4.8.1/steamaudio_4.8.1.zip"
 SDK_SHA256 = "4a0aa5ec1176f38f0b0993a37c2259d9e86f27e22d5e24f83ec4c3cb9a1d5449"
+VALVE_TAG_COMMIT = "0da18255cca520771f363ee01f100572b39a308e"
+LICENSE_URL = f"https://raw.githubusercontent.com/ValveSoftware/steam-audio/{VALVE_TAG_COMMIT}/LICENSE.md"
+LICENSE_GIT_BLOB_SHA1 = "d645695673349e3947e8e5ae42332d0ac3164cd7"
 CACHE_DIR = ROOT / "third_party" / "steam-audio" / ".cache"
 SDK_DIR = ROOT / "third_party" / "steam-audio" / VERSION
 LICENSE_NAME = "STEAM-AUDIO-LICENSE.md"
-LICENSE_SOURCE = ROOT / "tools_pc" / "dist" / "LICENSE-Steam-Audio-Apache-2.0.md"
 
 
 def target() -> tuple[str, str, str]:
@@ -47,6 +49,11 @@ def sha256(path: Path) -> str:
         for block in iter(lambda: f.read(1024 * 1024), b""):
             h.update(block)
     return h.hexdigest()
+
+
+def git_blob_sha1(data: bytes) -> str:
+    header = f"blob {len(data)}\0".encode("ascii")
+    return hashlib.sha1(header + data).hexdigest()
 
 
 def download_zip(dest: Path) -> None:
@@ -88,6 +95,30 @@ def download_zip(dest: Path) -> None:
     print("Steam Audio SDK archive SHA-256: PASS")
 
 
+def ensure_license() -> Path:
+    SDK_DIR.mkdir(parents=True, exist_ok=True)
+    dest = SDK_DIR / LICENSE_NAME
+    if dest.exists():
+        data = dest.read_bytes()
+        if git_blob_sha1(data) == LICENSE_GIT_BLOB_SHA1:
+            print(f"Steam Audio {VERSION}: verified cached license")
+            return dest
+        dest.unlink()
+
+    req = urllib.request.Request(LICENSE_URL, headers={"User-Agent": "GoldenEye-Ascension/0.0.4"})
+    with urllib.request.urlopen(req, timeout=30) as response:
+        data = response.read()
+    got = git_blob_sha1(data)
+    if got != LICENSE_GIT_BLOB_SHA1:
+        raise SystemExit(
+            "Steam Audio license integrity check failed. "
+            f"Expected Git blob {LICENSE_GIT_BLOB_SHA1}, got {got}."
+        )
+    dest.write_bytes(data)
+    print("Steam Audio license Git blob SHA-1: PASS")
+    return dest
+
+
 def _extract_member(zf: zipfile.ZipFile, member: str, out: Path) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     with zf.open(member) as src, out.open("wb") as dst:
@@ -123,14 +154,12 @@ def ensure() -> Path:
 
 def stage() -> Path:
     lib = ensure()
-    if not LICENSE_SOURCE.exists() or LICENSE_SOURCE.stat().st_size < 1000:
-        raise SystemExit(f"Steam Audio tracked license missing or invalid: {LICENSE_SOURCE.relative_to(ROOT)}")
-
+    license_path = ensure_license()
     build_dir = ROOT / "build-pc"
     build_dir.mkdir(parents=True, exist_ok=True)
     dest = build_dir / lib.name
     shutil.copy2(lib, dest)
-    shutil.copy2(LICENSE_SOURCE, build_dir / LICENSE_NAME)
+    shutil.copy2(license_path, build_dir / LICENSE_NAME)
     print(f"Steam Audio {VERSION}: staged {dest.relative_to(ROOT)}")
     print(f"Steam Audio {VERSION}: staged build-pc/{LICENSE_NAME}")
     return dest
