@@ -3,7 +3,7 @@
 
 Fixes:
   * Escape while the native Q Watch is active must not disarm PC mouse capture.
-    Escape is also a normal GoldenEye input binding, so the SDL shell should
+    Escape is also a normal GoldenEye Cancel binding, so the SDL shell should
     leave capture ownership alone while the watch owns the pause interaction.
   * The F10 quick-return action must go directly to the normal solo mission
     selector. It must not reuse the stock Q Watch Abort Mission path, because
@@ -32,11 +32,12 @@ def patch_options(text: str) -> str:
     if marker not in text:
         raise PatchError("final Q Watch bridge is not installed")
 
-    # Already fixed.
+    # Already fixed. These are semantic markers of the newer bridge, not a
+    # formatting-dependent comment, so a second run is byte-for-byte stable.
     if (
         "int ascensionWatchIsActive(void)" in text
         and "frontChangeMenu(MENU_MISSION_SELECT, FALSE);" in text
-        and "/* Ascension runtime fix: direct frontend return" in text
+        and "mission_failed_or_aborted = FALSE;" in text
     ):
         return text
 
@@ -115,26 +116,28 @@ def patch_video(text: str) -> str:
     if "/* Ascension watch capture guard */" in text:
         return text
 
-    old = '''                } else if (ev.key.keysym.sym == SDLK_ESCAPE && !ev.key.repeat) {
-                    if (optionsOverlayIsOpen()) {
-                        optionsOverlayToggle();
-                    } else {
-                        inputReleaseCapture();
-                    }
-                }'''
-    new = '''                } else if (ev.key.keysym.sym == SDLK_ESCAPE && !ev.key.repeat) {
-                    if (optionsOverlayIsOpen()) {
-                        optionsOverlayToggle();
-                    } else if (ascensionWatchIsActive()) {
-                        /* Ascension watch capture guard: Escape is still
-                         * delivered through SDL_GetKeyboardState to GoldenEye,
-                         * but it must not clear captureArmed while the native
-                         * Q Watch owns the pause interaction. Otherwise the
-                         * player returns to gameplay with dead mouse-look. */
-                    } else {
-                        inputReleaseCapture();
-                    }
-                }'''
+    # Keep the anchor limited to the Escape branch but ignore its outer
+    # indentation; the current video.c uses 12 spaces at switch depth.
+    old = '''} else if (ev.key.keysym.sym == SDLK_ESCAPE && !ev.key.repeat) {
+                if (optionsOverlayIsOpen()) {
+                    optionsOverlayToggle();
+                } else {
+                    inputReleaseCapture();
+                }
+            }'''
+    new = '''} else if (ev.key.keysym.sym == SDLK_ESCAPE && !ev.key.repeat) {
+                if (optionsOverlayIsOpen()) {
+                    optionsOverlayToggle();
+                } else if (ascensionWatchIsActive()) {
+                    /* Ascension watch capture guard: Escape is still
+                     * delivered through SDL_GetKeyboardState to GoldenEye,
+                     * but it must not clear captureArmed while the native
+                     * Q Watch owns the pause interaction. Otherwise the
+                     * player returns to gameplay with dead mouse-look. */
+                } else {
+                    inputReleaseCapture();
+                }
+            }'''
 
     count = text.count(old)
     if count != 1:
