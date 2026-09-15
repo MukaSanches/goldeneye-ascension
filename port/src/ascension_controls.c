@@ -10,7 +10,7 @@
 /* 0 = Classic, 1 = Hybrid, 2 = Modern. Classic remains the safe default for
  * new configs; the F10 preset row can opt into V2 without mutating ROM/save
  * data or the original GoldenEye controller ABI. */
-static int s_controlPreset = ASCENSION_CONTROLS_CLASSIC;
+static int s_controlPreset = 0;
 static int s_dedicatedCrouch = 1;
 
 /* Modern Controls V2: host-input policy only. */
@@ -25,8 +25,7 @@ static int s_prevPhysicalAim = 0;
 
 PD_CONSTRUCTOR static void ascensionControlsConfigInit(void)
 {
-    configRegisterInt("Input.ControlPreset", &s_controlPreset,
-                      ASCENSION_CONTROLS_CLASSIC, ASCENSION_CONTROLS_MODERN);
+    configRegisterInt("Input.ControlPreset", &s_controlPreset, 0, 2);
     configRegisterInt("Input.DedicatedCrouch", &s_dedicatedCrouch, 0, 1);
     configRegisterInt("Input.ModernAimToggle", &s_modernAimToggle, 0, 1);
     configRegisterInt("Input.ModernRawMouse", &s_modernRawMouse, 0, 1);
@@ -42,21 +41,20 @@ int ascensionControlsPreset(void)
 
 int ascensionControlsIsModern(void)
 {
-    return s_controlPreset == ASCENSION_CONTROLS_MODERN;
+    return s_controlPreset == 2;
 }
 
 int ascensionControlsDedicatedCrouchHeld(void)
 {
-    if (!s_dedicatedCrouch || s_controlPreset == ASCENSION_CONTROLS_CLASSIC)
+    if (!s_dedicatedCrouch || s_controlPreset == 0)
         return 0;
 
     const Uint8 *ks = SDL_GetKeyboardState(NULL);
-    if (!ks)
-        return 0;
+    if (!ks) return 0;
 
     /* Hybrid: C only, preserving legacy Left Ctrl fire.
      * Modern: either Ctrl or C becomes a dedicated crouch hold. */
-    if (s_controlPreset == ASCENSION_CONTROLS_HYBRID)
+    if (s_controlPreset == 1)
         return ks[SDL_SCANCODE_C] != 0;
 
     return ks[SDL_SCANCODE_LCTRL] || ks[SDL_SCANCODE_RCTRL] ||
