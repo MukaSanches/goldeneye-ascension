@@ -11,8 +11,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: watch-final-${{ github.ref }}
-  cancel-in-progress: true
+  group: watch-final-${{ github.workflow }}-${{ github.sha }}
+  cancel-in-progress: false
 
 jobs:
   windows-watch-final:
