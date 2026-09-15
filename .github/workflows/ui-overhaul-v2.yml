@@ -51,9 +51,9 @@ jobs:
           python3 tools_pc/apply_unlock_all_missions.py --check
           python3 tools_pc/apply_unlock_all_missions.py --no-backup
           python3 tools_pc/apply_unlock_all_missions.py --check
-          python3 tools_pc/apply_watch_ui_final.py --check
-          python3 tools_pc/apply_watch_ui_final.py --no-backup
-          python3 tools_pc/apply_watch_ui_final.py --check
+          python3 tools_pc/apply_watch_ui_final_safe.py --check
+          python3 tools_pc/apply_watch_ui_final_safe.py --no-backup
+          python3 tools_pc/apply_watch_ui_final_safe.py --check
 
       - name: Regression and watch contracts
         run: |
@@ -114,9 +114,9 @@ jobs:
           python3 tools_pc/apply_unlock_all_missions.py --check
           python3 tools_pc/apply_unlock_all_missions.py --no-backup
           python3 tools_pc/apply_unlock_all_missions.py --check
-          python3 tools_pc/apply_watch_ui_final.py --check
-          python3 tools_pc/apply_watch_ui_final.py --no-backup
-          python3 tools_pc/apply_watch_ui_final.py --check
+          python3 tools_pc/apply_watch_ui_final_safe.py --check
+          python3 tools_pc/apply_watch_ui_final_safe.py --no-backup
+          python3 tools_pc/apply_watch_ui_final_safe.py --check
           python3 tools_pc/test_modern_controls_v2.py
           python3 tools_pc/test_modern_controls_v3.py
           python3 tools_pc/test_ui_overhaul_v2.py
@@ -179,9 +179,9 @@ jobs:
           python tools_pc/apply_unlock_all_missions.py --check
           python tools_pc/apply_unlock_all_missions.py --no-backup
           python tools_pc/apply_unlock_all_missions.py --check
-          python tools_pc/apply_watch_ui_final.py --check
-          python tools_pc/apply_watch_ui_final.py --no-backup
-          python tools_pc/apply_watch_ui_final.py --check
+          python tools_pc/apply_watch_ui_final_safe.py --check
+          python tools_pc/apply_watch_ui_final_safe.py --no-backup
+          python tools_pc/apply_watch_ui_final_safe.py --check
 
       - name: Regression and watch contracts
         run: |
