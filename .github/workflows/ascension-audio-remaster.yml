@@ -38,6 +38,7 @@ jobs:
             mingw-w64-x86_64-zlib
             mingw-w64-x86_64-python
             unzip
+            zip
 
       - name: Prepare complete Ascension stack
         run: python tools_pc/ascension.py prepare
@@ -86,6 +87,18 @@ jobs:
           test -f build-pc/STEAM-AUDIO-LICENSE.md
           sha256sum build-pc/ge007.x86_64.exe build-pc/phonon.dll > ascension-audio-sha256.txt
 
+      - name: Build zero-install Windows bundle
+        run: tools_pc/bundle-win.sh 0.0.4-audio-ci
+
+      - name: Verify bundle contains Steam Audio transparently
+        run: |
+          ZIP="dist/goldeneye-pc-port-0.0.4-audio-ci-win64.zip"
+          test -f "$ZIP"
+          unzip -l "$ZIP" | tee ascension-audio-bundle.txt
+          grep -q 'phonon.dll' ascension-audio-bundle.txt
+          grep -q 'LICENSE-Steam-Audio-Apache-2.0.md' ascension-audio-bundle.txt
+          sha256sum "$ZIP" >> ascension-audio-sha256.txt
+
       - name: Upload Windows validation evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -96,6 +109,8 @@ jobs:
             ascension-audio-build-windows.log
             steam-audio-ldd.txt
             ascension-audio-sha256.txt
+            ascension-audio-bundle.txt
+            dist/goldeneye-pc-port-0.0.4-audio-ci-win64.zip
           if-no-files-found: ignore
 
   linux:
