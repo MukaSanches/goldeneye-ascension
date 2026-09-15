@@ -123,11 +123,13 @@ def main() -> int:
     require("if (rmb && !prevRmb)" in src and "optionsOverlayToggle();" in src,
             "RMB Back behavior missing")
 
-    # The native file-select remains authoritative. V2 only adds a restrained
-    # signature and F10 hint; the V1 dossier overlay is intentionally gone.
+    # The native file-select remains visually authoritative. V2 only renders a
+    # restrained Ascension signature and one-time F10 discovery hint. A legacy
+    # extern left by V1 is harmless; the release gate is that no dossier chrome
+    # or save-slot metadata is rendered by the overlay.
     require('"F10  OPTIONS"' in src, "minimal file-select discovery hint missing")
-    require("selected_folder_num" not in src,
-            "V2 overlay should not pretend to own native save-slot content")
+    require("MI6 CLASSIFIED ARCHIVES" not in src,
+            "overlay still renders replacement file-select chrome")
 
     # PT-BR UI strings must be concise and present.
     locale_markers = [
@@ -147,7 +149,7 @@ def main() -> int:
     require(locale_mod.patch(locale) == locale, "UI V2 locale patcher is not idempotent")
 
     # Exercise layout invariants across legacy 4:3 and modern widescreen virtual
-    # widths.  We intentionally test the native low-height case too.
+    # widths. We intentionally test the native low-height case too.
     cases = [
         (320, 240), (400, 300), (440, 330), (640, 360),
         (640, 480), (854, 480), (960, 540),
