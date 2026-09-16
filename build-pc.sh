@@ -24,14 +24,21 @@ set -euo pipefail
 ROMID="${1:-ntsc-final}"
 BUILD_DIR="${BUILD_DIR:-build-pc}"
 
-# Real-world positional audio is deliberately wired at build time instead of
-# carrying a giant generated propobj.c diff. The patcher is idempotent and
-# fails closed if the decomp seam ever changes.
+# The integration gates below are deliberately deterministic and idempotent.
+# They fail closed if a known source seam changes instead of silently creating
+# a half-integrated build.
 PYTHON_BIN="${PYTHON:-python3}"
 if ! command -v "${PYTHON_BIN}" >/dev/null 2>&1; then
   PYTHON_BIN="python"
 fi
 
+echo "==> Wiring Ascension final graphics pipeline"
+"${PYTHON_BIN}" scripts/apply_graphics_final.py
+"${PYTHON_BIN}" scripts/apply_graphics_final.py --check
+
+# Real-world positional audio is deliberately wired at build time instead of
+# carrying a giant generated propobj.c diff. The patcher is idempotent and
+# fails closed if the decomp seam ever changes.
 echo "==> Wiring Ascension real-world 3D audio"
 "${PYTHON_BIN}" scripts/apply_audio_world_integration.py
 
