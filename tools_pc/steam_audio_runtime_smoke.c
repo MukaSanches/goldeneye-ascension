@@ -8,6 +8,7 @@
 
 #define FRAME 128
 #define SOURCE_FRAME 16
+#define SOURCE_TEST_FRAMES 32
 
 static int loadfn(void *lib, const char *name, void *dst, size_t size)
 {
@@ -63,6 +64,7 @@ int main(int argc, char **argv)
     double virtualEnergy = 0.0;
     double binauralEnergy = 0.0;
     int i;
+    int frame;
 
     if (!lib) {
         fprintf(stderr, "could not load %s: %s\n", path, SDL_GetError());
@@ -142,7 +144,13 @@ int main(int argc, char **argv)
     }
 
     /* Exercise the exact low-latency format used by the in-game physical
-     * voices: mono, 22.05 kHz, 16 samples, bilinear HRTF, source to the right. */
+     * voices: mono, 22.05 kHz, 16 samples, bilinear HRTF, source to the right.
+     *
+     * HRTF is convolution and therefore has persistent state/tail. A valid
+     * implementation is allowed to delay an impulse beyond the first tiny
+     * 16-sample block. Keep the effect alive and inspect a sequence of blocks;
+     * this tests the real streaming contract instead of assuming zero DSP
+     * latency and falsely rejecting a correct runtime. */
     sourceAudioSettings.samplingRate = 22050;
     sourceAudioSettings.frameSize = SOURCE_FRAME;
     if (hrtfCreate(context, &sourceAudioSettings, &hrtfSettings, &sourceHrtf) != ASC_IPL_STATUS_SUCCESS || !sourceHrtf) {
@@ -166,7 +174,6 @@ int main(int argc, char **argv)
         return 10;
     }
 
-    sourceIn[0] = 0.75f;
     memset(&binauralParams, 0, sizeof(binauralParams));
     binauralParams.direction.x = 1.0f;
     binauralParams.direction.y = 0.0f;
@@ -176,20 +183,30 @@ int main(int argc, char **argv)
     binauralParams.hrtf = sourceHrtf;
     binauralParams.peakDelays = NULL;
     binauralReset(binaural);
-    binauralApply(binaural, &binauralParams, &sourceInBuffer, &sourceOutBuffer);
 
-    for (i = 0; i < SOURCE_FRAME; ++i) {
-        if (!isfinite(sourceOutL[i]) || !isfinite(sourceOutR[i])) {
-            fprintf(stderr, "Steam Audio binaural source produced non-finite output at frame %d\n", i);
-            binauralRelease(&binaural);
-            hrtfRelease(&sourceHrtf);
-            effectRelease(&effect);
-            hrtfRelease(&hrtf);
-            contextRelease(&context);
-            SDL_UnloadObject(lib);
-            return 11;
+    for (frame = 0; frame < SOURCE_TEST_FRAMES; ++frame) {
+        memset(sourceIn, 0, sizeof(sourceIn));
+        memset(sourceOutL, 0, sizeof(sourceOutL));
+        memset(sourceOutR, 0, sizeof(sourceOutR));
+        if (frame == 0) {
+            sourceIn[0] = 0.75f;
         }
-        binauralEnergy += fabs((double)sourceOutL[i]) + fabs((double)sourceOutR[i]);
+
+        binauralApply(binaural, &binauralParams, &sourceInBuffer, &sourceOutBuffer);
+
+        for (i = 0; i < SOURCE_FRAME; ++i) {
+            if (!isfinite(sourceOutL[i]) || !isfinite(sourceOutR[i])) {
+                fprintf(stderr, "Steam Audio binaural source produced non-finite output at block %d sample %d\n", frame, i);
+                binauralRelease(&binaural);
+                hrtfRelease(&sourceHrtf);
+                effectRelease(&effect);
+                hrtfRelease(&hrtf);
+                contextRelease(&context);
+                SDL_UnloadObject(lib);
+                return 11;
+            }
+            binauralEnergy += fabs((double)sourceOutL[i]) + fabs((double)sourceOutR[i]);
+        }
     }
 
     binauralRelease(&binaural);
@@ -200,7 +217,7 @@ int main(int argc, char **argv)
     SDL_UnloadObject(lib);
 
     if (binauralEnergy < 1e-6) {
-        fprintf(stderr, "Steam Audio binaural source smoke produced silent output\n");
+        fprintf(stderr, "Steam Audio binaural source streaming smoke produced silent output\n");
         return 12;
     }
 
