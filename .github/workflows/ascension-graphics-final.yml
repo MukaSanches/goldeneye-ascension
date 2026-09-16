@@ -1,0 +1,114 @@
+name: Ascension Graphics Final validation
+
+on:
+  push:
+    branches: [ feature/ascension-graphics-final ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ascension-graphics-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-mingw64:
+    name: Windows / MSYS2 MINGW64
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-python
+            ninja
+
+      - name: Prepare generated Ascension assets
+        run: python tools_pc/ascension.py assets
+
+      - name: Apply and verify final graphics integration
+        run: |
+          python scripts/apply_graphics_final.py
+          python scripts/apply_graphics_final.py --check
+          git diff --check
+
+      - name: Build complete game
+        run: |
+          set -o pipefail
+          ./build-pc.sh ntsc-final 2>&1 | tee ascension-graphics-windows.log
+
+      - name: Verify final executable
+        run: |
+          test -f build-pc/ge007.x86_64.exe
+          sha256sum build-pc/ge007.x86_64.exe > ascension-graphics-windows.sha256
+
+      - name: Upload Windows evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ascension-graphics-final-windows
+          path: |
+            ascension-graphics-windows.log
+            ascension-graphics-windows.sha256
+            build-pc/ge007.x86_64.exe
+          if-no-files-found: ignore
+
+  linux:
+    name: Linux / GCC 14
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-14 g++-14 cmake ninja-build python3 libsdl2-dev zlib1g-dev libgl1-mesa-dev
+
+      - name: Prepare generated Ascension assets
+        run: python3 tools_pc/ascension.py assets
+
+      - name: Apply and verify final graphics integration
+        run: |
+          python3 scripts/apply_graphics_final.py
+          python3 scripts/apply_graphics_final.py --check
+          git diff --check
+
+      - name: Build complete game
+        env:
+          CC: gcc-14
+          CXX: g++-14
+        run: |
+          set -o pipefail
+          ./build-pc.sh ntsc-final 2>&1 | tee ascension-graphics-linux.log
+
+      - name: Verify executable
+        run: test -f build-pc/ge007.x86_64
+
+      - name: Upload Linux evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ascension-graphics-final-linux
+          path: ascension-graphics-linux.log
+          if-no-files-found: ignore
