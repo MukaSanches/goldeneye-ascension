@@ -4,6 +4,10 @@
 Only the PC build is affected: every inserted game hook is inside #ifdef PORT.
 The script fails closed if the expected decomp seams change, so a future
 upstream edit cannot silently apply the hook at the wrong location.
+
+Runtime safety: world-state publication is synchronous with the game thread.
+The mixer consumes already-published snapshots and never creates an acoustic
+worker pthread from the audio path.
 """
 from pathlib import Path
 import sys
@@ -82,6 +86,19 @@ def patch_world() -> bool:
     text = WORLD.read_text(encoding="utf-8")
     original = text
 
+    # Do not spawn an independent 120 Hz pthread inside the GoldenEye PC port.
+    # Submit() now computes/publishes the acoustic snapshot synchronously on
+    # the game thread; the audio mixer remains a consumer only.
+    sync_anchor = '#include "ascension_audio_world.h"\n\n'
+    sync_block = (
+        '#include "ascension_audio_world.h"\n\n'
+        '#ifndef ASC_AUDIO_WORLD_TEST_SYNC\n'
+        '#define ASC_AUDIO_WORLD_TEST_SYNC 1\n'
+        '#endif\n\n'
+    )
+    if '#define ASC_AUDIO_WORLD_TEST_SYNC 1' not in text:
+        text = replace_once(text, sync_anchor, sync_block, "synchronous acoustic runtime")
+
     warning_old = '        if (input != output) memcpy(output, input, (size_t)frame_count * sizeof(float)); return;\n'
     warning_new = (
         '        if (input != output) {\n'
@@ -92,8 +109,6 @@ def patch_world() -> bool:
     if warning_old in text:
         text = text.replace(warning_old, warning_new, 1)
 
-    # MinGW GCC 16.2 may lower plain isfinite() to an unresolved symbol in the
-    # final mixed C/C++ link. Use the compiler intrinsic directly in this TU.
     finite_old = 'static int ascFinite(float v) { return isfinite(v) != 0; }\n'
     finite_new = 'static int ascFinite(float v) { return __builtin_isfinite(v) != 0; }\n'
     if finite_old in text:
@@ -109,8 +124,6 @@ def patch_mixer() -> bool:
     text = MIXER.read_text(encoding="utf-8")
     original = text
 
-    # Explicit calls are safer than preprocessor aliases: aliases can rename
-    # the raw Steam Audio function definitions in another translation unit.
     raw_process = '            if (!ascensionAudioSourceProcess(tap->stateAddr, mono,\n'
     world_process = '            if (!ascensionAudioWorldSourceProcess(tap->stateAddr, mono,\n'
     if world_process not in text:
