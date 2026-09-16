@@ -20,21 +20,13 @@ int ascensionAudioRemasterActive(void);
  */
 #define ASCENSION_AUDIO_SOURCE_FRAME 16u
 
-/* GoldenEye's software RSP DMEM address for the main-left output bus.
- * The original mixer historically used the literal 1088 for this address.
- * Keep the compatibility name local to the Ascension bridge so the source
- * capture code can calculate offsets without depending on an N64-only macro
- * that is not exported by the PC ABI headers. */
+/* GoldenEye's software RSP DMEM address for the main-left output bus. */
 #ifndef AL_MAIN_L_OUT
 #define AL_MAIN_L_OUT 1088u
 #endif
 
-/* The port's mixed C/C++ build can expose isfinite as an external symbol on
- * some GCC configurations instead of the expected compiler intrinsic. That
- * caused a link failure even though libm was present. Both supported CI
- * toolchains are GCC-family (Linux GCC and MSYS2 MinGW GCC), so force the
- * builtin here: no function call, no extra dependency, and identical NaN/Inf
- * rejection in the real-time path. */
+/* Keep finite checks intrinsic on GCC-family toolchains. MinGW GCC 16 can
+ * otherwise expose isfinite as an unresolved external in mixed C/C++ links. */
 #if defined(__GNUC__) || defined(__clang__)
 #ifdef isfinite
 #undef isfinite
@@ -52,10 +44,9 @@ int ascensionAudioSourceProcess(uint32_t voiceKey,
                                 float *outLeft,
                                 float *outRight);
 
-/* World-aware adapter. The mixer is the only translation unit redirected to
- * these symbols; ascension_audio_remaster.c still defines/calls the raw Steam
- * Audio functions above. PORT_MIXER_H is already defined before this header is
- * included by port/src/mixer.c. */
+/* World-aware adapter called explicitly by mixer.c. Do not macro-rename the
+ * raw functions above: doing so also renames their definitions in some MinGW
+ * translation units and creates duplicate symbols at link time. */
 int ascensionAudioWorldSourceProcess(uint32_t voiceKey,
                                      const float *mono,
                                      float fallbackDirectionX,
@@ -64,10 +55,5 @@ int ascensionAudioWorldSourceProcess(uint32_t voiceKey,
                                      float *outLeft,
                                      float *outRight);
 void ascensionAudioWorldSourceReset(uint32_t voiceKey);
-
-#if defined(PORT_MIXER_H)
-#define ascensionAudioSourceProcess ascensionAudioWorldSourceProcess
-#define ascensionAudioSourceReset   ascensionAudioWorldSourceReset
-#endif
 
 #endif
