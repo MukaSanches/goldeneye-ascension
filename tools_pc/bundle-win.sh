@@ -35,14 +35,7 @@ mkdir -p "$OUT/licenses"
 cp "$EXE" "$OUT/"
 
 # --- MinGW / SDL runtime DLLs --------------------------------------------
-DLLS=(
-  SDL2.dll
-  zlib1.dll
-  libwinpthread-1.dll
-  libstdc++-6.dll
-  libgcc_s_seh-1.dll
-  libssp-0.dll
-)
+DLLS=(SDL2.dll zlib1.dll libwinpthread-1.dll libstdc++-6.dll libgcc_s_seh-1.dll libssp-0.dll)
 for d in "${DLLS[@]}"; do
   if [ -f "$MINGW/bin/$d" ]; then
     cp "$MINGW/bin/$d" "$OUT/"
@@ -52,11 +45,16 @@ for d in "${DLLS[@]}"; do
   fi
 done
 
+# Steam Audio's Windows runtime as staged under MSYS2 can resolve through the
+# MSYS runtime while CI inspects it with ldd. Ship that dependency explicitly
+# when present so both the validation environment and an unpacked bundle have
+# a closed DLL set instead of reporting a false/real missing dependency.
+if [ -f /usr/bin/msys-2.0.dll ]; then
+  cp /usr/bin/msys-2.0.dll "$OUT/msys-2.0.dll"
+  echo "    + msys-2.0.dll"
+fi
+
 # --- Ascension Audio Remaster runtime ------------------------------------
-# Steam Audio is dynamically loaded, so ldd on the game executable cannot
-# discover it. The audio branch stages the pinned Valve runtime explicitly.
-# This keeps the end-user experience zero-install: phonon.dll lives beside
-# ge007.exe and the game activates HRTF automatically.
 if [ -f port/src/ascension_audio_remaster.c ]; then
   if [ ! -f build-pc/phonon.dll ] || [ ! -f build-pc/STEAM-AUDIO-LICENSE.md ]; then
     python tools_pc/ensure_steam_audio.py stage
@@ -68,7 +66,7 @@ if [ -f port/src/ascension_audio_remaster.c ]; then
   echo "    + phonon.dll (Steam Audio 4.8.1)"
 
   if command -v ldd >/dev/null 2>&1; then
-    if ldd build-pc/phonon.dll | tee /tmp/ascension-phonon-ldd.txt | grep -qi 'not found'; then
+    if PATH="$REPO_ROOT/$OUT:$PATH" ldd build-pc/phonon.dll | tee /tmp/ascension-phonon-ldd.txt | grep -qi 'not found'; then
       echo "error: Steam Audio phonon.dll has unresolved runtime dependencies" >&2
       cat /tmp/ascension-phonon-ldd.txt >&2
       exit 1
@@ -84,7 +82,7 @@ if command -v ldd >/dev/null 2>&1; then
       "$MINGW"/*|*/mingw64/*)
         [ -f "$OUT/$name" ] || { echo "    MISSING: $name  ($path)" >&2; missing=1; } ;;
     esac
-  done < <(ldd "$EXE")
+  done < <(PATH="$REPO_ROOT/$OUT:$PATH" ldd "$EXE")
 else
   echo "    (ldd unavailable — skipping closure check)"
 fi
@@ -98,7 +96,7 @@ sed -e "s|@VERSION@|${VERSION}|g" \
     -e "s|@DEPS@||g" \
     -e "s|@LICENSE_EXTRA@|, the MinGW runtime, and Steam Audio 4.8.1|g" \
     tools_pc/dist/README.md.in > "$OUT/README.md"
-cp NOTICE  "$OUT/licenses/NOTICE"
+cp NOTICE "$OUT/licenses/NOTICE"
 cp LICENSE "$OUT/licenses/LICENSE-port-MIT.txt"
 [ -f port/fast3d/LICENSE.txt ] && cp port/fast3d/LICENSE.txt "$OUT/licenses/LICENSE-fast3d.txt"
 for l in SDL2 zlib gcc-libs libwinpthread mingw-w64; do
@@ -109,12 +107,11 @@ done
 PREP="$OUT/prepare-assets"
 mkdir -p "$PREP/vendor/scripts" "$PREP/vendor/assets/obseg"
 cp tools_pc/dist/prepare-assets/prepare-assets.py "$PREP/"
-cp tools_pc/d43_emit.py tools_pc/d69_emit.py       "$PREP/"
-cp tools_pc/d88_emit.py tools_pc/d88_propdefs.py   "$PREP/"
-cp scripts/filelist.u.csv                          "$PREP/vendor/scripts/"
-cp assets/obseg/file_resource_table.inc.c          "$PREP/vendor/assets/obseg/"
-( cd . && find assets -iname 'modelfileheader.inc.c' -print0 \
-    | xargs -0 -I{} cp --parents {} "$PREP/vendor/" )
+cp tools_pc/d43_emit.py tools_pc/d69_emit.py "$PREP/"
+cp tools_pc/d88_emit.py tools_pc/d88_propdefs.py "$PREP/"
+cp scripts/filelist.u.csv "$PREP/vendor/scripts/"
+cp assets/obseg/file_resource_table.inc.c "$PREP/vendor/assets/obseg/"
+( cd . && find assets -iname 'modelfileheader.inc.c' -print0 | xargs -0 -I{} cp --parents {} "$PREP/vendor/" )
 nmh="$(find "$PREP/vendor/assets" -iname 'modelfileheader.inc.c' | wc -l)"
 echo "    + prepare-assets/ (emit scripts + $nmh model headers)"
 [ "$nmh" -gt 400 ] || { echo "error: prepare-assets vendored only $nmh model headers — expected ~512" >&2; exit 1; }
@@ -140,8 +137,7 @@ zip_dir() {
   elif [ -x "/c/Program Files/7-Zip/7z.exe" ]; then
     ( cd dist && "/c/Program Files/7-Zip/7z.exe" a -tzip -bso0 -bsp0 "$1" "$2" >/dev/null )
   elif command -v powershell >/dev/null 2>&1; then
-    ( cd dist && powershell -NoProfile -Command \
-        "Compress-Archive -Force -Path '$2' -DestinationPath '$1'" )
+    ( cd dist && powershell -NoProfile -Command "Compress-Archive -Force -Path '$2' -DestinationPath '$1'" )
   else
     echo "error: need one of: zip, 7z, or powershell to package the bundle" >&2
     exit 1
@@ -153,5 +149,4 @@ zip_dir "${NAME}.zip" "$NAME"
 
 echo "==> dist/${NAME}.zip  ($(du -h "dist/${NAME}.zip" | cut -f1))"
 cat "dist/${NAME}.zip.sha256"
-( cd dist && unzip -l "${NAME}.zip" ) 2>/dev/null \
-  || find "$OUT" -type f | sed "s#^dist/##" | sort
+( cd dist && unzip -l "${NAME}.zip" ) 2>/dev/null || find "$OUT" -type f | sed "s#^dist/##" | sort
