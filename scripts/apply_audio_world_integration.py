@@ -11,6 +11,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 PROPOBJ = ROOT / "src/game/propobj.c"
 WORLD = ROOT / "port/src/ascension_audio_world.c"
+MIXER = ROOT / "port/src/mixer.c"
 
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
@@ -51,8 +52,6 @@ def patch_propobj() -> bool:
     if 'ascensionAudioWorldSubmitFromGame(state, pos, low, high);' not in text:
         text = replace_once(text, event_old, event_new, "positional SFX publication")
 
-    # Door loops update their volume every tick without re-entering
-    # chrobjSndCreatePostEvent. Refresh their real XYZ while they are playing.
     open_old = '            sndCreatePostEvent(arg0->openSoundState, 8, sp1C);\n'
     open_new = (
         '            sndCreatePostEvent(arg0->openSoundState, 8, sp1C);\n'
@@ -79,20 +78,51 @@ def patch_propobj() -> bool:
     return False
 
 
-def patch_world_warning() -> bool:
+def patch_world() -> bool:
     text = WORLD.read_text(encoding="utf-8")
     original = text
-    old = '        if (input != output) memcpy(output, input, (size_t)frame_count * sizeof(float)); return;\n'
-    new = (
+
+    warning_old = '        if (input != output) memcpy(output, input, (size_t)frame_count * sizeof(float)); return;\n'
+    warning_new = (
         '        if (input != output) {\n'
         '            memcpy(output, input, (size_t)frame_count * sizeof(float));\n'
         '        }\n'
         '        return;\n'
     )
-    if old in text:
-        text = text.replace(old, new, 1)
+    if warning_old in text:
+        text = text.replace(warning_old, warning_new, 1)
+
+    # MinGW GCC 16.2 may lower plain isfinite() to an unresolved symbol in the
+    # final mixed C/C++ link. Use the compiler intrinsic directly in this TU.
+    finite_old = 'static int ascFinite(float v) { return isfinite(v) != 0; }\n'
+    finite_new = 'static int ascFinite(float v) { return __builtin_isfinite(v) != 0; }\n'
+    if finite_old in text:
+        text = text.replace(finite_old, finite_new, 1)
+
     if text != original:
         WORLD.write_text(text, encoding="utf-8", newline="\n")
+        return True
+    return False
+
+
+def patch_mixer() -> bool:
+    text = MIXER.read_text(encoding="utf-8")
+    original = text
+
+    # Explicit calls are safer than preprocessor aliases: aliases can rename
+    # the raw Steam Audio function definitions in another translation unit.
+    raw_process = '            if (!ascensionAudioSourceProcess(tap->stateAddr, mono,\n'
+    world_process = '            if (!ascensionAudioWorldSourceProcess(tap->stateAddr, mono,\n'
+    if world_process not in text:
+        text = replace_once(text, raw_process, world_process, "mixer world-aware source process")
+
+    raw_reset = '                ascensionAudioSourceReset(stateAddr);\n'
+    world_reset = '                ascensionAudioWorldSourceReset(stateAddr);\n'
+    if world_reset not in text:
+        text = replace_once(text, raw_reset, world_reset, "mixer world-aware source reset")
+
+    if text != original:
+        MIXER.write_text(text, encoding="utf-8", newline="\n")
         return True
     return False
 
@@ -100,7 +130,8 @@ def patch_world_warning() -> bool:
 def main() -> int:
     try:
         changed_prop = patch_propobj()
-        changed_world = patch_world_warning()
+        changed_world = patch_world()
+        changed_mixer = patch_mixer()
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
@@ -110,6 +141,8 @@ def main() -> int:
         changed.append("propobj.c")
     if changed_world:
         changed.append("ascension_audio_world.c")
+    if changed_mixer:
+        changed.append("mixer.c")
     if changed:
         print("Ascension Audio 3D integration applied: " + ", ".join(changed))
     else:
