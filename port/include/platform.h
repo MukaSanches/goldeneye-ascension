@@ -2,17 +2,18 @@
 #define PORT_PLATFORM_H
 
 /*
- * Platform abstraction for the GE PC port.
+ * Platform abstraction for the GE host port.
  *
- * Provides the small set of host primitives the port layer needs, with
- * per-OS implementations selected at compile time. Modelled on the PD port's
- * port/include/platform.h.
+ * Android deliberately precedes __linux__: Bionic defines __linux__, but the
+ * mobile host has different storage, lifecycle and graphics requirements.
  */
 
 #include <stdint.h>
 #include <stddef.h>
 
-#if defined(_WIN32) || defined(_WIN64)
+#if defined(__ANDROID__)
+  #define PLATFORM_ANDROID 1
+#elif defined(_WIN32) || defined(_WIN64)
   #define PLATFORM_WINDOWS 1
 #elif defined(__APPLE__)
   #include <TargetConditionals.h>
@@ -37,9 +38,10 @@
   #define PLATFORM_X86_64 1
 #elif defined(__aarch64__)
   #define PLATFORM_ARM 1
+  #define PLATFORM_ARM64 1
 #endif
 
-/* Constructor attribute: run before main(). */
+/* Constructor attribute: run before the host entry point. */
 #if defined(_MSC_VER)
   #define PD_CONSTRUCTOR
   #define PD_EXPORT
