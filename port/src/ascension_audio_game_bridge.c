@@ -1,5 +1,6 @@
 #include "ascension_audio_game_bridge.h"
 #include "ascension_audio_world.h"
+#include "ascension_audio_world_runtime.h"
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -27,6 +28,7 @@ void ascensionAudioWorldSubmitFromGame(ALSoundState *state, const coord3d *sourc
 
     if (!state || !source || !g_CurrentPlayer || !g_CurrentPlayer->prop ||
         !state->voice.pvoice || !state->voice.pvoice->envmixer.state) return;
+    if (!ascensionAudioWorldRuntimeEnsure()) return;
 
     listener_prop = g_CurrentPlayer->prop;
     voice_key = (uint32_t)(uintptr_t)osVirtualToPhysical(state->voice.pvoice->envmixer.state);
