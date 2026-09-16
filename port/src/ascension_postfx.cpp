@@ -13,8 +13,8 @@
 /*
  * Ascension final presentation pass
  * ---------------------------------
- * This is intentionally a presentation-only effect. It never changes the
- * GoldenEye display list, RSP/RDP state, textures, depth data or gameplay.
+ * Presentation only: this never changes GoldenEye display lists, RSP/RDP
+ * state, depth data, world geometry, gameplay or timing.
  *
  * The shader is an original edge-adaptive sharpening pass inspired by the
  * design goals of modern contrast-adaptive sharpening filters: recover detail
@@ -25,8 +25,8 @@
  *  - lazy initialization only after a valid GL context exists;
  *  - no allocations in the steady-state frame path;
  *  - resize allocation only when the drawable size changes;
- *  - complete GL state preservation for the state touched by this pass;
- *  - fail-open: shader/FBO/driver trouble disables this pass, never the game.
+ *  - GL bindings/state touched here are restored before returning;
+ *  - fail-open: shader/driver trouble disables this pass, never the game.
  */
 
 static int s_postFxEnabled = 1;
@@ -152,6 +152,17 @@ static int ascPostFxInit(void)
     if (s_fx.initialized) return 1;
     if (s_fx.failed) return 0;
 
+    /* Fast3D's normal Windows path is GL 3.x. If a very old fallback context
+     * lacks the VAO entry points, keep the original frame instead of risking
+     * a null driver function call. */
+    if (!glGenVertexArrays || !glBindVertexArray || !glDeleteVertexArrays ||
+        !glCopyTexSubImage2D) {
+        sysLogPrintf(LOG_WARNING,
+            "graphics: PostFX unavailable on this OpenGL context; using original presentation");
+        s_fx.failed = 1;
+        return 0;
+    }
+
     GLuint vs = ascCompileShader(GL_VERTEX_SHADER, kVertexShader, "vertex");
     GLuint fs = ascCompileShader(GL_FRAGMENT_SHADER, kFragmentShader, "fragment");
     if (!vs || !fs) {
@@ -208,12 +219,32 @@ static int ascPostFxInit(void)
         -1.0f,  1.0f, 0.0f, 1.0f,
     };
 
+    /* First-use initialization must not poison Fast3D's cached binding state.
+     * Capture the bindings before creating/configuring our private objects and
+     * restore them before returning. */
+    GLint oldVao = 0;
+    GLint oldArrayBuffer = 0;
+    GLint oldActiveTexture = 0;
+    GLint oldTexture = 0;
+    glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &oldVao);
+    glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &oldArrayBuffer);
+    glGetIntegerv(GL_ACTIVE_TEXTURE, &oldActiveTexture);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &oldTexture);
+
     glGenVertexArrays(1, &s_fx.vao);
     glGenBuffers(1, &s_fx.vbo);
     glGenTextures(1, &s_fx.texture);
     if (!s_fx.vao || !s_fx.vbo || !s_fx.texture) {
         sysLogPrintf(LOG_WARNING, "graphics: PostFX GPU resource creation failed; disabling pass");
-        ascensionPostFxShutdown();
+        if (s_fx.vbo) glDeleteBuffers(1, &s_fx.vbo);
+        if (s_fx.vao) glDeleteVertexArrays(1, &s_fx.vao);
+        if (s_fx.texture) glDeleteTextures(1, &s_fx.texture);
+        if (s_fx.program) glDeleteProgram(s_fx.program);
+        s_fx.program = s_fx.texture = s_fx.vao = s_fx.vbo = 0;
+        glBindVertexArray((GLuint)oldVao);
+        glBindBuffer(GL_ARRAY_BUFFER, (GLuint)oldArrayBuffer);
+        glBindTexture(GL_TEXTURE_2D, (GLuint)oldTexture);
+        glActiveTexture((GLenum)oldActiveTexture);
         s_fx.failed = 1;
         return 0;
     }
@@ -231,6 +262,11 @@ static int ascPostFxInit(void)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    glBindVertexArray((GLuint)oldVao);
+    glBindBuffer(GL_ARRAY_BUFFER, (GLuint)oldArrayBuffer);
+    glBindTexture(GL_TEXTURE_2D, (GLuint)oldTexture);
+    glActiveTexture((GLenum)oldActiveTexture);
 
     s_fx.width = 0;
     s_fx.height = 0;
