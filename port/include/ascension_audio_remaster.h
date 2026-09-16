@@ -52,4 +52,22 @@ int ascensionAudioSourceProcess(uint32_t voiceKey,
                                 float *outLeft,
                                 float *outRight);
 
+/* World-aware adapter. The mixer is the only translation unit redirected to
+ * these symbols; ascension_audio_remaster.c still defines/calls the raw Steam
+ * Audio functions above. PORT_MIXER_H is already defined before this header is
+ * included by port/src/mixer.c. */
+int ascensionAudioWorldSourceProcess(uint32_t voiceKey,
+                                     const float *mono,
+                                     float fallbackDirectionX,
+                                     float fallbackDirectionY,
+                                     float fallbackDirectionZ,
+                                     float *outLeft,
+                                     float *outRight);
+void ascensionAudioWorldSourceReset(uint32_t voiceKey);
+
+#if defined(PORT_MIXER_H)
+#define ascensionAudioSourceProcess ascensionAudioWorldSourceProcess
+#define ascensionAudioSourceReset   ascensionAudioWorldSourceReset
+#endif
+
 #endif
