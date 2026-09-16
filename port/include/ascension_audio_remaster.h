@@ -29,6 +29,19 @@ int ascensionAudioRemasterActive(void);
 #define AL_MAIN_L_OUT 1088u
 #endif
 
+/* The port's mixed C/C++ build can expose isfinite as an external symbol on
+ * some GCC configurations instead of the expected compiler intrinsic. That
+ * caused a link failure even though libm was present. Both supported CI
+ * toolchains are GCC-family (Linux GCC and MSYS2 MinGW GCC), so force the
+ * builtin here: no function call, no extra dependency, and identical NaN/Inf
+ * rejection in the real-time path. */
+#if defined(__GNUC__) || defined(__clang__)
+#ifdef isfinite
+#undef isfinite
+#endif
+#define isfinite(x) __builtin_isfinite(x)
+#endif
+
 int ascensionAudioSourceHrtfActive(void);
 void ascensionAudioSourceReset(uint32_t voiceKey);
 int ascensionAudioSourceProcess(uint32_t voiceKey,
