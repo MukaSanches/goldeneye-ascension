@@ -4,7 +4,25 @@ This file tracks Ascension-specific work layered on top of the GoldenEye PC port
 
 ## Unreleased
 
-Pending work after the 0.0.4 test candidate belongs here.
+### World-aware 3D audio — accepted Windows integration
+
+- Extended the Steam Audio 4.8.1 remaster with a per-source world-aware path that can consume real GoldenEye source XYZ, listener XYZ/orientation and the physical voice identity used by the software mixer.
+- Added a GoldenEye game bridge for positional SFX and continuously refreshed door-loop positions without changing the original authored SFX event/volume path.
+- Added STAN room traversal and portal-transition metadata for conservative obstruction/transmission modelling.
+- Added bounded physical propagation modelling: source/listener distance, speed-of-sound propagation delay, air/barrier attenuation, distance/barrier low-pass response, early reflections and a small room field.
+- Kept the original GoldenEye contribution as the authoritative audible fail-safe. A binaural replacement is committed only after a complete finite frame succeeds.
+- Preserved the previously accepted per-source pan-derived Steam Audio HRTF as the fallback when world metadata is missing or the real-world layer is disabled.
+- Added `GE_ASCENSION_WORLD3D=0`, `GE_ASCENSION_SOURCE_HRTF=0`, `GE_ASCENSION_AUDIO_BYPASS=1` and `GE_ASCENSION_AUDIO_DIAG=1` A/B/diagnostic paths.
+- Added a 64-source acoustic-world pool and a ROM-independent C regression test covering direction, distance, obstruction, filtering, propagation, finite DSP output, room response and snapshot reset behavior.
+- Made the acoustic-world regression compile under MSYS2/MinGW with `-Wall -Wextra -Werror` before the full PC build.
+- Fixed the MinGW mixed C/C++ link path for `isfinite`, removed accidental duplicate world-adapter symbol definitions and made mixer routing explicit rather than relying on preprocessor symbol aliases.
+- Kept world initialization and game-side publication locks out of the mixer callback; the callback consumes only already-published state and otherwise falls back to the proven source-HRTF path.
+- Added a world-layer safety bypass after diagnosing an early startup stall during the first Windows integration attempt.
+- Completed a successful Windows/MSYS2 native build and manual in-game acceptance pass, including directional listening in Facility / Instala.
+
+### Documentation
+
+- Replaced the inherited upstream-first README with a project-level GoldenEye Ascension README covering identity, architecture, controls, Universal Controller Layer, Steam Audio, world-aware 3D audio, build/run flow, diagnostics, validation, compatibility, troubleshooting, credits and legal boundaries.
 
 ## v0.0.4 — 2026-09-15 — test candidate
 
