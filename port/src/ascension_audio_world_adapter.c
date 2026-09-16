@@ -7,11 +7,12 @@
 /*
  * Mixer-facing adapter.
  *
- * The legacy per-source HRTF remains the final fail-safe. When real world
- * metadata exists for the exact physical voice, the mono source first passes
- * through propagation/air/barrier DSP, then Steam Audio receives the real
- * listener-space XYZ direction. Early reflections and the bounded room field
- * are added only after a complete finite HRTF frame succeeds.
+ * IMPORTANT REAL-TIME RULE:
+ * The audio callback never initializes the world engine, creates threads, or
+ * takes the game-side publication mutex. The game thread activates/publishes
+ * world state when a positional SFX is created. The mixer only consumes an
+ * already-published atomic snapshot; otherwise it falls back to the proven
+ * Steam Audio pan-HRTF path.
  */
 int ascensionAudioWorldSourceProcess(uint32_t voiceKey,
                                      const float *mono,
@@ -26,7 +27,7 @@ int ascensionAudioWorldSourceProcess(uint32_t voiceKey,
 
     if (!mono || !outLeft || !outRight) return 0;
 
-    if (ascensionAudioWorldRuntimeEnsure() &&
+    if (ascensionAudioWorldRuntimeActive() &&
         ascensionAudioWorldGet(voiceKey, &snapshot)) {
         ascensionAudioWorldProcessMono(voiceKey, mono,
                                        (int)ASCENSION_AUDIO_SOURCE_FRAME,
@@ -61,8 +62,8 @@ int ascensionAudioWorldSourceProcess(uint32_t voiceKey,
 
 void ascensionAudioWorldSourceReset(uint32_t voiceKey)
 {
-    if (ascensionAudioWorldRuntimeActive()) {
-        ascensionAudioWorldResetVoice(voiceKey);
-    }
+    /* Do not call ascensionAudioWorldResetVoice here. This function runs from
+     * the mixer/audio path and ResetVoice owns game-side publication state.
+     * The next game-thread publication replaces the atomic snapshot. */
     ascensionAudioSourceReset(voiceKey);
 }
