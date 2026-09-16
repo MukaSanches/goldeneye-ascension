@@ -260,7 +260,63 @@ const char *sysResolvePath(const char *path)
 
 /* --- Lifecycle ---------------------------------------------------------- */
 
+static volatile int g_restartRequested = 0;
+
 void sysExit(int code)
 {
     exit(code);
+}
+
+int sysRestart(void)
+{
+    g_restartRequested = 1;
+    sysLogPrintf(LOG_INFO, "restart: requested");
+    return 0;
+}
+
+int sysRestartRequested(void)
+{
+    return g_restartRequested != 0;
+}
+
+int sysRelaunch(void)
+{
+#if defined(PLATFORM_WINDOWS)
+    /* Reuse the exact host command line so direct-level/debug launches restart
+     * in the same mode. CreateProcess requires a mutable command-line buffer. */
+    const char *src = GetCommandLineA();
+    char cmdline[32768];
+    STARTUPINFOA si;
+    PROCESS_INFORMATION pi;
+
+    if (!src || !*src) {
+        sysLogPrintf(LOG_ERROR, "restart: host command line unavailable");
+        return -1;
+    }
+
+    strncpy(cmdline, src, sizeof(cmdline) - 1);
+    cmdline[sizeof(cmdline) - 1] = 0;
+    ZeroMemory(&si, sizeof(si));
+    ZeroMemory(&pi, sizeof(pi));
+    si.cb = sizeof(si);
+
+    if (!CreateProcessA(NULL, cmdline, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
+        sysLogPrintf(LOG_ERROR, "restart: CreateProcess failed (%lu)",
+                     (unsigned long)GetLastError());
+        return -1;
+    }
+
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    sysLogPrintf(LOG_INFO, "restart: relaunched process");
+    return 0;
+#else
+    if (!g_argv || !g_argv[0]) {
+        sysLogPrintf(LOG_ERROR, "restart: argv unavailable");
+        return -1;
+    }
+    execv(g_argv[0], g_argv);
+    sysLogPrintf(LOG_ERROR, "restart: execv failed");
+    return -1;
+#endif
 }

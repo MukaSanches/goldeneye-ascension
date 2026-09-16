@@ -1,0 +1,167 @@
+name: Ascension 0.0.4 validation
+
+on:
+  push:
+    branches: [ release/ascension-0.0.4 ]
+  pull_request:
+    branches: [ release/ascension-0.0.4 ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ascension-004-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-python
+
+      - name: Prepare Ascension 0.0.4
+        run: python tools_pc/ascension.py prepare
+
+      - name: Regression contracts
+        run: python tools_pc/ascension.py test
+
+      - name: Upload Windows regression report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ascension-004-regression-windows
+          path: ascension-0.0.4-test-report.txt
+          if-no-files-found: ignore
+
+      - name: Explicit Windows diff check
+        run: '"/c/Program Files/Git/bin/git.exe" diff --check'
+
+      - name: Regenerate ROM symbols
+        run: python tools_pc/ascension.py assets
+
+      - name: Build Windows
+        run: |
+          set -o pipefail
+          python tools_pc/ascension.py build 2>&1 | tee ascension-0.0.4-build-windows.log
+
+      - name: Upload Windows build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ascension-004-build-windows
+          path: ascension-0.0.4-build-windows.log
+          if-no-files-found: ignore
+
+      - name: Verify executable
+        run: test -f build-pc/ge007.x86_64.exe
+
+      - name: Stage Windows RC test package
+        run: |
+          set -euo pipefail
+          stage="dist/ascension-0.0.4-rc1-windows"
+          rm -rf "$stage"
+          mkdir -p "$stage"
+          cp build-pc/ge007.x86_64.exe "$stage/"
+
+          # Copy the common MinGW runtime dependencies so the candidate can be
+          # launched from Explorer instead of requiring an MSYS2 shell in PATH.
+          for dll in SDL2.dll zlib1.dll libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll; do
+            if [ -f "/mingw64/bin/$dll" ]; then
+              cp "/mingw64/bin/$dll" "$stage/"
+            fi
+          done
+
+          # Also collect any additional MinGW DLL that this exact executable
+          # resolves to. Windows system DLLs are intentionally not bundled.
+          ldd build-pc/ge007.x86_64.exe \
+            | awk '{ for (i = 1; i <= NF; ++i) if ($i ~ /^\/mingw64\/bin\/.*\.dll$/) print $i }' \
+            | sort -u \
+            | while read -r dll; do
+                [ -f "$dll" ] && cp -n "$dll" "$stage/"
+              done
+
+          cp docs/dev/ascension-0.0.4-test-windows.txt "$stage/LEIA-ME-TESTE.txt"
+          cp docs/dev/ascension-0.0.4.md "$stage/RELEASE-NOTES.md"
+          printf '%s\n' "$GITHUB_SHA" > "$stage/BUILD-COMMIT.txt"
+          sha256sum "$stage/ge007.x86_64.exe" > "$stage/SHA256SUMS.txt"
+
+      - name: Upload Windows RC test package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ascension-0.0.4-rc1-windows
+          path: dist/ascension-0.0.4-rc1-windows
+          if-no-files-found: error
+          compression-level: 9
+
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        gcc: [13, 14]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-${{ matrix.gcc }} g++-${{ matrix.gcc }} cmake python3 libsdl2-dev zlib1g-dev libgl1-mesa-dev
+
+      - name: Prepare Ascension 0.0.4
+        run: python3 tools_pc/ascension.py prepare
+
+      - name: Regression contracts
+        run: python3 tools_pc/ascension.py test
+
+      - name: Upload Linux regression report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ascension-004-regression-linux-gcc${{ matrix.gcc }}
+          path: ascension-0.0.4-test-report.txt
+          if-no-files-found: ignore
+
+      - name: Regenerate ROM symbols
+        run: python3 tools_pc/ascension.py assets
+
+      - name: Build Linux
+        env:
+          CC: gcc-${{ matrix.gcc }}
+          CXX: g++-${{ matrix.gcc }}
+        run: |
+          set -o pipefail
+          bash build-pc.sh ntsc-final 2>&1 | tee ascension-0.0.4-build-linux-gcc${{ matrix.gcc }}.log
+
+      - name: Upload Linux build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ascension-004-build-linux-gcc${{ matrix.gcc }}
+          path: ascension-0.0.4-build-linux-gcc${{ matrix.gcc }}.log
+          if-no-files-found: ignore
+
+      - name: Verify executable
+        run: test -f build-pc/ge007.x86_64

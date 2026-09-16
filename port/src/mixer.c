@@ -1,27 +1,14 @@
 /*
  * Audio mixing — software implementation of GE's RSP audio ucode opcodes.
  *
- * On the N64 the RSP audio ucode (aspMain) executes an acmd list built by
- * libaudio/naudio to do ADPCM decode, resampling, and the final envelope
- * mix. The RSP is never run on PC (port/src/ucode.c); instead every aXxx
- * macro in include/PR/abi.h is redefined (port/include/mixer.h, included
- * under #ifdef PORT) to call one of the Impl functions below immediately,
- * against a small software "DMEM" scratch buffer — the Perfect Dark PC
- * port's macro-swap trick (docs/dev/AUDIO-PLAN.md), adapted to GE's ABI.
- *
- * GE uses the classic IDO libaudio ABI, not PD's differently-shaped naudio
- * "New" ABI — verified against every call site in src/libultra/audio/*.c
- * and src/libultrare/audio/{env,reverb}.c. The DSP algorithms below (ADPCM
- * decode, linear resample, linear envelope mix) are the same Nintendo/SGI
- * ucode math PD's port/src/mixer.c ported (scalar path); only the ABI/
- * addressing layer here is GE-specific.
- *
- * GE's aSetBuffer(flags, in, out, count) sets a small persistent context
- * that several opcodes read instead of taking DMEM addresses/counts
- * directly (see MixerCtx below) — reconstructed from reading every call
- * site (docs/dev/findings.md D199), not from RSP disassembly.
+ * On PC the RSP is replaced by scalar software DSP against a small DMEM
+ * scratch buffer. Ascension's source-object audio enhancement is deliberately
+ * inserted here, after each physical voice has been decoded/resampled but
+ * before the final stereo interleave. The original mix is always rendered
+ * first and therefore remains the authoritative fail-safe path.
  */
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,13 +17,9 @@
 #include <PR/os.h>
 #include "system.h"
 
-/* D202 diag (temporary): per-opcode DMEM address/context trace, gated by
- * GE_MIXERTRACE=1, to test the M-56 "concurrent voices share/clobber DMEM
- * context" hypothesis directly against a live repro. Remove once
- * root-caused. */
 extern char *getenv(const char *);
 static FILE *sMixerTraceFile = NULL;
-static int   sMixerTraceChecked = 0;
+static int sMixerTraceChecked = 0;
 static int mixerTraceOn(void)
 {
     if (!sMixerTraceChecked) {
@@ -54,10 +37,12 @@ static int mixerTraceOn(void)
 #include "system.h"
 #include "mixer.h"
 #include "audio.h"
+#include "ascension_audio_remaster.h"
 
-/* Largest DMEM address GE's audio call sites use is AL_AUX_R_OUT (2048) +
- * up to AL_MAX_RSP_SAMPLES (160) samples * 2 bytes; round up generously. */
 #define DMEM_SIZE 4096
+#define ASC_SPATIAL_MAX_VOICES 64
+#define ASC_SPATIAL_MAX_SAMPLES 160
+#define ASC_PI 3.14159265358979323846f
 
 static u8 sDmem[DMEM_SIZE];
 
@@ -72,28 +57,169 @@ static inline s16 mixerClamp16(s32 v)
 }
 
 /*
- * Persistent context set by aSetBuffer, read by opcodes that don't carry
- * their own DMEM addresses/counts. Reconstructed from call-site pairs:
+ * A tap contains only information that already exists in the original
+ * envelope mixer. stateAddr is a stable physical-voice identity for the
+ * lifetime of that voice. input is the post-resample mono PCM. gainL/R are
+ * the exact Q15 dry gains which the original mixer applies.
  *
- *   resample.c:   aSetBuffer(0, inp, *outp, outCnt<<1); aResample(...)
- *   load.c:       aSetBuffer(0, dmemAddr, 0, nbytes...); aLoadBuffer(dram)
- *   reverb.c:     aSetBuffer(0, 0, buff, count<<1);      aSaveBuffer(dram)
- *   mainbus.c:    aSetBuffer(0, 0, 0, outCount<<1); aMix(...); aMix(...)
- *   save.c:       aSetBuffer(0, 0, 0, outCount<<1); aInterleave(L, R)
- *   env.c:        aSetBuffer(A_MAIN, *inp, AL_MAIN_L_OUT+*outp, outCount<<1);
- *                 aSetBuffer(A_AUX, AL_MAIN_R_OUT+*outp, AL_AUX_L_OUT+*outp,
- *                            AL_AUX_R_OUT+*outp);
- *                 aEnvMixer(...)
- *
- * i.e. LoadBuffer/ADPCMdec/Resample read `in` as their DMEM source (or, for
- * LoadBuffer, as the load destination); Resample/EnvMixer read `out` as a
- * destination too; SaveBuffer/Interleave read `out` as their DMEM source;
- * Mix/DMEMMove/ClearBuffer take explicit addresses and don't touch this
- * context at all. The A_AUX-flagged aSetBuffer call packs three more
- * envmixer-only DMEM addresses (dry-R, wet-L, wet-R) — its third argument
- * is a DMEM address here, not a byte count, unlike every other opcode's use
- * of aSetBuffer's `count` field.
+ * We intentionally do not invent distance, height, walls or room geometry.
+ * At this layer GoldenEye provides a horizontal equal-power pan. That pan is
+ * inverted mathematically into an azimuth, then Steam Audio renders the
+ * point source with an HRTF. Full XYZ propagation can be added only when real
+ * world-space source/listener metadata is exposed to port/.
  */
+typedef struct {
+    u32 stateAddr;
+    int used;
+    s16 input[ASC_SPATIAL_MAX_SAMPLES];
+    s16 gainL[ASC_SPATIAL_MAX_SAMPLES];
+    s16 gainR[ASC_SPATIAL_MAX_SAMPLES];
+} AscSpatialTap;
+
+static AscSpatialTap sSpatialTaps[ASC_SPATIAL_MAX_VOICES];
+static u32 sSpatialSamples;
+
+static void ascSpatialBegin(u32 sampleCount)
+{
+    memset(sSpatialTaps, 0, sizeof(sSpatialTaps));
+    sSpatialSamples = sampleCount <= ASC_SPATIAL_MAX_SAMPLES ? sampleCount : 0;
+}
+
+static AscSpatialTap *ascSpatialTapFor(u32 stateAddr)
+{
+    AscSpatialTap *freeTap = NULL;
+    unsigned i;
+
+    if (!sSpatialSamples) {
+        return NULL;
+    }
+
+    for (i = 0; i < ASC_SPATIAL_MAX_VOICES; ++i) {
+        if (sSpatialTaps[i].used && sSpatialTaps[i].stateAddr == stateAddr) {
+            return &sSpatialTaps[i];
+        }
+        if (!sSpatialTaps[i].used && !freeTap) {
+            freeTap = &sSpatialTaps[i];
+        }
+    }
+
+    if (freeTap) {
+        freeTap->used = 1;
+        freeTap->stateAddr = stateAddr;
+    }
+    return freeTap;
+}
+
+static s32 ascFloatContribution(float x)
+{
+    float scaled;
+    if (!isfinite(x)) return 0;
+    if (x > 2.0f) x = 2.0f;
+    if (x < -2.0f) x = -2.0f;
+    scaled = x * 32768.0f;
+    return (s32)(scaled + (scaled >= 0.0f ? 0.5f : -0.5f));
+}
+
+static void ascSpatialApply(s16 *left, s16 *right, u32 n)
+{
+    s32 mixL[ASC_SPATIAL_MAX_SAMPLES];
+    s32 mixR[ASC_SPATIAL_MAX_SAMPLES];
+    unsigned voice;
+    u32 i;
+
+    if (!ascensionAudioSourceHrtfActive() || !left || !right ||
+        !sSpatialSamples || n != sSpatialSamples ||
+        n > ASC_SPATIAL_MAX_SAMPLES ||
+        (n % ASCENSION_AUDIO_SOURCE_FRAME) != 0) {
+        return;
+    }
+
+    for (i = 0; i < n; ++i) {
+        mixL[i] = left[i];
+        mixR[i] = right[i];
+    }
+
+    for (voice = 0; voice < ASC_SPATIAL_MAX_VOICES; ++voice) {
+        AscSpatialTap *tap = &sSpatialTaps[voice];
+        u32 base;
+
+        if (!tap->used) continue;
+
+        for (base = 0; base < n; base += ASCENSION_AUDIO_SOURCE_FRAME) {
+            float mono[ASCENSION_AUDIO_SOURCE_FRAME];
+            float hrtfL[ASCENSION_AUDIO_SOURCE_FRAME];
+            float hrtfR[ASCENSION_AUDIO_SOURCE_FRAME];
+            s32 legacyL[ASCENSION_AUDIO_SOURCE_FRAME];
+            s32 legacyR[ASCENSION_AUDIO_SOURCE_FRAME];
+            float sumL = 0.0f;
+            float sumR = 0.0f;
+            float azimuth;
+            float alpha;
+            float dirX;
+            float dirZ;
+            unsigned k;
+
+            for (k = 0; k < ASCENSION_AUDIO_SOURCE_FRAME; ++k) {
+                u32 idx = base + k;
+                float gl = (float)tap->gainL[idx] / 32768.0f;
+                float gr = (float)tap->gainR[idx] / 32768.0f;
+                float prePanGain = sqrtf(gl * gl + gr * gr);
+                float sample = (float)tap->input[idx] / 32768.0f;
+                float weight = fabsf(sample) + 0.000001f;
+
+                mono[k] = sample * prePanGain;
+                legacyL[k] = ((s32)tap->input[idx] * (s32)tap->gainL[idx]) >> 15;
+                legacyR[k] = ((s32)tap->input[idx] * (s32)tap->gainR[idx]) >> 15;
+                sumL += fabsf(gl) * weight;
+                sumR += fabsf(gr) * weight;
+            }
+
+            if (sumL + sumR < 0.000001f) {
+                continue;
+            }
+
+            /* GE's env mixer uses an equal-power pair. For gains L/R:
+             *   alpha = atan2(R,L) in [0,pi/2]
+             *   azimuth = 2*alpha - pi/2 in [-pi/2,+pi/2]
+             * Steam Audio uses +X right and -Z forward. */
+            alpha = atan2f(sumR, sumL);
+            azimuth = 2.0f * alpha - 0.5f * ASC_PI;
+
+            /* A perfectly centered source carries no horizontal location
+             * information. Preserve it exactly instead of pretending that
+             * "center" proves a front/back position. This also protects the
+             * largely centered soundtrack and UI from unnecessary HRTF tone. */
+            if (fabsf(azimuth) < 0.035f) {
+                continue;
+            }
+
+            dirX = sinf(azimuth);
+            dirZ = -cosf(azimuth);
+
+            if (!ascensionAudioSourceProcess(tap->stateAddr, mono,
+                                             dirX, 0.0f, dirZ,
+                                             hrtfL, hrtfR)) {
+                continue;
+            }
+
+            /* Critical safety invariant: the legacy signal already exists in
+             * mixL/R. Only after the whole 16-sample HRTF frame succeeds do
+             * we subtract that source's old direct contribution and add its
+             * binaural replacement. Failure means a zero delta, never silence. */
+            for (k = 0; k < ASCENSION_AUDIO_SOURCE_FRAME; ++k) {
+                u32 idx = base + k;
+                mixL[idx] += ascFloatContribution(hrtfL[k]) - legacyL[k];
+                mixR[idx] += ascFloatContribution(hrtfR[k]) - legacyR[k];
+            }
+        }
+    }
+
+    for (i = 0; i < n; ++i) {
+        left[i] = mixerClamp16(mixL[i]);
+        right[i] = mixerClamp16(mixR[i]);
+    }
+}
+
 static struct {
     u16 in;
     u16 out;
@@ -119,20 +245,18 @@ void aSetBufferImpl(u32 flags, u16 i, u16 o, u16 c)
 
 void aClearBufferImpl(u16 addr, u32 count)
 {
-    /* D202/M-65 diag (temporary): alMainBusPull's clear of AL_MAIN_L_OUT is
-     * the first opcode of every audio frame, so it is an exact frame
-     * boundary. GE_DMEMWIPE=1 zeroes the scratch region below AL_MAIN_L_OUT
-     * (AL_TEMP_0/1/2, AL_DECODER_IN, AL_RESAMPLER_OUT) there. Nothing on real
-     * hardware may read those without writing them first in the same command
-     * list, so this must be a no-op; if it silences the stuck drone, some
-     * opcode is reading scratch DMEM left over from the previous frame.
-     * Remove once root-caused. */
-    if (addr == 1088 /* AL_MAIN_L_OUT */ && getenv("GE_DMEMWIPE")) {
-        memset(sDmem, 0, sizeof(sDmem));
+    if (addr == 1088 /* AL_MAIN_L_OUT */) {
+        if (ascensionAudioSourceHrtfActive()) {
+            ascSpatialBegin(count >> 1);
+        } else {
+            sSpatialSamples = 0;
+        }
+        if (getenv("GE_DMEMWIPE")) {
+            memset(sDmem, 0, sizeof(sDmem));
+        }
     }
     memset(DMEM_U8(addr), 0, count);
 }
-
 
 void aLoadBufferImpl(u32 dramAddr)
 {
@@ -150,7 +274,6 @@ void aLoadBufferImpl(u32 dramAddr)
 void aSaveBufferImpl(u32 dramAddr)
 {
     memcpy(osPhysicalToVirtual(dramAddr), DMEM_U8(sCtx.out), sCtx.count);
-
     (void)0;
 }
 
@@ -161,23 +284,15 @@ void aDMEMMoveImpl(u16 in, u16 out, u32 count)
 
 void aSegmentImpl(u32 seg, u32 base)
 {
-    /* No-op on PC: GE's audio DMA addresses are already resolved via
-     * osVirtualToPhysical before reaching us (D199); segment/base never
-     * factor into DMEM addressing here. */
-    (void)seg; (void)base;
+    (void)seg;
+    (void)base;
 }
-
-/* ------------------------------------------------------------------------ */
-/* ADPCM                                                                     */
-/* ------------------------------------------------------------------------ */
 
 static s16 sAdpcmTable[8][2][8];
 static ADPCM_STATE *sAdpcmLoopState;
 
 void aLoadADPCMImpl(u32 count, u32 dramAddr)
 {
-    /* `count` is GE's bookSize in bytes (2 * order * npredictors * 8);
-     * order=2 always for this format, matching sAdpcmTable's shape. */
     u32 n = count;
     void *src = osPhysicalToVirtual(dramAddr);
     if (n > sizeof(sAdpcmTable)) n = sizeof(sAdpcmTable);
@@ -199,11 +314,12 @@ void aSetLoopImpl(u32 stateAddr)
 void aADPCMdecImpl(u32 flags, u32 stateAddr)
 {
     ADPCM_STATE *state = (ADPCM_STATE *)osPhysicalToVirtual(stateAddr);
-    MTRACE("[ADPCMDEC] flags=%u state=%p in=%u out=%u count=%u book0=%d\n",
-           flags, (void *)state, sCtx.in, sCtx.out, sCtx.count, sAdpcmTable[0][0][0]);
     u8 *in = DMEM_U8(sCtx.in);
     s16 *out = DMEM_S16(sCtx.out);
-    s32 nbytes = (s32)((sCtx.count + 31) & ~31u); /* round up to 16-sample (32-byte) chunks */
+    s32 nbytes = (s32)((sCtx.count + 31) & ~31u);
+
+    MTRACE("[ADPCMDEC] flags=%u state=%p in=%u out=%u count=%u book0=%d\n",
+           flags, (void *)state, sCtx.in, sCtx.out, sCtx.count, sAdpcmTable[0][0][0]);
 
     if (flags & A_INIT) {
         memset(out, 0, 16 * sizeof(s16));
@@ -244,7 +360,7 @@ void aADPCMdecImpl(u32 flags, u32 stateAddr)
     memcpy(state, out - 16, 16 * sizeof(s16));
 
     if (mixerTraceOn()) {
-        s16 *dumpOut = DMEM_S16(sCtx.out) + 16; /* skip the 16-sample history/init lead-in */
+        s16 *dumpOut = DMEM_S16(sCtx.out) + 16;
         u32 n = (sCtx.count > 64 ? 64 : sCtx.count);
         u32 k;
         fprintf(sMixerTraceFile, "[PCMOUT] book0=%d first-decoded-frame[0..%u]=", sAdpcmTable[0][0][0], n / 2 - 1);
@@ -252,10 +368,6 @@ void aADPCMdecImpl(u32 flags, u32 stateAddr)
         fprintf(sMixerTraceFile, "\n");
     }
 }
-
-/* ------------------------------------------------------------------------ */
-/* Resample (linear, N64 64-phase table)                                    */
-/* ------------------------------------------------------------------------ */
 
 static const s16 sResampleTable[64][4] = {
     {0x0c39, 0x66ad, 0x0d46, 0xffdf}, {0x0b39, 0x6696, 0x0e5f, 0xffd8},
@@ -296,8 +408,6 @@ void aResampleImpl(u32 flags, u16 pitch, u32 stateAddr)
 {
     RESAMPLE_STATE *stateBuf = (RESAMPLE_STATE *)osPhysicalToVirtual(stateAddr);
     s16 *state = (s16 *)stateBuf;
-    MTRACE("[RESAMPLE] flags=%u pitch=%u state=%p in=%u out=%u count=%u\n",
-           flags, pitch, (void *)stateBuf, sCtx.in, sCtx.out, sCtx.count);
     s16 tmp[16];
     s16 *inInitial = DMEM_S16(sCtx.in);
     s16 *in = inInitial;
@@ -305,6 +415,9 @@ void aResampleImpl(u32 flags, u16 pitch, u32 stateAddr)
     s32 nbytes = (s32)((sCtx.count + 15) & ~15u);
     u32 pitchAccumulator;
     s32 i;
+
+    MTRACE("[RESAMPLE] flags=%u pitch=%u state=%p in=%u out=%u count=%u\n",
+           flags, pitch, (void *)stateBuf, sCtx.in, sCtx.out, sCtx.count);
 
     if (flags & A_INIT) {
         memset(tmp, 0, 5 * sizeof(s16));
@@ -323,7 +436,6 @@ void aResampleImpl(u32 flags, u16 pitch, u32 stateAddr)
                          ((in[2] * tbl[2] + 0x4000) >> 15) +
                          ((in[3] * tbl[3] + 0x4000) >> 15);
             *out++ = mixerClamp16(sample);
-
             pitchAccumulator += (u32)pitch << 1;
             in += pitchAccumulator >> 16;
             pitchAccumulator %= 0x10000;
@@ -340,17 +452,15 @@ void aResampleImpl(u32 flags, u16 pitch, u32 stateAddr)
     memcpy(state + 8, in, 8 * sizeof(s16));
 }
 
-/* ------------------------------------------------------------------------ */
-/* Interleave / DMEM mix                                                    */
-/* ------------------------------------------------------------------------ */
-
 void aInterleaveImpl(u16 l, u16 r)
 {
-    const s16 *lp = DMEM_S16(l);
-    const s16 *rp = DMEM_S16(r);
+    s16 *lp = DMEM_S16(l);
+    s16 *rp = DMEM_S16(r);
     s16 *d = DMEM_S16(sCtx.out);
-    u32 n = sCtx.count >> 1; /* mono sample count */
+    u32 n = sCtx.count >> 1;
     u32 i;
+
+    ascSpatialApply(lp, rp, n);
 
     for (i = 0; i < n; i++) {
         *d++ = *lp++;
@@ -372,10 +482,6 @@ void aMixImpl(u32 flags, u16 gain, u16 in, u16 out)
     }
 }
 
-/* ------------------------------------------------------------------------ */
-/* Volume / envelope mixer                                                  */
-/* ------------------------------------------------------------------------ */
-
 static struct {
     s16 volCur[2];
     s16 volTgt[2];
@@ -388,13 +494,6 @@ void aSetVolumeImpl(u32 flags, u16 v, u16 t, u16 r)
     if (flags & A_AUX) {
         sVol.dryamt = (s16)v;
         sVol.wetamt = (s16)r;
-        /* D202/M-65 diag (temporary): GE_NOWET=1 stops any signal entering
-         * the reverb send. The reverb delay lines are the only audio state
-         * that survives across frames in DRAM, and aPoleFilterImpl -- the
-         * damping in that feedback path -- is an unimplemented no-op here
-         * (D199). If muting the send silences the stuck drone, the drone is
-         * an undamped reverb feedback loop, not a stuck voice.
-         * Remove once root-caused. */
         if (getenv("GE_NOWET")) {
             sVol.wetamt = 0;
         }
@@ -408,14 +507,6 @@ void aSetVolumeImpl(u32 flags, u16 v, u16 t, u16 r)
     }
 }
 
-/* D202/M-67 diag (temporary): GE_VOICEDUMP=1 writes each voice's resampled
- * mono stream (the aEnvMixer input, i.e. post-resample/pre-envelope) to
- * voicedump.raw as records of [u32 stateAddr][u32 nSamples][u64 us]
- * [s16 x nSamples], where us is sysGetMicroseconds() at mix time so records
- * can be correlated with the timestamped [WIRE] (load.c) and [AUDIOTRACE]
- * (snd.c) lines. Offline, each record is matched against all 261 ROM SFX
- * decodes (pitch-resampled per keymap) to prove exactly which sample data a
- * voice played, with no music/reverb masking. Remove once D202 closes. */
 static FILE *s_voiceDumpFile = NULL;
 
 void aEnvMixerImpl(u32 flags, u32 stateAddr)
@@ -428,13 +519,22 @@ void aEnvMixerImpl(u32 flags, u32 stateAddr)
         s16 volwet;
     } *saved = (void *)osPhysicalToVirtual(stateAddr);
 
+    const s16 *in = DMEM_S16(sCtx.in);
+    s16 *dry[2] = { DMEM_S16(sCtx.out), DMEM_S16(sCtx.dryR) };
+    s16 *wet[2] = { DMEM_S16(sCtx.wetL), DMEM_S16(sCtx.wetR) };
+    u32 nsamples = sCtx.count >> 1;
+    AscSpatialTap *spatialTap = NULL;
+    u32 spatialOffset = 0;
+    s32 t[2], tgt[2], rate[2];
+    s16 voldry, volwet;
+    u32 i;
+    int j;
+
     MTRACE("[ENVMIX] flags=%u state=%p in=%u out=%u dryR=%u wetL=%u wetR=%u count=%u\n",
            flags, (void *)saved, sCtx.in, sCtx.out, sCtx.dryR, sCtx.wetL, sCtx.wetR, sCtx.count);
-    const s16 *in = DMEM_S16(sCtx.in);
 
     if (getenv("GE_VOICEDUMP")) {
-        if (!s_voiceDumpFile)
-            s_voiceDumpFile = fopen("voicedump.raw", "wb");
+        if (!s_voiceDumpFile) s_voiceDumpFile = fopen("voicedump.raw", "wb");
         if (s_voiceDumpFile) {
             u32 hdr[2] = { stateAddr, (u32)(sCtx.count >> 1) };
             u64 us = sysGetMicroseconds();
@@ -444,14 +544,16 @@ void aEnvMixerImpl(u32 flags, u32 stateAddr)
         }
     }
 
-    s16 *dry[2] = { DMEM_S16(sCtx.out), DMEM_S16(sCtx.dryR) };
-    s16 *wet[2] = { DMEM_S16(sCtx.wetL), DMEM_S16(sCtx.wetR) };
-    u32 nsamples = sCtx.count >> 1;
-
-    s32 t[2], tgt[2], rate[2];
-    s16 voldry, volwet;
-    u32 i;
-    int j;
+    if (ascensionAudioSourceHrtfActive() && sSpatialSamples &&
+        sCtx.out >= AL_MAIN_L_OUT) {
+        spatialOffset = ((u32)sCtx.out - (u32)AL_MAIN_L_OUT) >> 1;
+        if (spatialOffset + nsamples <= sSpatialSamples) {
+            spatialTap = ascSpatialTapFor(stateAddr);
+            if ((flags & A_INIT) && spatialTap) {
+                ascensionAudioSourceReset(stateAddr);
+            }
+        }
+    }
 
     if (flags & A_INIT) {
         for (j = 0; j < 2; j++) {
@@ -490,6 +592,13 @@ void aEnvMixerImpl(u32 flags, u32 stateAddr)
         gain[2] = mixerClamp16(((s32)vol[0] * volwet + 0x4000) >> 15);
         gain[3] = mixerClamp16(((s32)vol[1] * volwet + 0x4000) >> 15);
 
+        if (spatialTap) {
+            u32 idx = spatialOffset + i;
+            spatialTap->input[idx] = insamp;
+            spatialTap->gainL[idx] = gain[0];
+            spatialTap->gainR[idx] = gain[1];
+        }
+
         dry[0][i] = mixerClamp16(dry[0][i] + (((s32)insamp * gain[0]) >> 15));
         dry[1][i] = mixerClamp16(dry[1][i] + (((s32)insamp * gain[1]) >> 15));
         wet[0][i] = mixerClamp16(wet[0][i] + (((s32)insamp * gain[2]) >> 15));
@@ -505,21 +614,12 @@ void aEnvMixerImpl(u32 flags, u32 stateAddr)
     saved->volwet = volwet;
 }
 
-/* ------------------------------------------------------------------------ */
-/* Pole filter (reverb/chorus lowpass)                                      */
-/* ------------------------------------------------------------------------ */
-
 void aPoleFilterImpl(u32 flags, u16 gain, u32 stateAddr)
 {
-    /* PC port (D199): identity passthrough — reverb/chorus tone-shaping
-     * (CUSTOM_FX_PARAMS_N) is not implemented. Affects reverb/chorus
-     * character only, not silence/garbling (docs/dev/AUDIO-PLAN.md risk 1).
-     * DMEM in-place buffer (sCtx set by the caller's aSetBuffer(buf,buf,..))
-     * is left untouched, which is the correct no-op for this filter shape. */
-    (void)flags; (void)gain; (void)stateAddr;
+    (void)flags;
+    (void)gain;
+    (void)stateAddr;
 }
-
-/* ------------------------------------------------------------------------ */
 
 void mixerInit(void)
 {
@@ -527,6 +627,8 @@ void mixerInit(void)
     memset(sAdpcmTable, 0, sizeof(sAdpcmTable));
     memset(&sCtx, 0, sizeof(sCtx));
     memset(&sVol, 0, sizeof(sVol));
+    memset(sSpatialTaps, 0, sizeof(sSpatialTaps));
+    sSpatialSamples = 0;
     sAdpcmLoopState = NULL;
 }
 

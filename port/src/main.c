@@ -33,6 +33,7 @@
 #include "mixer.h"
 #include "crash.h"
 #include "thread_config.h"
+#include "ascension_defaults.h"
 
 /* Defined in the game (src/init.c). The port calls into the real game entry. */
 extern void mainproc(void *args);
@@ -81,6 +82,28 @@ static void portAtExit(void)
     configSave();
 }
 
+/* Windows can briefly keep the default output endpoint unavailable while an
+ * earlier process/device is being torn down. A couple of short retries are
+ * cheap and prevent a transient open failure from turning into an otherwise
+ * healthy but completely silent play session. */
+static int portInitAudioWithRetry(void)
+{
+    for (int attempt = 0; attempt < 3; ++attempt) {
+        if (audioInit() == 0)
+            return 0;
+        if (attempt < 2) {
+            sysLogPrintf(LOG_WARNING,
+                         "audio: init failed; retrying in 250 ms (%d/3)",
+                         attempt + 1);
+            sysSleep(250000);
+        }
+    }
+
+    sysLogPrintf(LOG_ERROR,
+                 "audio: no output device after 3 attempts; continuing silent");
+    return -1;
+}
+
 int main(int argc, char **argv)
 {
     sysSetArgs(argc, argv);
@@ -99,6 +122,14 @@ int main(int argc, char **argv)
 
     /* 1. Platform + config + filesystem. */
     configLoad();
+
+    /* Keep every Ascension-owned UX surface, but start 0.0.2 from the
+     * upstream port's original visual/window baseline. This one-time
+     * migration runs before videoInit so FOV, MSAA, fullscreen and geometry
+     * all agree from the first rendered frame. Audio, input and saves are not
+     * touched, and later player changes are never overwritten. */
+    ascensionRestoreOriginalVisualDefaultsOnce();
+
     atexit(portAtExit);   /* persist config + window geometry on clean exit */
 
     /* 2. Load the ROM and map segments. */
@@ -138,7 +169,7 @@ int main(int argc, char **argv)
         sysLogPrintf(LOG_ERROR, "videoInit failed");
         return 1;
     }
-    audioInit();
+    int audioReady = (portInitAudioWithRetry() == 0);
     mixerInit();
     inputInit();
 
@@ -152,20 +183,36 @@ int main(int argc, char **argv)
                    MAIN_THREAD_PRIORITY);
     osStartThread(&mainThread);
 
-    /* 5. Host thread: pump SDL events until the window is closed / ESC.
-     *    videoPumpEvents() exits the process on quit. */
+    /* 5. Host thread: pump SDL events. Restart is deliberately a two-stage
+     * lifecycle: the overlay only posts the request; this host thread releases
+     * the SDL audio device before launching the replacement process. Starting
+     * the child first can race the old audio endpoint and produce a silent
+     * restarted game on Windows. */
     for (;;) {
         videoPumpEvents();
+        if (sysRestartRequested())
+            break;
         sysSleep(8);
     }
 
-    /* Unreachable in practice; clean up if we ever get here. */
-    inputDestroy();
-    mixerDestroy();
-    audioDestroy();
-    videoDestroy();
-    romdataDestroy();
-    configSave();
+    if (sysRestartRequested()) {
+        videoSaveWindowState();
+        configSave();
+
+        /* The game/audio worker threads may still be alive for these final
+         * milliseconds, but audioSetNextBuffer safely ignores writes with no
+         * device. Closing just the output device avoids tearing down renderer
+         * state from the wrong thread while still removing the handoff race. */
+        if (audioReady)
+            audioDestroy();
+        sysSleep(150000);
+
+        if (sysRelaunch() != 0) {
+            sysLogPrintf(LOG_ERROR, "restart: relaunch failed");
+            return 1;
+        }
+        return 0;
+    }
 
     return 0;
 }

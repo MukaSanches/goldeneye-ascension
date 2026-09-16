@@ -1,0 +1,78 @@
+name: Ascension Watch Final validation
+
+on:
+  push:
+    branches: [ ascension-watch-final-v1 ]
+  pull_request:
+    branches: [ ascension-watch-final-v1 ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: watch-final-${{ github.workflow }}-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  windows-watch-final:
+    runs-on: windows-latest
+    timeout-minutes: 55
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-python
+
+      - name: Python syntax
+        run: python -m compileall -q tools_pc
+
+      - name: Apply Ascension stack
+        run: |
+          python tools_pc/apply_modern_controls_v2.py --no-backup
+          python tools_pc/apply_modern_controls_v3.py --no-backup
+          python tools_pc/apply_modern_menu_guard.py
+          python tools_pc/apply_ui_overhaul_v1.py
+          python tools_pc/fix_ui_overhaul_text_state.py
+          python tools_pc/install_ui_overhaul_v2.py --no-backup
+          python tools_pc/apply_persistent_f10_hint.py --no-backup
+          python tools_pc/apply_unlock_all_missions.py --no-backup
+          python tools_pc/apply_watch_ui_final_safe.py --no-backup
+          python tools_pc/apply_watch_runtime_fix.py --no-backup
+          python tools_pc/apply_watch_runtime_fix.py --check
+
+      - name: Release contracts
+        run: |
+          python tools_pc/test_modern_controls_v2.py
+          python tools_pc/test_modern_controls_v3.py
+          python tools_pc/test_ui_overhaul_v1.py
+          python tools_pc/test_ui_overhaul_v2.py
+          python tools_pc/test_persistent_f10_hint.py
+          python tools_pc/test_unlock_all_missions.py
+          python tools_pc/test_watch_ui_final.py
+          python tools_pc/test_watch_runtime_fix.py
+          "/c/Program Files/Git/bin/git.exe" diff --check
+
+      - name: Regenerate ROM symbols
+        run: python scripts/gen_romassets.py u
+
+      - name: Build Windows
+        run: ./build-pc.sh ntsc-final
+
+      - name: Verify executable
+        run: test -f build-pc/ge007.x86_64.exe

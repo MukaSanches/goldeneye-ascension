@@ -1,0 +1,100 @@
+name: Modern Controls V2 validation
+
+on:
+  push:
+    branches: [ ascension-modern-controls-v2 ]
+  pull_request:
+    branches: [ ascension-modern-controls-v1, ascension-modern-controls-v2 ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: modern-controls-v2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-v2:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential gcc-14 g++-14 cmake python3 \
+            libsdl2-dev zlib1g-dev libgl1-mesa-dev
+
+      - name: Python syntax
+        run: python3 -m compileall -q tools_pc
+
+      - name: V2 fail-closed preflight
+        run: python3 tools_pc/apply_modern_controls_v2.py --check
+
+      - name: Apply generated V2 bridge
+        run: python3 tools_pc/apply_modern_controls_v2.py --no-backup
+
+      - name: Source-contract regression tests
+        run: |
+          python3 tools_pc/test_modern_controls_v2.py
+          python3 tools_pc/verify_ascension_contracts.py
+          git diff --check
+
+      - name: Regenerate ROM symbols
+        run: python3 scripts/gen_romassets.py u
+
+      - name: Configure Linux
+        run: cmake -S . -B build-v2-linux -DROMID=ntsc-final -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14
+
+      - name: Build Linux
+        run: cmake --build build-v2-linux -j"$(nproc)"
+
+      - name: Verify binary
+        run: |
+          test -f build-v2-linux/ge007.x86_64
+          file build-v2-linux/ge007.x86_64
+
+  windows-v2:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            git
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-python
+
+      - name: V2 preflight + apply
+        run: |
+          python tools_pc/apply_modern_controls_v2.py --check
+          python tools_pc/apply_modern_controls_v2.py --no-backup
+          python tools_pc/test_modern_controls_v2.py
+          git diff --check
+
+      - name: Regenerate ROM symbols
+        run: python scripts/gen_romassets.py u
+
+      - name: Build Windows
+        run: ./build-pc.sh ntsc-final
+
+      - name: Verify executable
+        run: test -f build-pc/ge007.x86_64.exe

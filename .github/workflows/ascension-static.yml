@@ -1,0 +1,34 @@
+name: Ascension static contracts
+
+on:
+  push:
+    branches: [ ascension-modern-controls-v1, ascension-dev ]
+  pull_request:
+    branches: [ ascension-modern-controls-v1, ascension-dev ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ascension-static-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Check Python tool syntax
+        run: python3 -m compileall -q tools_pc
+
+      - name: Verify Ascension contracts
+        run: python3 tools_pc/verify_ascension_contracts.py
+
+      - name: Test reversible patcher pack
+        run: python3 tools_pc/test_ascension_patchers.py

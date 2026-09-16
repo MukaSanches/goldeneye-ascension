@@ -1,0 +1,162 @@
+name: Ascension Audio Remaster validation
+
+on:
+  push:
+    branches: [ feature/ascension-audio-remaster, feature/ascension-audio-3d-world ]
+  pull_request:
+    branches: [ release/ascension-0.0.4-controller-universal ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ascension-audio-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-python
+            unzip
+            zip
+
+      - name: Prepare complete Ascension stack
+        run: python tools_pc/ascension.py prepare
+
+      - name: Regression contracts
+        run: python tools_pc/ascension.py test
+
+      - name: Download and verify Steam Audio 4.8.1
+        run: python tools_pc/ensure_steam_audio.py stage
+
+      - name: Verify Steam Audio DLL dependency closure
+        run: |
+          test -f build-pc/phonon.dll
+          ldd build-pc/phonon.dll | tee steam-audio-ldd.txt
+          if grep -qi 'not found' steam-audio-ldd.txt; then
+            echo 'Steam Audio DLL has unresolved runtime dependencies' >&2
+            exit 1
+          fi
+
+      - name: Compile exact ABI runtime smoke
+        run: |
+          gcc -std=gnu11 -O2 -Wall -Wextra \
+            -Iport/include $(sdl2-config --cflags) \
+            tools_pc/steam_audio_runtime_smoke.c \
+            -o steam_audio_runtime_smoke.exe \
+            $(sdl2-config --libs) -lm
+
+      - name: Execute Steam Audio context HRTF DSP smoke
+        run: ./steam_audio_runtime_smoke.exe build-pc/phonon.dll
+
+      - name: Regenerate ROM symbols
+        run: python tools_pc/ascension.py assets
+
+      - name: Build Windows
+        run: |
+          set -o pipefail
+          python tools_pc/ascension.py build 2>&1 | tee ascension-audio-build-windows.log
+
+      - name: Stage Steam Audio beside final executable
+        run: python tools_pc/ensure_steam_audio.py stage
+
+      - name: Verify final runtime payload
+        run: |
+          test -f build-pc/ge007.x86_64.exe
+          test -f build-pc/phonon.dll
+          test -f build-pc/STEAM-AUDIO-LICENSE.md
+          sha256sum build-pc/ge007.x86_64.exe build-pc/phonon.dll > ascension-audio-sha256.txt
+
+      - name: Build zero-install Windows bundle
+        run: tools_pc/bundle-win.sh 0.0.4-audio-ci
+
+      - name: Verify bundle contains Steam Audio transparently
+        run: |
+          ZIP="dist/goldeneye-pc-port-0.0.4-audio-ci-win64.zip"
+          test -f "$ZIP"
+          unzip -l "$ZIP" | tee ascension-audio-bundle.txt
+          grep -q 'phonon.dll' ascension-audio-bundle.txt
+          grep -q 'LICENSE-Steam-Audio-Apache-2.0.md' ascension-audio-bundle.txt
+          sha256sum "$ZIP" >> ascension-audio-sha256.txt
+
+      - name: Upload Windows validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ascension-audio-windows-validation
+          path: |
+            ascension-0.0.4-test-report.txt
+            ascension-audio-build-windows.log
+            steam-audio-ldd.txt
+            ascension-audio-sha256.txt
+            ascension-audio-bundle.txt
+            dist/goldeneye-pc-port-0.0.4-audio-ci-win64.zip
+          if-no-files-found: ignore
+
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        gcc: [13, 14]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-${{ matrix.gcc }} g++-${{ matrix.gcc }} cmake python3 libsdl2-dev zlib1g-dev libgl1-mesa-dev
+
+      - name: Prepare complete Ascension stack
+        run: python3 tools_pc/ascension.py prepare
+
+      - name: Regression contracts
+        run: python3 tools_pc/ascension.py test
+
+      - name: Regenerate ROM symbols
+        run: python3 tools_pc/ascension.py assets
+
+      - name: Build Linux
+        env:
+          CC: gcc-${{ matrix.gcc }}
+          CXX: g++-${{ matrix.gcc }}
+        run: |
+          set -o pipefail
+          bash build-pc.sh ntsc-final 2>&1 | tee ascension-audio-build-linux-gcc${{ matrix.gcc }}.log
+
+      - name: Verify executable
+        run: test -f build-pc/ge007.x86_64
+
+      - name: Upload Linux validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ascension-audio-linux-gcc${{ matrix.gcc }}
+          path: |
+            ascension-0.0.4-test-report.txt
+            ascension-audio-build-linux-gcc${{ matrix.gcc }}.log
+          if-no-files-found: ignore

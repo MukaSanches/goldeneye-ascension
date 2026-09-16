@@ -1,0 +1,91 @@
+ASCENSION 0.0.4 RC1 — GUIA DE TESTE WINDOWS
+===========================================
+
+ESTE PACOTE NAO INCLUI ROM NEM DADOS DERIVADOS DA ROM.
+Use apenas uma ROM de GoldenEye 007 que voce possua legalmente.
+
+FORMA MAIS SEGURA DE TESTAR
+---------------------------
+1. Nao apague sua instalacao atual.
+2. Faca uma copia da sua pasta data/ atual antes do teste.
+3. Extraia o pacote ascension-0.0.4-rc1-windows em uma pasta nova.
+4. Copie para essa pasta a sua pasta data/ de uma instalacao do port que ja funcione.
+   Ela deve conter, no minimo:
+   - data/ge007.ntsc-final.z64
+   - data/pcmodels-ntsc-final/
+   - data/pccg-ntsc-final/
+5. Execute ge007.x86_64.exe.
+
+Se voce preferir testar direto pelo repositorio, use MSYS2 MINGW64:
+
+  git fetch origin
+  git switch release/ascension-0.0.4
+  git pull --ff-only
+  python tools_pc/ascension.py all
+  ./build-pc/ge007.x86_64.exe
+
+O QUE DEVE ESTAR DIFERENTE NA 0.0.4
+------------------------------------
+No jogo, abra F10 -> Controls.
+
+Para testar o controle moderno:
+- Control preset: MODERN
+- Modern twin-stick gamepad: ON
+- left stick: movimento analogico
+- right stick: camera
+- RT: atirar
+- LT: mirar
+- A: acao
+- X: recarregar/voltar
+- B: agachar
+- Y: proxima arma
+- LB: arma anterior
+- RB: acao alternativa
+
+Tambem existem:
+- deadzone radial configuravel;
+- curva LINEAR ou PRECISION;
+- sensibilidade de camera do controle;
+- sensibilidade ADS do controle;
+- inverter X/Y;
+- Southpaw (troca os analogicos);
+- troca de LT/RT;
+- remapeamento de botoes do controle no proprio F10;
+- remapeamento de teclado no proprio F10.
+
+CHECKLIST RAPIDO OBRIGATORIO
+----------------------------
+1. Entre em Dam usando o mouse Modern e confirme que a mira continua tao boa quanto a versao anterior.
+2. Abra e feche o Q Watch duas vezes; a mira do mouse deve voltar imediatamente.
+3. Abra e feche F10 duas vezes; a mira do mouse deve voltar imediatamente.
+4. No controle, mova o analogico esquerdo devagar, diagonal e no limite. Nao deve parecer um direcional digital.
+5. Gire a camera bem devagar no centro do analogico direito e depois no limite.
+6. Segure LT e confirme que a camera fica mais lenta ao mirar.
+7. Teste A, X, B, Y, LB, RB, LT, RT, Start e D-pad.
+8. Ative Southpaw, teste e desative.
+9. Ative a troca de gatilhos, teste e desative.
+10. Remapeie Action e Crouch no F10; feche F10 e teste imediatamente.
+11. Feche e abra o jogo e confirme que os novos botoes permaneceram.
+12. Remapeie Forward no teclado, feche F10 e teste; reinicie e confirme persistencia.
+13. Use Reset PC settings e confirme que teclado e controle voltam aos padroes.
+14. Troque para CLASSIC e confirme que o comportamento antigo do controle continua normal.
+15. Troque para HYBRID e confirme que continua normal.
+16. Use F10 -> Return to main menu e confirme que seu save/perfil continua intacto.
+17. Ligue/desligue All Missions e confirme que nao aparece progresso falso salvo.
+18. Alt-Tab durante uma fase e volte; nao deve haver tranco de camera nem analogico preso.
+
+SE ENCONTRAR BUG
+----------------
+Anote exatamente:
+- onde estava (menu, gameplay, Q Watch ou F10);
+- qual preset estava usando;
+- qual dispositivo (mouse/teclado/controle);
+- qual acao fez imediatamente antes do problema;
+- se o problema apareceu depois de uma transicao (ex.: Q Watch -> gameplay);
+- se acontece tambem em CLASSIC.
+
+IMPORTANTE
+----------
+0.0.4 RC1 passou a pipeline completa de compilacao e contratos em Windows/MSYS2,
+Linux GCC 13 e Linux GCC 14. Isso prova integracao do codigo, mas a sensacao real
+do twin-stick e as transicoes precisam do seu playtest antes de chamarmos a versao de validada.
