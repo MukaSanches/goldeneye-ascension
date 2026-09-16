@@ -20,6 +20,15 @@ int ascensionAudioRemasterActive(void);
  */
 #define ASCENSION_AUDIO_SOURCE_FRAME 16u
 
+/* GoldenEye's software RSP DMEM address for the main-left output bus.
+ * The original mixer historically used the literal 1088 for this address.
+ * Keep the compatibility name local to the Ascension bridge so the source
+ * capture code can calculate offsets without depending on an N64-only macro
+ * that is not exported by the PC ABI headers. */
+#ifndef AL_MAIN_L_OUT
+#define AL_MAIN_L_OUT 1088u
+#endif
+
 int ascensionAudioSourceHrtfActive(void);
 void ascensionAudioSourceReset(uint32_t voiceKey);
 int ascensionAudioSourceProcess(uint32_t voiceKey,
