@@ -19,6 +19,15 @@ static void ascensionAudioWorldRuntimeShutdown(void)
 
 static void ascensionAudioWorldRuntimeInitOnce(void)
 {
+    const char *mode = getenv("GE_ASCENSION_WORLD3D");
+
+    /* Developer/safety A-B switch. It disables only the new real-world layer;
+     * the proven Steam Audio per-source HRTF and original GoldenEye fallback
+     * remain available. */
+    if (mode && mode[0] == '0' && mode[1] == '\0') {
+        return;
+    }
+
     if (ascensionAudioWorldInit(ASCENSION_GE_AUDIO_RATE)) {
         atomic_store_explicit(&s_world_active, 1, memory_order_release);
         atexit(ascensionAudioWorldRuntimeShutdown);
