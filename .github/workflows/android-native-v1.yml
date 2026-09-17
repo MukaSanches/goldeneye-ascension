@@ -294,7 +294,7 @@ jobs:
           test -e /dev/kvm
 
       - name: Boot Android 15 and run native self-test
-        uses: ReactiveCircus/android-emulator-runner@ed009f5318f15b1cf93a191b856c4f1748a2d4c1
+        uses: ReactiveCircus/android-emulator-runner@v2
         with:
           api-level: 35
           target: google_apis_ps16k
