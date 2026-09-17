@@ -220,6 +220,38 @@ file(WRITE "${MPMENU_ANDROID_SOURCE}" "${MPMENU_ANDROID_TEXT}")
 list(REMOVE_ITEM SRC_GAME "${MPMENU_SOURCE}")
 list(APPEND SRC_GAME "${MPMENU_ANDROID_SOURCE}")
 
+set(OPTIONS_SOURCE "${ASCENSION_ROOT}/src/game/options.c")
+set(OPTIONS_ANDROID_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/generated/options_android.c")
+file(READ "${OPTIONS_SOURCE}" OPTIONS_ANDROID_TEXT)
+ascension_android_replace_required(
+  OPTIONS_ANDROID_TEXT
+  "sprintf(pageTitle, langGet(0xac38));"
+  "sprintf(pageTitle, \"%s\", langGet(0xac38));"
+  "options background title format")
+ascension_android_replace_required(
+  OPTIONS_ANDROID_TEXT
+  "sprintf(pageTitle, langGet(0xac39));"
+  "sprintf(pageTitle, \"%s\", langGet(0xac39));"
+  "options M title format")
+ascension_android_replace_required(
+  OPTIONS_ANDROID_TEXT
+  "sprintf(pageTitle, langGet(0xac3a));"
+  "sprintf(pageTitle, \"%s\", langGet(0xac3a));"
+  "options Q title format")
+ascension_android_replace_required(
+  OPTIONS_ANDROID_TEXT
+  "sprintf(pageTitle, langGet(0xac3b));"
+  "sprintf(pageTitle, \"%s\", langGet(0xac3b));"
+  "options Moneypenny title format")
+ascension_android_replace_required(
+  OPTIONS_ANDROID_TEXT
+  "sprintf(pageTitle, langGet(0xac3c));"
+  "sprintf(pageTitle, \"%s\", langGet(0xac3c));"
+  "options objectives title format")
+file(WRITE "${OPTIONS_ANDROID_SOURCE}" "${OPTIONS_ANDROID_TEXT}")
+list(REMOVE_ITEM SRC_GAME "${OPTIONS_SOURCE}")
+list(APPEND SRC_GAME "${OPTIONS_ANDROID_SOURCE}")
+
 file(GLOB SRC_LIBAUDIO "${ASCENSION_ROOT}/src/libultra/audio/*.c")
 file(GLOB SRC_LIBULTRARE_AUDIO "${ASCENSION_ROOT}/src/libultrare/audio/*.c")
 file(GLOB SRC_GU "${ASCENSION_ROOT}/src/libultra/gu/*.c")
