@@ -8,6 +8,7 @@
 #if defined(__ANDROID__)
 
 #include <PR/ultratypes.h>
+#include "platform.h"
 #include "config.h"
 
 s32 portNoHitFlash = 0;
