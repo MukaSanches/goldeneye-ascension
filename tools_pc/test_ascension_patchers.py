@@ -119,6 +119,8 @@ def verify_modern_controls_bridge(root: Path) -> int:
         "native stick-down crouch gesture": "if (dedicatedCrouch)\n            sy = -STICK_MAX;",
         "dedicated crouch preserves stick-Y during mouse look":
             "if (!dedicatedCrouch && fabs(dyLook) >= AIM_MOVE_THRESH)",
+        "dedicated crouch preserves horizontal mouse aim":
+            "if (fabs(edx) >= AIM_MOVE_THRESH) {",
     }
     for label, needle in required.items():
         if needle not in source:
