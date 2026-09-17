@@ -10,12 +10,16 @@ permissions:
 
 jobs:
   native-arm64:
-    name: Build libascension.so (ARM64)
+    name: Build Android APK (ARM64)
     runs-on: ubuntu-22.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      NDK_VERSION: 30.0.16248370
+      CMAKE_VERSION: 3.22.1
+      SDL_COMMIT: b90ac95029d801c5abc59472ba8e2200dff31e1e
+      BUILD_TOOLS_VERSION: 35.0.0
     steps:
       - name: Checkout Ascension Android branch
         uses: actions/checkout@v4
@@ -29,30 +33,41 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Install Android NDK and CMake
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Install Android SDK, NDK and CMake
         shell: bash
         run: |
           set -o pipefail
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
-          "$SDKMANAGER" "ndk;30.0.16248370" "cmake;3.22.1" 2>&1 | tee android-toolchain.log
+          "$SDKMANAGER" \
+            "platforms;android-35" \
+            "build-tools;${BUILD_TOOLS_VERSION}" \
+            "ndk;${NDK_VERSION}" \
+            "cmake;${CMAKE_VERSION}" \
+            2>&1 | tee android-toolchain.log
 
       - name: Fetch pinned SDL2
         shell: bash
         run: |
           set -o pipefail
           git clone https://github.com/libsdl-org/SDL.git third_party/SDL 2>&1 | tee sdl-fetch.log
-          git -C third_party/SDL checkout b90ac95029d801c5abc59472ba8e2200dff31e1e 2>&1 | tee -a sdl-fetch.log
+          git -C third_party/SDL checkout "$SDL_COMMIT" 2>&1 | tee -a sdl-fetch.log
+          test "$(git -C third_party/SDL rev-parse HEAD)" = "$SDL_COMMIT"
 
       - name: Configure ARM64 native core
         shell: bash
         run: |
           set -o pipefail
-          "$ANDROID_HOME/cmake/3.22.1/bin/cmake" \
+          "$ANDROID_HOME/cmake/${CMAKE_VERSION}/bin/cmake" \
             -S android \
             -B build-android-arm64 \
             -G Ninja \
-            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_HOME/ndk/30.0.16248370/build/cmake/android.toolchain.cmake" \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_HOME/ndk/${NDK_VERSION}/build/cmake/android.toolchain.cmake" \
             -DANDROID_ABI=arm64-v8a \
             -DANDROID_PLATFORM=android-26 \
             -DANDROID_STL=c++_shared \
@@ -66,7 +81,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          "$ANDROID_HOME/cmake/3.22.1/bin/cmake" --build build-android-arm64 --target ascension -j2 2>&1 | tee native-build.log
+          "$ANDROID_HOME/cmake/${CMAKE_VERSION}/bin/cmake" --build build-android-arm64 --target ascension -j2 2>&1 | tee native-build.log
 
       - name: Extract first compiler failure
         if: always()
@@ -97,18 +112,107 @@ jobs:
         if: steps.native_build.outcome != 'success'
         run: exit 1
 
-      - name: Verify native output
+      - name: Stage APK native libraries
         shell: bash
         run: |
-          test -f build-android-arm64/libascension.so
-          file build-android-arm64/libascension.so
-          readelf -h build-android-arm64/libascension.so | grep -E 'Class:|Machine:'
-          readelf -lW build-android-arm64/libascension.so | grep -E 'LOAD|Align' | head -20
+          set -euo pipefail
+          JNI_DIR="android/app/src/main/jniLibs/arm64-v8a"
+          mkdir -p "$JNI_DIR"
 
-      - name: Upload native library
+          ASCENSION_SO="build-android-arm64/libascension.so"
+          SDL_SO="build-android-arm64/sdl2/libSDL2.so"
+          CXX_SO="$ANDROID_HOME/ndk/${NDK_VERSION}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so"
+
+          test -f "$ASCENSION_SO"
+          test -f "$SDL_SO"
+          test -f "$CXX_SO"
+
+          cp "$ASCENSION_SO" "$JNI_DIR/libascension.so"
+          cp "$SDL_SO" "$JNI_DIR/libSDL2.so"
+          cp "$CXX_SO" "$JNI_DIR/libc++_shared.so"
+
+          for so in "$JNI_DIR"/*.so; do
+            echo "== $so =="
+            file "$so"
+            readelf -h "$so" | grep -E 'Class:|Machine:'
+            readelf -lW "$so" | awk '/ LOAD / { print }'
+            if readelf -lW "$so" | awk '/ LOAD / { if ($NF != "0x4000" && $NF != "0x10000") bad=1 } END { exit bad }'; then
+              :
+            else
+              echo "ELF segment alignment is not 16 KiB compatible: $so" >&2
+              exit 1
+            fi
+          done | tee native-package-verification.log
+
+      - name: Build debug APK
+        id: apk_build
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle -p android :app:assembleDebug --stacktrace 2>&1 | tee apk-build.log
+
+      - name: Extract APK build failure
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '=== first Gradle failure ==='
+            grep -n -m1 -E '(^|[[:space:]])(FAILURE:|error:|Execution failed for task)' apk-build.log || true
+            echo '=== final 160 lines ==='
+            tail -n 160 apk-build.log || true
+          } | tee apk-first-failure.txt
+
+      - name: Upload APK diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ascension-android-apk-diagnostics
+          path: |
+            apk-build.log
+            apk-first-failure.txt
+            native-package-verification.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Fail if APK build failed
+        if: steps.apk_build.outcome != 'success'
+        run: exit 1
+
+      - name: Verify APK contents and 16 KiB packaging
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          test -f "$APK"
+
+          "$ANDROID_HOME/build-tools/${BUILD_TOOLS_VERSION}/aapt" dump badging "$APK" | tee apk-badging.txt
+          "$ANDROID_HOME/build-tools/${BUILD_TOOLS_VERSION}/zipalign" -c -P 16 -v 4 "$APK" | tee apk-zipalign.txt
+
+          for name in libascension.so libSDL2.so libc++_shared.so; do
+            unzip -l "$APK" "lib/arm64-v8a/$name" | grep -q "lib/arm64-v8a/$name"
+          done
+
+          if unzip -l "$APK" | grep -qE '(^|[[:space:]])[^[:space:]]*\.(z64|n64|v64)([[:space:]]|$)'; then
+            echo "Forbidden ROM payload found inside APK" >&2
+            exit 1
+          fi
+
+      - name: Upload installable debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: goldeneye-ascension-android-v1-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload native libraries
         uses: actions/upload-artifact@v4
         with:
           name: ascension-android-arm64-native
-          path: build-android-arm64/libascension.so
+          path: |
+            android/app/src/main/jniLibs/arm64-v8a/libascension.so
+            android/app/src/main/jniLibs/arm64-v8a/libSDL2.so
+            android/app/src/main/jniLibs/arm64-v8a/libc++_shared.so
           if-no-files-found: error
           retention-days: 14
