@@ -28,7 +28,24 @@
 #define _PORT_SHIM_OS_H_
 
 #if defined(PORT)
+
+/* Bionic exposes errno as the macro `(*__errno())`. The N64 SDK header has
+ * three structure members literally named `errno`; if the host macro leaks
+ * into that header, Clang rewrites the member declarators into function calls.
+ * Hide only the host macro while parsing the legacy header, then restore it so
+ * Android code keeps the normal thread-local errno contract. */
+#    if defined(__ANDROID__) && defined(errno)
+#        pragma push_macro("errno")
+#        undef errno
+#        define ASCENSION_ANDROID_RESTORE_ERRNO_MACRO 1
+#    endif
+
 #    include "include/PR/os.h"
+
+#    if defined(ASCENSION_ANDROID_RESTORE_ERRNO_MACRO)
+#        pragma pop_macro("errno")
+#        undef ASCENSION_ANDROID_RESTORE_ERRNO_MACRO
+#    endif
 
 #    undef OS_K0_TO_PHYSICAL
 #    define OS_K0_TO_PHYSICAL(x) ((u32)((char *)(x) - 0x70000000))
