@@ -28,8 +28,6 @@ def main() -> int:
     original = PATH.read_text(encoding="utf-8")
     text = original
 
-    # The insertion intentionally keeps kCapture, so key idempotence off the
-    # symbol we add rather than off the retained anchor.
     if "static const char *const kControlPreset[]" in text:
         print("OK: control preset names already applied")
     else:
@@ -41,12 +39,14 @@ def main() -> int:
             "control preset names",
         )
 
-    # Later patchers are allowed to insert additional INPUT rows around these
-    # entries. Presence of both owned config keys is the stable proof that this
-    # patch has already been applied; requiring the original adjacency would
-    # make a second pack run fail or duplicate rows.
-    if ' .key="Input.ControlPreset"' in text and ' .key="Input.DedicatedCrouch"' in text:
-        print("OK: F10 control rows already applied")
+    # ControlPreset may already be owned by the current F10 overlay. In that
+    # case only add the missing DedicatedCrouch row before MouseAimSpeed.
+    if ' .key="Input.DedicatedCrouch"' in text:
+        print("OK: F10 dedicated crouch row already applied")
+    elif ' .key="Input.ControlPreset"' in text:
+        anchor = '''    { .key="Input.MouseAimSpeed",  .label="Mouse aim speed",\n'''
+        replacement = '''    { .key="Input.DedicatedCrouch", .label="Dedicated crouch",\n      .help="Enable the Ascension crouch shortcut for Hybrid/Modern.", .category=CAT_INPUT,\n      .kind=ROW_TOGGLE, .step=1, .names=kOnOff, .resetValue=1 },\n\n    { .key="Input.MouseAimSpeed",  .label="Mouse aim speed",\n'''
+        text = replace_once(text, anchor, replacement, "F10 dedicated crouch row")
     else:
         anchor = '''    /* INPUT */\n    { .key="Input.MouseAimSpeed",  .label="Mouse aim speed",\n'''
         replacement = '''    /* INPUT */\n    { .key="Input.ControlPreset", .label="Control preset",\n      .help="Classic, Hybrid or Modern PC controls.", .category=CAT_INPUT,\n      .kind=ROW_ENUM, .step=1, .names=kControlPreset, .resetValue=0 },\n\n    { .key="Input.DedicatedCrouch", .label="Dedicated crouch",\n      .help="Enable the Ascension crouch shortcut for Hybrid/Modern.", .category=CAT_INPUT,\n      .kind=ROW_TOGGLE, .step=1, .names=kOnOff, .resetValue=1 },\n\n    { .key="Input.MouseAimSpeed",  .label="Mouse aim speed",\n'''
