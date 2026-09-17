@@ -6,6 +6,12 @@
 #include <stdbool.h>
 #endif
 
+/* gfx_run consumes an N64 display-list command stream. Gfx is defined by
+ * PR/gbi.h; include it here instead of relying on each caller to provide the
+ * type transitively. This keeps gfx_api.h self-contained in both C and C++.
+ */
+#include <PR/gbi.h>
+
 #include "gfx_rendering_api.h"
 #include "gfx_window_manager_api.h"
 
