@@ -193,6 +193,74 @@ jobs:
             unzip -l "$APK" "lib/arm64-v8a/$name" | grep -q "lib/arm64-v8a/$name"
           done
 
+          ASCENSION_SO="android/app/src/main/jniLibs/arm64-v8a/libascension.so"
+          JNI_SYMBOLS="$(readelf -Ws "$ASCENSION_SO" | awk '/Java_com_muka_ascension_NativeInput_/ { print $8 }' | sort -u)"
+          test "$(printf '%s\n' "$JNI_SYMBOLS" | sed '/^$/d' | wc -l)" -eq 6
+          for method in setMove setLook addGyro setButton setTouchActive reset; do
+            printf '%s\n' "$JNI_SYMBOLS" | grep -qx "Java_com_muka_ascension_NativeInput_$method"
+          done
+          if readelf -Ws "$ASCENSION_SO" | grep -q 'Java_com_mukasanches_ascension_NativeInput_'; then
+            echo "Stale NativeInput JNI package prefix found" >&2
+            exit 1
+          fi
+
+          : > apk-dex-strings.txt
+          while IFS= read -r dex; do
+            unzip -p "$APK" "$dex" | strings >> apk-dex-strings.txt
+          done < <(unzip -Z1 "$APK" | grep -E '^classes[0-9]*\.dex            echo "Forbidden ROM payload found inside APK" >&2
+            exit 1
+          fi
+
+      - name: Upload installable debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: goldeneye-ascension-android-v1-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload native libraries
+        uses: actions/upload-artifact@v4
+        with:
+          name: ascension-android-arm64-native
+          path: |
+            android/app/src/main/jniLibs/arm64-v8a/libascension.so
+            android/app/src/main/jniLibs/arm64-v8a/libSDL2.so
+            android/app/src/main/jniLibs/arm64-v8a/libc++_shared.so
+          if-no-files-found: error
+          retention-days: 14
+)
+          for cls in GameActivity MobileControlsView NativeInput; do
+            grep -q "Lcom/muka/ascension/$cls;" apk-dex-strings.txt
+          done
+
+          CONVERTER_ZIP="$(mktemp)"
+          unzip -p "$APK" assets/ascension_converter.zip > "$CONVERTER_ZIP"
+          test "$(unzip -Z1 "$CONVERTER_ZIP" | grep -ci 'modelfileheader\.inc\.c            echo "Forbidden ROM payload found inside APK" >&2
+            exit 1
+          fi
+
+      - name: Upload installable debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: goldeneye-ascension-android-v1-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload native libraries
+        uses: actions/upload-artifact@v4
+        with:
+          name: ascension-android-arm64-native
+          path: |
+            android/app/src/main/jniLibs/arm64-v8a/libascension.so
+            android/app/src/main/jniLibs/arm64-v8a/libSDL2.so
+            android/app/src/main/jniLibs/arm64-v8a/libc++_shared.so
+          if-no-files-found: error
+          retention-days: 14
+)" -eq 80
+          rm -f "$CONVERTER_ZIP"
+
           if unzip -l "$APK" | grep -qE '(^|[[:space:]])[^[:space:]]*\.(z64|n64|v64)([[:space:]]|$)'; then
             echo "Forbidden ROM payload found inside APK" >&2
             exit 1
