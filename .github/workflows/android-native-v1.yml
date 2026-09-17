@@ -311,25 +311,38 @@ jobs:
             -no-snapshot-load
             -no-snapshot-save
           script: |
-            set -euo pipefail
+            set -eu
 
             APK="$(find runtime-apk -type f -name '*.apk' -print -quit)"
             test -n "$APK"
             test -f "$APK"
 
             adb wait-for-device
-            adb shell getprop ro.build.version.sdk | tee smoke-sdk.txt
-            adb shell getprop ro.product.cpu.abilist | tee smoke-abis.txt
-            adb shell getconf PAGE_SIZE | tee smoke-page-size.txt || true
+            adb shell getprop ro.build.version.sdk > smoke-sdk.txt
+            cat smoke-sdk.txt
+            adb shell getprop ro.product.cpu.abilist > smoke-abis.txt
+            cat smoke-abis.txt
+            adb shell getconf PAGE_SIZE > smoke-page-size.txt 2>&1 || true
+            cat smoke-page-size.txt
 
-            adb install -r "$APK" | tee smoke-install.txt
+            if ! adb install -r "$APK" > smoke-install.txt 2>&1; then
+              cat smoke-install.txt
+              exit 1
+            fi
+            cat smoke-install.txt
+
             adb logcat -c
             adb shell am force-stop com.muka.ascension || true
 
-            adb shell am start -W \
+            if ! adb shell am start -W \
               -n com.muka.ascension/.LauncherActivity \
               --ez ascension.selftest true \
-              | tee smoke-activity.txt
+              > smoke-activity.txt 2>&1; then
+              cat smoke-activity.txt
+              adb logcat -d -v threadtime > smoke-logcat.txt || true
+              exit 1
+            fi
+            cat smoke-activity.txt
 
             ok=0
             for i in $(seq 1 45); do
