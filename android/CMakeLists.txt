@@ -134,6 +134,15 @@ file(GLOB_RECURSE SRC_GAME "${ASCENSION_ROOT}/src/game/*.c")
 list(REMOVE_ITEM SRC_GAME
   "${ASCENSION_ROOT}/src/game/decompress.c"
   "${ASCENSION_ROOT}/src/game/zlib.c")
+
+# One decomp-era call in gunfire.c intentionally passes a localized string as
+# sprintf's format. Android Clang promotes -Wformat-security to an error. Keep
+# the diagnostic visible but non-fatal for this translation unit only while
+# the ARM64 port is brought up; do not weaken format-security project-wide.
+set_source_files_properties(
+  "${ASCENSION_ROOT}/src/game/gunfire.c"
+  PROPERTIES COMPILE_OPTIONS "-Wno-error=format-security")
+
 file(GLOB SRC_LIBAUDIO "${ASCENSION_ROOT}/src/libultra/audio/*.c")
 file(GLOB SRC_LIBULTRARE_AUDIO "${ASCENSION_ROOT}/src/libultrare/audio/*.c")
 file(GLOB SRC_GU "${ASCENSION_ROOT}/src/libultra/gu/*.c")
