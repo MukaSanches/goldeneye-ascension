@@ -215,22 +215,20 @@ public final class MobileControlsView extends View {
     }
 
     private void updateLeft(float x, float y) {
-        PointF p = clampedKnob(leftOrigin, x, y);
-        leftKnob.set(p.x, p.y);
+        setClampedKnob(leftOrigin, leftKnob, x, y);
         NativeInput.setMove(
                 (leftKnob.x - leftOrigin.x) / stickRadius,
                 (leftKnob.y - leftOrigin.y) / stickRadius);
     }
 
     private void updateRight(float x, float y) {
-        PointF p = clampedKnob(rightOrigin, x, y);
-        rightKnob.set(p.x, p.y);
+        setClampedKnob(rightOrigin, rightKnob, x, y);
         NativeInput.setLook(
                 (rightKnob.x - rightOrigin.x) / stickRadius,
                 (rightKnob.y - rightOrigin.y) / stickRadius);
     }
 
-    private PointF clampedKnob(PointF origin, float x, float y) {
+    private void setClampedKnob(PointF origin, PointF knob, float x, float y) {
         float dx = x - origin.x;
         float dy = y - origin.y;
         float len = (float) Math.hypot(dx, dy);
@@ -239,7 +237,13 @@ public final class MobileControlsView extends View {
             dx *= scale;
             dy *= scale;
         }
-        return new PointF(origin.x + dx, origin.y + dy);
+        knob.set(origin.x + dx, origin.y + dy);
+    }
+
+    public boolean hasActiveTouch() {
+        return leftPointer != NO_POINTER
+                || rightPointer != NO_POINTER
+                || pointerButtons.size() > 0;
     }
 
     private void releasePointer(int id) {
@@ -290,6 +294,12 @@ public final class MobileControlsView extends View {
             }
         }
         return false;
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        resetAll();
+        super.onDetachedFromWindow();
     }
 
     private float dp(float value) {

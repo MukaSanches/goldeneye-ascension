@@ -18,6 +18,8 @@ public final class GameActivity extends SDLActivity implements SensorEventListen
 
     private SensorManager sensorManager;
     private Sensor gyroscope;
+    private MobileControlsView controls;
+    private boolean nativeInputReady;
     private long lastGyroTimestampNs;
 
     @Override
@@ -30,9 +32,15 @@ public final class GameActivity extends SDLActivity implements SensorEventListen
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // SDLActivity returns early with its own error dialog if native
+        // libraries fail to load. Do not mask that useful error with an NPE.
+        if (mLayout == null) {
+            return;
+        }
+
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-        MobileControlsView controls = new MobileControlsView(this);
+        controls = new MobileControlsView(this);
         RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(
                 RelativeLayout.LayoutParams.MATCH_PARENT,
                 RelativeLayout.LayoutParams.MATCH_PARENT);
@@ -47,11 +55,15 @@ public final class GameActivity extends SDLActivity implements SensorEventListen
         // Mobile input is a permanent additive source while this Activity is
         // alive. Zero-valued touch axes never override a stronger SDL gamepad.
         NativeInput.setTouchActive(true);
+        nativeInputReady = true;
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        if (!nativeInputReady) {
+            return;
+        }
         NativeInput.setTouchActive(true);
         lastGyroTimestampNs = 0L;
         if (sensorManager != null && gyroscope != null) {
@@ -65,7 +77,9 @@ public final class GameActivity extends SDLActivity implements SensorEventListen
             sensorManager.unregisterListener(this);
         }
         lastGyroTimestampNs = 0L;
-        NativeInput.reset();
+        if (nativeInputReady) {
+            NativeInput.reset();
+        }
         super.onPause();
     }
 
@@ -74,13 +88,17 @@ public final class GameActivity extends SDLActivity implements SensorEventListen
         if (sensorManager != null) {
             sensorManager.unregisterListener(this);
         }
-        NativeInput.reset();
+        if (nativeInputReady) {
+            NativeInput.reset();
+        }
         super.onDestroy();
     }
 
     @Override
     public void onSensorChanged(SensorEvent event) {
-        if (event.sensor.getType() != Sensor.TYPE_GYROSCOPE) {
+        if (!nativeInputReady || controls == null || !controls.hasActiveTouch()
+                || event.sensor.getType() != Sensor.TYPE_GYROSCOPE) {
+            lastGyroTimestampNs = 0L;
             return;
         }
 
