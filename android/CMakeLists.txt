@@ -252,6 +252,21 @@ file(WRITE "${OPTIONS_ANDROID_SOURCE}" "${OPTIONS_ANDROID_TEXT}")
 list(REMOVE_ITEM SRC_GAME "${OPTIONS_SOURCE}")
 list(APPEND SRC_GAME "${OPTIONS_ANDROID_SOURCE}")
 
+# spectrum.c uses a weak alias for the first byte of spec_keyboard_buffer.
+# Clang's weak-alias ambiguity affects this reference too; target the aliased
+# storage directly on Android so behavior is identical without suppressions.
+set(SPECTRUM_SOURCE "${ASCENSION_ROOT}/src/game/spectrum.c")
+set(SPECTRUM_ANDROID_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/generated/spectrum_android.c")
+file(READ "${SPECTRUM_SOURCE}" SPECTRUM_ANDROID_TEXT)
+ascension_android_replace_required(
+  SPECTRUM_ANDROID_TEXT
+  "spec_keyboard_row_caps_z_x_c_v  = 0xff;"
+  "spec_keyboard_buffer[0]          = 0xff;"
+  "spectrum keyboard weak alias")
+file(WRITE "${SPECTRUM_ANDROID_SOURCE}" "${SPECTRUM_ANDROID_TEXT}")
+list(REMOVE_ITEM SRC_GAME "${SPECTRUM_SOURCE}")
+list(APPEND SRC_GAME "${SPECTRUM_ANDROID_SOURCE}")
+
 file(GLOB SRC_LIBAUDIO "${ASCENSION_ROOT}/src/libultra/audio/*.c")
 file(GLOB SRC_LIBULTRARE_AUDIO "${ASCENSION_ROOT}/src/libultrare/audio/*.c")
 file(GLOB SRC_GU "${ASCENSION_ROOT}/src/libultra/gu/*.c")
