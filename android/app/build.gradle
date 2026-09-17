@@ -76,7 +76,7 @@ def converterTask = tasks.register('prepareAscensionConverterAsset', Zip) {
     preserveFileTimestamps = false
 
     from(rootProject.file('../tools_pc')) {
-        include 'd43_emit.py', 'd69_emit.py'
+        include 'd43_emit.py', 'd69_emit.py', 'd88_emit.py', 'd88_propdefs.py', 'd125_check.py'
         into 'tools_pc'
     }
     from(rootProject.file('../scripts/filelist.u.csv')) {
@@ -124,6 +124,9 @@ def verifyConverterTask = tasks.register('verifyAscensionConverterAsset') {
         [
             'tools_pc/d43_emit.py',
             'tools_pc/d69_emit.py',
+            'tools_pc/d88_emit.py',
+            'tools_pc/d88_propdefs.py',
+            'tools_pc/d125_check.py',
             'scripts/filelist.u.csv',
             'assets/obseg/file_resource_table.inc.c'
         ].each { requiredPath ->
