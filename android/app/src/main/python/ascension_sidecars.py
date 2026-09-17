@@ -7,13 +7,14 @@ then this module executes them exactly as the desktop tooling does.
 from __future__ import annotations
 
 import csv
+import hashlib
 import os
 import runpy
 import shutil
 import sys
 
 REGION = "ntsc-final"
-GENERATOR_VERSION = "android-v1-sidecars-1"
+MARKER_SCHEMA = "android-v1-sidecars-fingerprint-v1"
 _MARKER = "data/.ascension_sidecars.version"
 
 
@@ -58,12 +59,57 @@ def _outputs_valid(home: str) -> bool:
     )
 
 
+def _generator_inputs(home: str) -> list[str]:
+    fixed = [
+        "tools_pc/d43_emit.py",
+        "tools_pc/d69_emit.py",
+        "scripts/filelist.u.csv",
+        "assets/obseg/file_resource_table.inc.c",
+    ]
+    paths = [os.path.join(home, rel) for rel in fixed]
+
+    assets_root = os.path.join(home, "assets")
+    if os.path.isdir(assets_root):
+        for root, _dirs, files in os.walk(assets_root):
+            for name in files:
+                if name.lower().endswith("modelfileheader.inc.c"):
+                    paths.append(os.path.join(root, name))
+
+    return sorted(paths, key=lambda p: os.path.relpath(p, home).replace(os.sep, "/"))
+
+
+def _generator_fingerprint(home: str) -> str:
+    digest = hashlib.sha256()
+    inputs = _generator_inputs(home)
+    if len(inputs) < 5:
+        raise RuntimeError("converter workspace is incomplete")
+
+    for path in inputs:
+        if not os.path.isfile(path):
+            raise RuntimeError(
+                "converter workspace file missing: "
+                + os.path.relpath(path, home).replace(os.sep, "/")
+            )
+        rel = os.path.relpath(path, home).replace(os.sep, "/").encode("utf-8")
+        digest.update(len(rel).to_bytes(4, "big"))
+        digest.update(rel)
+        with open(path, "rb") as f:
+            while True:
+                block = f.read(128 * 1024)
+                if not block:
+                    break
+                digest.update(block)
+
+    return MARKER_SCHEMA + ":" + digest.hexdigest()
+
+
 def _marker_valid(home: str) -> bool:
     marker = os.path.join(home, _MARKER)
     try:
+        expected = _generator_fingerprint(home)
         with open(marker, encoding="utf-8") as f:
-            return f.read().strip() == GENERATOR_VERSION
-    except OSError:
+            return f.read().strip() == expected
+    except (OSError, RuntimeError):
         return False
 
 
@@ -101,9 +147,10 @@ def _clear_generated(home: str) -> None:
 def _write_marker(home: str) -> None:
     marker = os.path.join(home, _MARKER)
     os.makedirs(os.path.dirname(marker), exist_ok=True)
+    value = _generator_fingerprint(home)
     temp = marker + ".tmp"
     with open(temp, "w", encoding="utf-8") as f:
-        f.write(GENERATOR_VERSION + "\n")
+        f.write(value + "\n")
         f.flush()
         os.fsync(f.fileno())
     os.replace(temp, marker)
@@ -132,5 +179,5 @@ def generate(home: str) -> str:
 
     _write_marker(home)
     if not ready(home):
-        raise RuntimeError("sidecar generation marker validation failed")
+        raise RuntimeError("sidecar generation fingerprint validation failed")
     return "generated"
