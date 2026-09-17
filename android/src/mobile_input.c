@@ -70,25 +70,25 @@ void mobileInputReset(void)
 }
 
 JNIEXPORT void JNICALL
-Java_com_mukasanches_ascension_NativeInput_setMove(JNIEnv *env, jclass cls, jfloat x, jfloat y)
+Java_com_muka_ascension_NativeInput_setMove(JNIEnv *env, jclass cls, jfloat x, jfloat y)
 { (void)env; (void)cls; mobileInputSetMove(x, y); }
 
 JNIEXPORT void JNICALL
-Java_com_mukasanches_ascension_NativeInput_setLook(JNIEnv *env, jclass cls, jfloat x, jfloat y)
+Java_com_muka_ascension_NativeInput_setLook(JNIEnv *env, jclass cls, jfloat x, jfloat y)
 { (void)env; (void)cls; mobileInputSetLook(x, y); }
 
 JNIEXPORT void JNICALL
-Java_com_mukasanches_ascension_NativeInput_addGyro(JNIEnv *env, jclass cls, jfloat x, jfloat y)
+Java_com_muka_ascension_NativeInput_addGyro(JNIEnv *env, jclass cls, jfloat x, jfloat y)
 { (void)env; (void)cls; mobileInputAddGyro(x, y); }
 
 JNIEXPORT void JNICALL
-Java_com_mukasanches_ascension_NativeInput_setButton(JNIEnv *env, jclass cls, jint button, jboolean down)
+Java_com_muka_ascension_NativeInput_setButton(JNIEnv *env, jclass cls, jint button, jboolean down)
 { (void)env; (void)cls; mobileInputSetButton((uint32_t)button, down ? 1 : 0); }
 
 JNIEXPORT void JNICALL
-Java_com_mukasanches_ascension_NativeInput_setTouchActive(JNIEnv *env, jclass cls, jboolean active)
+Java_com_muka_ascension_NativeInput_setTouchActive(JNIEnv *env, jclass cls, jboolean active)
 { (void)env; (void)cls; mobileInputSetTouchActive(active ? 1 : 0); }
 
 JNIEXPORT void JNICALL
-Java_com_mukasanches_ascension_NativeInput_reset(JNIEnv *env, jclass cls)
+Java_com_muka_ascension_NativeInput_reset(JNIEnv *env, jclass cls)
 { (void)env; (void)cls; mobileInputReset(); }
