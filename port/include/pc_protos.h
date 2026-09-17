@@ -1,11 +1,11 @@
 /*
- * pc_protos.h - PC-port-only prototypes for implicitly declared functions.
+ * pc_protos.h - host-port prototypes for implicitly declared functions.
  *
  * D38 (docs/internals.md section F): the decomp has ~72 translation units
  * that call ~400 functions without any visible prototype (missing #include of
  * the declaring header). Under C11 an implicit declaration assumes `int f()`,
- * which on N64 (MIPS, 32-bit pointers) is harmless, but on x86-64 it silently
- * truncates every pointer (and 64-bit scalar) return value to 32 bits - e.g.
+ * which on N64 (MIPS, 32-bit pointers) is harmless, but on 64-bit hosts it can
+ * silently truncate pointer (and 64-bit scalar) return values to 32 bits - e.g.
  * tokenFind() in set_mt_tex_alloc() returned a low-32-bit "pointer" that then
  * faulted in strtol().
  *
@@ -13,9 +13,9 @@
  * an empty parameter list (no argument checking, no dependency on the
  * parameter types' headers). Empty-paren declarations are compatible with the
  * real prototypes elsewhere, so this is purely additive: it changes only the
- * width of the returned value, restoring N64-correct semantics on x86-64.
+ * width of the returned value, restoring N64-correct semantics on 64-bit hosts.
  *
- * Anchored in port/shim/PR/ucode.h (PC-only shim): ucode.h is the LAST include
+ * Anchored in port/shim/PR/ucode.h (port-only shim): ucode.h is the LAST include
  * of <ultra64.h>, so by the time this header runs every PR type libaudio.h /
  * gbi.h needs is already defined. (Anchoring earlier, e.g. in gbi.h, poisons
  * libaudio.h: the bondtypes chain reaches snd.h -> <PR/libaudio.h> while
@@ -31,10 +31,10 @@
 #ifndef _PC_PROTOS_H_
 #define _PC_PROTOS_H_
 
-#if defined(PORT) && defined(__x86_64__) && !defined(__cplusplus)
+#if defined(PORT) && (defined(__x86_64__) || defined(__aarch64__)) && !defined(__cplusplus)
 
-#include <PR/ultratypes.h> /* u8..s32, f32, size_t (host on PC) */
-#include <PR/gbi.h>        /* Gfx, Mtx, Vtx, Light (shimmed on PC) */
+#include <PR/ultratypes.h> /* u8..s32, f32, size_t */
+#include <PR/gbi.h>        /* Gfx, Mtx, Vtx, Light */
 #include "bondtypes.h"   /* coord3d, PropRecord, ObjectRecord, ModelFileHeader, bool, ITEM_IDS */
 #include "bondconstants.h" /* MPSCENARIOS, OBJECTIVESTATUS, PROP, DIFFICULTY, TICKOP */
 #include "game/file.h"   /* save_data */
@@ -46,15 +46,14 @@ void assert();
 #pragma pop_macro("assert")
 
 /* D38: host byte-order functions replacing the CharArrayTo16/32 macros that
- * src/bondconstants.h used to define (neutralized in port/shim/bondconstants.h
- * because they break <winsock.h> parsing; see D38). Declared only when
- * winsock has not already declared them, so TUs that include <windows.h>
- * before <ultra64.h> don't get a dllimport redeclaration warning. Defined in
- * port/src/pc_netorder.c (little-endian byte swap == CharArrayTo16/32). */
-#if !defined(__WINSOCK_H) && !defined(_WINSOCK2_H)
-/* Match winsock's own signatures (u_short/u_long) so TUs that parse
- * <windows.h> later redeclare compatibly; on LLP64 u_long is 64-bit and the
- * high bits are unused for the 16/32-bit values game code passes. */
+ * src/bondconstants.h used to define (neutralized in port/shim/bondconstants.h).
+ * Windows x64 uses Winsock's unsigned-long spelling; Android AArch64 is LP64
+ * and Bionic declares ntohl(uint32_t), so keep the ABI-specific signatures
+ * distinct instead of pretending AArch64 is x86-64. */
+#if defined(__aarch64__)
+unsigned short ntohs(unsigned short);
+unsigned int ntohl(unsigned int);
+#elif !defined(__WINSOCK_H) && !defined(_WINSOCK2_H)
 unsigned short ntohs(unsigned short);
 unsigned long ntohl(unsigned long);
 #endif
@@ -324,7 +323,13 @@ void * memaAlloc();
 void memaFree();
 s32 memaGetLongestFree();
 int memcmp();
+#if defined(__ANDROID__)
+/* Bionic's FORTIFY wrappers are overloadable. Match that attribute instead of
+ * shadowing the fortified declaration with an old K&R prototype. */
+void *memcpy(void *, const void *, size_t) __attribute__((overloadable));
+#else
 void * memcpy();
+#endif
 u32 modelFindNextProjectileHitCandidate();
 void modelGetXYExtents();
 s32 modelLoad();
@@ -394,9 +399,7 @@ s32 sizepropdef();
 Gfx * skyRender();
 void skySetStageNum();
 void skyTick();
-/* Match the C library prototype. size_t (from <PR/ultratypes.h> above) is
- * `unsigned long long` on MinGW but `unsigned long` on Linux/glibc — spelling
- * it `size_t` keeps this compatible with both libcs' <stdio.h>. */
+/* Match the C library prototype. size_t keeps this compatible across host ABIs. */
 int snprintf(char *, size_t, const char *, ...);
 PropRecord * something_with_generating_object();
 void speedgraphInit();
@@ -407,11 +410,23 @@ bool stanTileHasZeroArea();
 void stop_recording_ramrom();
 void store_favorite_weapon_current_player();
 void store_osgetcount();
+#if defined(__ANDROID__)
+char *strcat(char *, const char *) __attribute__((overloadable));
+#else
 char * strcat();
+#endif
 int strcmp();
+#if defined(__ANDROID__)
+char *strcpy(char *, const char *) __attribute__((overloadable));
+#else
 char * strcpy();
+#endif
 size_t strlen();
+#if defined(__ANDROID__)
+char *strncpy(char *, const char *, size_t) __attribute__((overloadable));
+#else
 char * strncpy();
+#endif
 long int strtol();
 void sub_GAME_7F008DE4();
 s32 sub_GAME_7F03DB70();
@@ -477,5 +492,5 @@ Gfx * watchRenderControllerOpaque();
 u32 weaponLoadProjectileModels();
 void zbufSetBuffer();
 
-#endif /* PORT && __x86_64__ && !__cplusplus */
+#endif /* PORT && 64-bit host && !__cplusplus */
 #endif /* _PC_PROTOS_H_ */
