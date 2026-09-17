@@ -6,6 +6,7 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.PointF;
 import android.util.SparseIntArray;
+import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
 
@@ -13,14 +14,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Transparent multi-touch FPS control layer rendered above SDL.
+ * Transparent Android-native FPS control layer rendered above SDL.
  *
- * The left thumb is a floating movement stick. The right thumb is a floating
- * look stick. Buttons are hit-tested before either stick so multiple fingers
- * can move, aim and fire simultaneously.
+ * Movement remains a floating analog stick. The right side is intentionally
+ * NOT an N64-style stick: finger motion is converted into relative look
+ * deltas, like a modern mobile shooter. The native input layer then feeds
+ * those deltas through Ascension's mode-aware mouse-look path.
  */
 public final class MobileControlsView extends View {
     private static final int NO_POINTER = -1;
+    private static final float LOOK_PIXEL_GAIN = 0.22f;
 
     private static final class TouchButton {
         final float x;
@@ -51,6 +54,7 @@ public final class MobileControlsView extends View {
     private final PointF leftKnob = new PointF();
     private final PointF rightOrigin = new PointF();
     private final PointF rightKnob = new PointF();
+    private final PointF rightLast = new PointF();
 
     private float stickRadius;
     private float knobRadius;
@@ -80,7 +84,6 @@ public final class MobileControlsView extends View {
         float medium = big * 0.78f;
         float small = big * 0.64f;
 
-        // Keep the center-right region free for the floating look stick.
         buttons.add(new TouchButton(0.905f, 0.685f, big, "TIRO", NativeInput.BTN_FIRE));
         buttons.add(new TouchButton(0.785f, 0.805f, medium, "MIRA", NativeInput.BTN_AIM));
         buttons.add(new TouchButton(0.865f, 0.485f, medium, "USAR", NativeInput.BTN_USE));
@@ -96,7 +99,7 @@ public final class MobileControlsView extends View {
         super.onDraw(canvas);
 
         drawIdleStick(canvas, getWidth() * 0.175f, getHeight() * 0.735f, "MOV.");
-        drawIdleStick(canvas, getWidth() * 0.555f, getHeight() * 0.735f, "OLHAR");
+        drawIdleStick(canvas, getWidth() * 0.555f, getHeight() * 0.735f, "DESLIZE");
 
         if (leftPointer != NO_POINTER) {
             drawActiveStick(canvas, leftOrigin, leftKnob);
@@ -119,10 +122,13 @@ public final class MobileControlsView extends View {
             canvas.drawCircle(cx, cy, button.radius, fillPaint);
             canvas.drawCircle(cx, cy, button.radius, strokePaint);
 
-            textPaint.setColor(pressed ? Color.rgb(18, 18, 20) : Color.argb(220, 245, 235, 196));
+            textPaint.setColor(pressed
+                    ? Color.rgb(18, 18, 20)
+                    : Color.argb(220, 245, 235, 196));
             textPaint.setTextSize(Math.max(dp(9), button.radius * 0.34f));
             Paint.FontMetrics fm = textPaint.getFontMetrics();
-            canvas.drawText(button.label, cx, cy - (fm.ascent + fm.descent) * 0.5f, textPaint);
+            canvas.drawText(button.label, cx,
+                    cy - (fm.ascent + fm.descent) * 0.5f, textPaint);
         }
     }
 
@@ -156,12 +162,14 @@ public final class MobileControlsView extends View {
         switch (action) {
             case MotionEvent.ACTION_DOWN:
             case MotionEvent.ACTION_POINTER_DOWN:
-                assignPointer(event.getPointerId(index), event.getX(index), event.getY(index));
+                assignPointer(
+                        event.getPointerId(index), event.getX(index), event.getY(index));
                 break;
 
             case MotionEvent.ACTION_MOVE:
                 for (int i = 0; i < event.getPointerCount(); i++) {
-                    updatePointer(event.getPointerId(i), event.getX(i), event.getY(i));
+                    updatePointer(
+                            event.getPointerId(i), event.getX(i), event.getY(i));
                 }
                 break;
 
@@ -171,13 +179,14 @@ public final class MobileControlsView extends View {
                 break;
 
             case MotionEvent.ACTION_CANCEL:
-                resetAll();
+                cancelAllInputs();
                 break;
 
             default:
                 break;
         }
 
+        syncTouchActive();
         invalidate();
         return true;
     }
@@ -187,6 +196,7 @@ public final class MobileControlsView extends View {
         if (button != 0) {
             pointerButtons.put(id, button);
             NativeInput.setButton(button, true);
+            performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
             return;
         }
 
@@ -202,7 +212,7 @@ public final class MobileControlsView extends View {
             rightPointer = id;
             rightOrigin.set(x, y);
             rightKnob.set(x, y);
-            updateRight(x, y);
+            rightLast.set(x, y);
         }
     }
 
@@ -222,10 +232,15 @@ public final class MobileControlsView extends View {
     }
 
     private void updateRight(float x, float y) {
+        float dx = x - rightLast.x;
+        float dy = y - rightLast.y;
+        rightLast.set(x, y);
+
+        // Visual knob remains bounded, but gameplay receives relative deltas.
         setClampedKnob(rightOrigin, rightKnob, x, y);
         NativeInput.setLook(
-                (rightKnob.x - rightOrigin.x) / stickRadius,
-                (rightKnob.y - rightOrigin.y) / stickRadius);
+                clamp(dx * LOOK_PIXEL_GAIN, -18.0f, 18.0f),
+                clamp(dy * LOOK_PIXEL_GAIN, -18.0f, 18.0f));
     }
 
     private void setClampedKnob(PointF origin, PointF knob, float x, float y) {
@@ -246,6 +261,10 @@ public final class MobileControlsView extends View {
                 || pointerButtons.size() > 0;
     }
 
+    public boolean isLookGestureActive() {
+        return rightPointer != NO_POINTER;
+    }
+
     private void releasePointer(int id) {
         if (id == leftPointer) {
             leftPointer = NO_POINTER;
@@ -253,7 +272,6 @@ public final class MobileControlsView extends View {
         }
         if (id == rightPointer) {
             rightPointer = NO_POINTER;
-            NativeInput.setLook(0.0f, 0.0f);
         }
 
         int bit = pointerButtons.get(id, 0);
@@ -265,7 +283,7 @@ public final class MobileControlsView extends View {
         }
     }
 
-    private void resetAll() {
+    public void cancelAllInputs() {
         for (int i = 0; i < pointerButtons.size(); i++) {
             NativeInput.setButton(pointerButtons.valueAt(i), false);
         }
@@ -273,7 +291,12 @@ public final class MobileControlsView extends View {
         leftPointer = NO_POINTER;
         rightPointer = NO_POINTER;
         NativeInput.setMove(0.0f, 0.0f);
-        NativeInput.setLook(0.0f, 0.0f);
+        NativeInput.setTouchActive(false);
+        invalidate();
+    }
+
+    private void syncTouchActive() {
+        NativeInput.setTouchActive(hasActiveTouch());
     }
 
     private int hitButton(float x, float y) {
@@ -298,7 +321,7 @@ public final class MobileControlsView extends View {
 
     @Override
     protected void onDetachedFromWindow() {
-        resetAll();
+        cancelAllInputs();
         super.onDetachedFromWindow();
     }
 

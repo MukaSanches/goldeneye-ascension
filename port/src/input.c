@@ -210,6 +210,33 @@ static double mouseSmDX = 0.0, mouseSmDY = 0.0;
 static double mouseDX = 0.0;
 static double mouseDY = 0.0;
 
+/* Relative look injected by non-mouse platforms (Android touch/gyro). The
+ * deltas are consumed by the same mode-aware path as desktop mouse input. */
+static int injectedLookPending = 0;
+static int injectedAimHeld = 0;
+
+void inputInjectRelativeLook(double dx, double dy, int aimHeld)
+{
+    if (!isfinite(dx) || !isfinite(dy)) {
+        return;
+    }
+
+    if (dx > 128.0) dx = 128.0;
+    if (dx < -128.0) dx = -128.0;
+    if (dy > 128.0) dy = 128.0;
+    if (dy < -128.0) dy = -128.0;
+
+    mouseDX += dx;
+    mouseDY += dy;
+    if (mouseDX > 512.0) mouseDX = 512.0;
+    if (mouseDX < -512.0) mouseDX = -512.0;
+    if (mouseDY > 512.0) mouseDY = 512.0;
+    if (mouseDY < -512.0) mouseDY = -512.0;
+
+    injectedLookPending = 1;
+    injectedAimHeld = aimHeld != 0;
+}
+
 /* Mouse-wheel -> weapon cycle: a wheel notch queues a short A-button press
  * (GE's default scheme cycles the weapon forward on a fresh A edge, invButtons
  * = A_BUTTON, bondview2.c:5162/5326). Held for a couple of polls so the game
@@ -636,7 +663,8 @@ unsigned inputComputePad(int idx, signed char *stick_x, signed char *stick_y)
             button |= GE_CONT_G;
 
         int aimHeld = (mb & SDL_BUTTON(SDL_BUTTON_RIGHT)) ||
-                      actHeld(ks, IA_AIM) || dedicatedCrouch;
+                      actHeld(ks, IA_AIM) || dedicatedCrouch ||
+                      injectedAimHeld;
         if (aimHeld)
             button |= GE_CONT_R;
 
@@ -662,7 +690,7 @@ unsigned inputComputePad(int idx, signed char *stick_x, signed char *stick_y)
          * "look down" convention: mouse-down looks down by default; GE's
          * native pitch is inverted so hipfire down = C-up (GE_CONT_E) and
          * aim-mode down = +stick_y. MouseInvertY flips both. */
-        if (mouseEnabled) {
+        if (mouseEnabled || injectedLookPending) {
             double invert = mouseInvertY ? -1.0 : 1.0;
 
             /* Optional exponential low-pass (mouseSmoothing = blend % of the
@@ -832,6 +860,8 @@ unsigned inputComputePad(int idx, signed char *stick_x, signed char *stick_y)
 
         mouseDX = 0.0;
         mouseDY = 0.0;
+        injectedLookPending = 0;
+        injectedAimHeld = 0;
     }
 
     /* ---- gamepad ---- */

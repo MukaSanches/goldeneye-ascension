@@ -1,30 +1,43 @@
 package com.muka.ascension;
 
+import android.annotation.TargetApi;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.Surface;
+import android.view.View;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.widget.RelativeLayout;
+import android.window.OnBackInvokedCallback;
+import android.window.OnBackInvokedDispatcher;
 
 import org.libsdl.app.SDLActivity;
 
-/** SDL host plus the Android-native mobile control surface. */
+/**
+ * Android-first host for the native GoldenEye engine.
+ *
+ * SDL still owns the GL surface and native thread, while Android owns touch,
+ * gyro, system bars, lifecycle and back navigation.
+ */
 public final class GameActivity extends SDLActivity implements SensorEventListener {
-    private static final float GYRO_YAW_GAIN = 0.45f;
-    private static final float GYRO_PITCH_GAIN = 0.36f;
+    private static final float GYRO_YAW_GAIN = 82.0f;
+    private static final float GYRO_PITCH_GAIN = 70.0f;
+    private static final long BUTTON_PULSE_MS = 90L;
 
     private SensorManager sensorManager;
     private Sensor gyroscope;
     private MobileControlsView controls;
     private boolean nativeInputReady;
     private long lastGyroTimestampNs;
+    private Object backCallback33;
 
     @Override
     protected String[] getLibraries() {
-        // The last library is where SDLActivity resolves SDL_main().
         return new String[] { "SDL2", "ascension" };
     }
 
@@ -33,12 +46,13 @@ public final class GameActivity extends SDLActivity implements SensorEventListen
         super.onCreate(savedInstanceState);
 
         // SDLActivity returns early with its own error dialog if native
-        // libraries fail to load. Do not mask that useful error with an NPE.
+        // libraries fail to load. Preserve that diagnostic.
         if (mLayout == null) {
             return;
         }
 
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        hideSystemBars();
 
         controls = new MobileControlsView(this);
         RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(
@@ -52,9 +66,11 @@ public final class GameActivity extends SDLActivity implements SensorEventListen
             gyroscope = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
         }
 
-        // Mobile input is a permanent additive source while this Activity is
-        // alive. Zero-valued touch axes never override a stronger SDL gamepad.
-        NativeInput.setTouchActive(true);
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerBackCallback33();
+        }
+
+        NativeInput.reset();
         nativeInputReady = true;
     }
 
@@ -64,10 +80,12 @@ public final class GameActivity extends SDLActivity implements SensorEventListen
         if (!nativeInputReady) {
             return;
         }
-        NativeInput.setTouchActive(true);
+
+        hideSystemBars();
         lastGyroTimestampNs = 0L;
         if (sensorManager != null && gyroscope != null) {
-            sensorManager.registerListener(this, gyroscope, SensorManager.SENSOR_DELAY_GAME);
+            sensorManager.registerListener(
+                    this, gyroscope, SensorManager.SENSOR_DELAY_GAME);
         }
     }
 
@@ -77,6 +95,9 @@ public final class GameActivity extends SDLActivity implements SensorEventListen
             sensorManager.unregisterListener(this);
         }
         lastGyroTimestampNs = 0L;
+        if (controls != null) {
+            controls.cancelAllInputs();
+        }
         if (nativeInputReady) {
             NativeInput.reset();
         }
@@ -85,6 +106,9 @@ public final class GameActivity extends SDLActivity implements SensorEventListen
 
     @Override
     protected void onDestroy() {
+        if (Build.VERSION.SDK_INT >= 33) {
+            unregisterBackCallback33();
+        }
         if (sensorManager != null) {
             sensorManager.unregisterListener(this);
         }
@@ -95,8 +119,23 @@ public final class GameActivity extends SDLActivity implements SensorEventListen
     }
 
     @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) {
+            hideSystemBars();
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
+    public void onBackPressed() {
+        pulsePause();
+    }
+
+    @Override
     public void onSensorChanged(SensorEvent event) {
-        if (!nativeInputReady || controls == null || !controls.hasActiveTouch()
+        if (!nativeInputReady || controls == null
+                || !controls.isLookGestureActive()
                 || event.sensor.getType() != Sensor.TYPE_GYROSCOPE) {
             lastGyroTimestampNs = 0L;
             return;
@@ -118,8 +157,8 @@ public final class GameActivity extends SDLActivity implements SensorEventListen
         float pitchRate;
         int rotation = getWindowManager().getDefaultDisplay().getRotation();
 
-        // Sensor axes remain in the device's natural coordinate system. Map
-        // them into screen-space yaw/pitch so both landscape orientations work.
+        // Sensor axes use the device's natural coordinates. Convert them to
+        // the current landscape screen axes before producing relative look.
         switch (rotation) {
             case Surface.ROTATION_90:
                 yawRate = -event.values[0];
@@ -141,13 +180,82 @@ public final class GameActivity extends SDLActivity implements SensorEventListen
         }
 
         NativeInput.addGyro(
-                clamp(yawRate * dt * GYRO_YAW_GAIN, -0.35f, 0.35f),
-                clamp(pitchRate * dt * GYRO_PITCH_GAIN, -0.35f, 0.35f));
+                clamp(yawRate * dt * GYRO_YAW_GAIN, -6.0f, 6.0f),
+                clamp(pitchRate * dt * GYRO_PITCH_GAIN, -6.0f, 6.0f));
     }
 
     @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
-        // No calibration state is required for incremental aiming.
+        // Incremental gyro look needs no calibration state.
+    }
+
+    private void pulsePause() {
+        if (!nativeInputReady) {
+            return;
+        }
+        NativeInput.setTouchActive(true);
+        NativeInput.setButton(NativeInput.BTN_PAUSE, true);
+
+        View host = controls != null ? controls : mLayout;
+        if (host != null) {
+            host.postDelayed(() -> {
+                if (!nativeInputReady) {
+                    return;
+                }
+                NativeInput.setButton(NativeInput.BTN_PAUSE, false);
+                if (controls == null || !controls.hasActiveTouch()) {
+                    NativeInput.setTouchActive(false);
+                }
+            }, BUTTON_PULSE_MS);
+        }
+    }
+
+    private void hideSystemBars() {
+        if (Build.VERSION.SDK_INT >= 30) {
+            hideSystemBars30();
+        } else {
+            hideSystemBarsLegacy();
+        }
+    }
+
+    @TargetApi(30)
+    private void hideSystemBars30() {
+        WindowInsetsController controller = getWindow().getInsetsController();
+        if (controller == null) {
+            return;
+        }
+        controller.setSystemBarsBehavior(
+                WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+        controller.hide(WindowInsets.Type.statusBars()
+                | WindowInsets.Type.navigationBars());
+    }
+
+    @SuppressWarnings("deprecation")
+    private void hideSystemBarsLegacy() {
+        getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                        | View.SYSTEM_UI_FLAG_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+    }
+
+    @TargetApi(33)
+    private void registerBackCallback33() {
+        OnBackInvokedCallback callback = this::pulsePause;
+        getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                OnBackInvokedDispatcher.PRIORITY_DEFAULT, callback);
+        backCallback33 = callback;
+    }
+
+    @TargetApi(33)
+    private void unregisterBackCallback33() {
+        if (backCallback33 instanceof OnBackInvokedCallback) {
+            getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(
+                    (OnBackInvokedCallback) backCallback33);
+            backCallback33 = null;
+        }
     }
 
     private static float clamp(float value, float lo, float hi) {

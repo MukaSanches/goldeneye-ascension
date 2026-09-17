@@ -15,8 +15,16 @@ public final class NativeInput {
     private NativeInput() {}
 
     public static native void setMove(float x, float y);
-    public static native void setLook(float x, float y);
-    public static native void addGyro(float x, float y);
+
+    /**
+     * Add a relative screen-space look delta. Unlike movement this is
+     * consumed once by the next native controller poll.
+     */
+    public static native void setLook(float dx, float dy);
+
+    /** Add a relative gyro look delta, also consumed on the next poll. */
+    public static native void addGyro(float dx, float dy);
+
     public static native void setButton(int button, boolean down);
     public static native void setTouchActive(boolean active);
     public static native void reset();

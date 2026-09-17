@@ -32,7 +32,7 @@ void mobileInputSetLook(float x, float y);
 void mobileInputAddGyro(float x, float y);
 void mobileInputSetButton(uint32_t button, int down);
 void mobileInputSetTouchActive(int active);
-void mobileInputSnapshot(MobileInputSnapshot *out, int consumeGyro);
+void mobileInputSnapshot(MobileInputSnapshot *out, int consumeMotion);
 void mobileInputReset(void);
 
 #ifdef __cplusplus

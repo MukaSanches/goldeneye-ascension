@@ -20,6 +20,7 @@ int  inputReleaseCapture(void);
 int  inputMouseCaptureActive(void);
 void inputSuspendForOverlay(void);
 void inputPostWheel(int notches);
+void inputInjectRelativeLook(double dx, double dy, int aimHeld);
 void inputRescanPads(void);
 
 /* Live F10 keyboard remapping. */

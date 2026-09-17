@@ -14,6 +14,16 @@ static float clampAxis(float v)
     return v;
 }
 
+static float accumulateMotion(float current, float delta)
+{
+    if (delta < -64.0f) delta = -64.0f;
+    if (delta > 64.0f) delta = 64.0f;
+    current += delta;
+    if (current < -256.0f) current = -256.0f;
+    if (current > 256.0f) current = 256.0f;
+    return current;
+}
+
 void mobileInputSetMove(float x, float y)
 {
     pthread_mutex_lock(&g_lock);
@@ -25,16 +35,16 @@ void mobileInputSetMove(float x, float y)
 void mobileInputSetLook(float x, float y)
 {
     pthread_mutex_lock(&g_lock);
-    g_state.look_x = clampAxis(x);
-    g_state.look_y = clampAxis(y);
+    g_state.look_x = accumulateMotion(g_state.look_x, x);
+    g_state.look_y = accumulateMotion(g_state.look_y, y);
     pthread_mutex_unlock(&g_lock);
 }
 
 void mobileInputAddGyro(float x, float y)
 {
     pthread_mutex_lock(&g_lock);
-    g_state.gyro_x += x;
-    g_state.gyro_y += y;
+    g_state.gyro_x = accumulateMotion(g_state.gyro_x, x);
+    g_state.gyro_y = accumulateMotion(g_state.gyro_y, y);
     pthread_mutex_unlock(&g_lock);
 }
 
@@ -50,15 +60,24 @@ void mobileInputSetTouchActive(int active)
 {
     pthread_mutex_lock(&g_lock);
     g_state.touch_active = active != 0;
+    if (!g_state.touch_active) {
+        g_state.move_x = g_state.move_y = 0.0f;
+        g_state.look_x = g_state.look_y = 0.0f;
+        g_state.gyro_x = g_state.gyro_y = 0.0f;
+        g_state.buttons = 0;
+    }
     pthread_mutex_unlock(&g_lock);
 }
 
-void mobileInputSnapshot(MobileInputSnapshot *out, int consumeGyro)
+void mobileInputSnapshot(MobileInputSnapshot *out, int consumeMotion)
 {
     if (!out) return;
     pthread_mutex_lock(&g_lock);
     *out = g_state;
-    if (consumeGyro) g_state.gyro_x = g_state.gyro_y = 0.0f;
+    if (consumeMotion) {
+        g_state.look_x = g_state.look_y = 0.0f;
+        g_state.gyro_x = g_state.gyro_y = 0.0f;
+    }
     pthread_mutex_unlock(&g_lock);
 }
 
