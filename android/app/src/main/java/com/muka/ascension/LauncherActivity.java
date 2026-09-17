@@ -14,26 +14,33 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
+import com.chaquo.python.PyObject;
+import com.chaquo.python.Python;
+import com.chaquo.python.android.AndroidPlatform;
+
+import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 /**
- * First-run host. The APK contains no copyrighted ROM data: the user selects
- * a legally obtained NTSC-U GoldenEye ROM, which is copied into app-private
- * storage using the exact filename consumed by romdataInit().
+ * First-run host. The APK contains no copyrighted ROM or converted game data:
+ * the user selects a legally obtained NTSC-U ROM, and required 64-bit sidecars
+ * are generated locally from that ROM before SDL is allowed to start.
  */
 public final class LauncherActivity extends Activity {
     private static final int PICK_ROM = 1001;
     private static final String ROM_DIR = "data";
     private static final String ROM_NAME = "ge007.ntsc-final.z64";
+    private static final String CONVERTER_ASSET = "ascension_converter.zip";
     private static final long MIN_REASONABLE_ROM_BYTES = 8L * 1024L * 1024L;
     private static final long MAX_REASONABLE_ROM_BYTES = 64L * 1024L * 1024L;
 
-    private LinearLayout root;
     private Button pickButton;
     private ProgressBar progress;
     private TextView status;
@@ -41,21 +48,19 @@ public final class LauncherActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        showImporter();
 
         File stored = getStoredRom();
         if (isValidGoldenEyeRom(stored)) {
-            launchGame();
-            return;
-        }
-        if (stored.exists()) {
+            beginGameDataPreparation();
+        } else if (stored.exists()) {
             //noinspection ResultOfMethodCallIgnored
             stored.delete();
         }
-        showImporter();
     }
 
     private void showImporter() {
-        root = new LinearLayout(this);
+        LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setGravity(Gravity.CENTER);
         root.setPadding(dp(28), dp(28), dp(28), dp(28));
@@ -71,7 +76,7 @@ public final class LauncherActivity extends Activity {
                 LinearLayout.LayoutParams.WRAP_CONTENT));
 
         TextView body = new TextView(this);
-        body.setText("Para iniciar, selecione sua própria ROM legal de GoldenEye 007 NTSC-U no formato .z64. A ROM será copiada apenas para o armazenamento privado do aplicativo e não faz parte do APK.");
+        body.setText("Para iniciar, selecione sua própria ROM legal de GoldenEye 007 NTSC-U no formato .z64. A ROM e os dados convertidos permanecem somente no armazenamento privado do aplicativo.");
         body.setTextColor(Color.LTGRAY);
         body.setTextSize(16f);
         body.setGravity(Gravity.CENTER);
@@ -123,9 +128,7 @@ public final class LauncherActivity extends Activity {
         }
 
         Uri uri = data.getData();
-        pickButton.setEnabled(false);
-        progress.setVisibility(View.VISIBLE);
-        status.setText("Importando e validando ROM…");
+        setBusy("Importando e validando ROM…");
         new Thread(() -> importRom(uri), "AscensionRomImport").start();
     }
 
@@ -169,11 +172,70 @@ public final class LauncherActivity extends Activity {
                 throw new IOException("Falha ao finalizar a importação da ROM.");
             }
 
-            runOnUiThread(this::launchGame);
+            beginGameDataPreparationFromWorker();
         } catch (Exception e) {
             //noinspection ResultOfMethodCallIgnored
             temp.delete();
             runOnUiThread(() -> showImportError(e.getMessage()));
+        }
+    }
+
+    private void beginGameDataPreparation() {
+        setBusy("Preparando dados do jogo para ARM64…");
+        new Thread(this::beginGameDataPreparationFromWorker, "AscensionSidecars").start();
+    }
+
+    private void beginGameDataPreparationFromWorker() {
+        try {
+            prepareConverterWorkspace();
+            if (!Python.isStarted()) {
+                Python.start(new AndroidPlatform(this));
+            }
+            Python py = Python.getInstance();
+            PyObject module = py.getModule("ascension_sidecars");
+            if (!module.callAttr("ready", getFilesDir().getAbsolutePath()).toBoolean()) {
+                runOnUiThread(() -> status.setText("Convertendo modelos e fases. Isso acontece apenas na primeira configuração…"));
+                module.callAttr("generate", getFilesDir().getAbsolutePath());
+            }
+            if (!module.callAttr("ready", getFilesDir().getAbsolutePath()).toBoolean()) {
+                throw new IOException("Os dados convertidos não passaram na validação final.");
+            }
+            runOnUiThread(this::launchGame);
+        } catch (Exception e) {
+            runOnUiThread(() -> showPreparationError(e.getMessage()));
+        }
+    }
+
+    private void prepareConverterWorkspace() throws IOException {
+        File root = getFilesDir();
+        String rootPath = root.getCanonicalPath() + File.separator;
+        try (ZipInputStream zin = new ZipInputStream(new BufferedInputStream(getAssets().open(CONVERTER_ASSET)))) {
+            ZipEntry entry;
+            byte[] buffer = new byte[64 * 1024];
+            while ((entry = zin.getNextEntry()) != null) {
+                File out = new File(root, entry.getName());
+                String outPath = out.getCanonicalPath();
+                if (!outPath.startsWith(rootPath)) {
+                    throw new IOException("Entrada inválida no pacote interno de conversão.");
+                }
+                if (entry.isDirectory()) {
+                    if (!out.exists() && !out.mkdirs()) {
+                        throw new IOException("Falha ao criar " + entry.getName());
+                    }
+                } else {
+                    File parent = out.getParentFile();
+                    if (parent != null && !parent.exists() && !parent.mkdirs()) {
+                        throw new IOException("Falha ao criar diretório de conversão.");
+                    }
+                    try (FileOutputStream fout = new FileOutputStream(out)) {
+                        int read;
+                        while ((read = zin.read(buffer)) != -1) {
+                            fout.write(buffer, 0, read);
+                        }
+                    }
+                }
+                zin.closeEntry();
+            }
         }
     }
 
@@ -207,6 +269,13 @@ public final class LauncherActivity extends Activity {
         return new File(new File(getFilesDir(), ROM_DIR), ROM_NAME);
     }
 
+    private void setBusy(String message) {
+        pickButton.setEnabled(false);
+        pickButton.setVisibility(View.GONE);
+        progress.setVisibility(View.VISIBLE);
+        status.setText(message);
+    }
+
     private void launchGame() {
         Intent game = new Intent(this, GameActivity.class);
         startActivity(game);
@@ -216,17 +285,33 @@ public final class LauncherActivity extends Activity {
     private void showImportError(String message) {
         progress.setVisibility(View.GONE);
         pickButton.setEnabled(true);
+        pickButton.setVisibility(View.VISIBLE);
         status.setText("ROM não importada.");
         new AlertDialog.Builder(this)
                 .setTitle("ROM inválida")
                 .setMessage(message == null ? "Não foi possível importar a ROM." : message)
                 .setPositiveButton("Tentar novamente", null)
-                .setNegativeButton("Configurações", (dialog, which) -> {
-                    Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-                    intent.setData(Uri.parse("package:" + getPackageName()));
-                    startActivity(intent);
-                })
+                .setNegativeButton("Configurações", (dialog, which) -> openAppSettings())
                 .show();
+    }
+
+    private void showPreparationError(String message) {
+        progress.setVisibility(View.GONE);
+        pickButton.setEnabled(true);
+        pickButton.setVisibility(View.VISIBLE);
+        status.setText("Falha ao preparar os dados do jogo.");
+        new AlertDialog.Builder(this)
+                .setTitle("Preparação incompleta")
+                .setMessage(message == null ? "Não foi possível gerar os dados ARM64 a partir da sua ROM." : message)
+                .setPositiveButton("Tentar novamente", (dialog, which) -> beginGameDataPreparation())
+                .setNegativeButton("Escolher outra ROM", (dialog, which) -> openPicker())
+                .show();
+    }
+
+    private void openAppSettings() {
+        Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+        intent.setData(Uri.parse("package:" + getPackageName()));
+        startActivity(intent);
     }
 
     private int dp(int value) {

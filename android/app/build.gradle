@@ -1,5 +1,6 @@
 plugins {
     id 'com.android.application'
+    id 'com.chaquo.python'
 }
 
 android {
@@ -51,4 +52,46 @@ android {
         abortOnError true
         checkReleaseBuilds false
     }
+}
+
+chaquopy {
+    defaultConfig {
+        version = '3.13'
+        // Runtime conversion uses only the Python standard library. Keep source
+        // as source so CI does not require a matching host Python 3.13 install.
+        pyc {
+            src = false
+        }
+    }
+}
+
+// The existing converters need only the ROM plus this small slice of repository
+// metadata. Generate a deterministic asset at build time instead of shipping
+// pre-generated game sidecars or the whole decomp tree in the APK.
+def converterAssetDir = layout.buildDirectory.dir('generated/ascensionConverterAssets')
+tasks.register('prepareAscensionConverterAsset', Zip) {
+    archiveFileName = 'ascension_converter.zip'
+    destinationDirectory = converterAssetDir
+    reproducibleFileOrder = true
+    preserveFileTimestamps = false
+
+    from(rootProject.file('../tools_pc')) {
+        include 'd43_emit.py', 'd69_emit.py'
+        into 'tools_pc'
+    }
+    from(rootProject.file('../scripts/filelist.u.csv')) {
+        into 'scripts'
+    }
+    from(rootProject.file('../assets/obseg/file_resource_table.inc.c')) {
+        into 'assets/obseg'
+    }
+    from(rootProject.file('../assets')) {
+        include { details -> details.file.name.toLowerCase().endsWith('modelfileheader.inc.c') }
+        into 'assets'
+    }
+}
+
+android.sourceSets.main.assets.srcDir(converterAssetDir)
+tasks.named('preBuild').configure {
+    dependsOn tasks.named('prepareAscensionConverterAsset')
 }
