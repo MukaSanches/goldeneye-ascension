@@ -34,7 +34,7 @@ jobs:
         run: |
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
-          "$SDKMANAGER" "ndk;30.0.16248370" "cmake;3.22.1" "platforms;android-37"
+          "$SDKMANAGER" "ndk;30.0.16248370" "cmake;3.22.1"
 
       - name: Fetch pinned SDL2
         shell: bash
