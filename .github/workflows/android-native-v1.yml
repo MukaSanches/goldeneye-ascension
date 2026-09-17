@@ -1,0 +1,71 @@
+name: Android native V1
+
+on:
+  push:
+    branches: [ android-v1 ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-arm64:
+    name: Build libascension.so (ARM64)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout Ascension Android branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK and CMake
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "ndk;30.0.16248370" "cmake;3.22.1" "platforms;android-37"
+
+      - name: Fetch pinned SDL2
+        shell: bash
+        run: |
+          git clone https://github.com/libsdl-org/SDL.git third_party/SDL
+          git -C third_party/SDL checkout b90ac95029d801c5abc59472ba8e2200dff31e1e
+
+      - name: Configure ARM64 native core
+        shell: bash
+        run: |
+          "$ANDROID_HOME/cmake/3.22.1/bin/cmake" \
+            -S android \
+            -B build-android-arm64 \
+            -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_HOME/ndk/30.0.16248370/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-26 \
+            -DANDROID_STL=c++_shared \
+            -DASCENSION_SDL2_SOURCE_DIR="$GITHUB_WORKSPACE/third_party/SDL" \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo
+
+      - name: Compile ARM64 native core
+        shell: bash
+        run: |
+          "$ANDROID_HOME/cmake/3.22.1/bin/cmake" --build build-android-arm64 --target ascension -j2
+
+      - name: Verify native output
+        shell: bash
+        run: |
+          test -f build-android-arm64/libascension.so
+          file build-android-arm64/libascension.so
+          readelf -h build-android-arm64/libascension.so | grep -E 'Class:|Machine:'
+          readelf -lW build-android-arm64/libascension.so | grep -E 'LOAD|Align' | head -20
+
+      - name: Upload native library
+        uses: actions/upload-artifact@v4
+        with:
+          name: ascension-android-arm64-native
+          path: build-android-arm64/libascension.so
+          if-no-files-found: error
+          retention-days: 14
