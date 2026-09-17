@@ -135,6 +135,51 @@ list(REMOVE_ITEM SRC_GAME
   "${ASCENSION_ROOT}/src/game/decompress.c"
   "${ASCENSION_ROOT}/src/game/zlib.c")
 
+# Clang currently has an open frontend bug for references to names declared
+# through `#pragma weak alias = target` in the same C translation unit: it can
+# report a spurious "reference ... is ambiguous" error (LLVM #56760). lv.c
+# uses four such aliases only as alternate names for these exact variables.
+# Generate an Android-only derived translation unit that rewrites those four
+# reads to their aliasees. This is semantically identical, leaves the shared
+# desktop source untouched, and deliberately fails configuration if upstream
+# changes any expected statement so the workaround can never drift silently.
+set(LV_SOURCE "${ASCENSION_ROOT}/src/game/lv.c")
+set(LV_ANDROID_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/generated/lv_android.c")
+file(READ "${LV_SOURCE}" LV_ANDROID_TEXT)
+
+function(ascension_android_replace_required var needle replacement label)
+  string(FIND "${${var}}" "${needle}" _ascension_android_match)
+  if(_ascension_android_match EQUAL -1)
+    message(FATAL_ERROR "Android Clang workaround drifted: missing ${label} in src/game/lv.c")
+  endif()
+  string(REPLACE "${needle}" "${replacement}" _ascension_android_rewritten "${${var}}")
+  set(${var} "${_ascension_android_rewritten}" PARENT_SCOPE)
+endfunction()
+
+ascension_android_replace_required(
+  LV_ANDROID_TEXT
+  "g_DebugPortalsInputBuffer = g_DebugPortalsInputBufferSource1;"
+  "g_DebugPortalsInputBuffer = g_DebugPortalsInputBuffer1;"
+  "portal source alias 1")
+ascension_android_replace_required(
+  LV_ANDROID_TEXT
+  "g_DebugPortalsInputBuffer1 = g_DebugPortalsInputBufferSource2;"
+  "g_DebugPortalsInputBuffer1 = g_DebugPortalsInputBuffer2;"
+  "portal source alias 2")
+ascension_android_replace_required(
+  LV_ANDROID_TEXT
+  "temp_v1 = g_DebugPortalsInputBufferSource4;"
+  "temp_v1 = g_DebugPortalsInputBuffer4;"
+  "portal source alias 4")
+ascension_android_replace_required(
+  LV_ANDROID_TEXT
+  "g_DebugPortalsInputBuffer2 = g_DebugPortalsInputBufferSource3;"
+  "g_DebugPortalsInputBuffer2 = g_DebugPortalsInputBuffer3;"
+  "portal source alias 3")
+file(WRITE "${LV_ANDROID_SOURCE}" "${LV_ANDROID_TEXT}")
+list(REMOVE_ITEM SRC_GAME "${LV_SOURCE}")
+list(APPEND SRC_GAME "${LV_ANDROID_SOURCE}")
+
 # One decomp-era call in gunfire.c intentionally passes a localized string as
 # sprintf's format. Android Clang promotes -Wformat-security to an error. Keep
 # the diagnostic visible but non-fatal for this translation unit only while
