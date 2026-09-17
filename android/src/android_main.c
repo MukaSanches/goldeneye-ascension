@@ -17,6 +17,7 @@
 
 extern void mainproc(void *args);
 extern OSThread mainThread;
+extern int androidRunSelfTest(void);
 
 static void androidPersist(void)
 {
@@ -30,6 +31,11 @@ int SDL_main(int argc, char **argv)
     sysLogPrintf(LOG_INFO, "GoldenEye Ascension Android native core starting");
     crashInit();
     configLoad();
+
+    if (sysArgCheck("--android-selftest")) {
+        return androidRunSelfTest();
+    }
+
     ascensionRestoreOriginalVisualDefaultsOnce();
     atexit(androidPersist);
 

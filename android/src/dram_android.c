@@ -13,19 +13,27 @@
 
 static int addressRangeFree(void *addr, size_t len)
 {
+    void *p = MAP_FAILED;
+
 #ifdef MAP_FIXED_NOREPLACE
-    void *p = mmap(addr, len, PROT_NONE,
-                   MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
-    if (p == MAP_FAILED) return 0;
-    munmap(p, len);
-    return p == addr;
-#else
-    void *p = mmap(addr, len, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    /* Some API-26-era kernels predate MAP_FIXED_NOREPLACE even when the NDK
+     * headers expose the flag. Try it first, then fall back to a harmless
+     * address hint. The fallback never uses MAP_FIXED, so it cannot clobber
+     * an existing mapping. */
+    p = mmap(addr, len, PROT_NONE,
+             MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
+    if (p != MAP_FAILED) {
+        int exact = p == addr;
+        munmap(p, len);
+        return exact;
+    }
+#endif
+
+    p = mmap(addr, len, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (p == MAP_FAILED) return 0;
     int exact = p == addr;
     munmap(p, len);
     return exact;
-#endif
 }
 
 void *dramReserve(void)

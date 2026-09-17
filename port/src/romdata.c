@@ -227,21 +227,48 @@ int romdataInit(void)
              * 4.17+) fails instead of clobbering an existing mapping; where it
              * is unavailable the plain hint is advisory and the == check below
              * catches a relocated result. */
-            int flags = MAP_PRIVATE | MAP_ANONYMOUS;
+            void *at = MAP_FAILED;
 #ifdef MAP_FIXED_NOREPLACE
-            flags |= MAP_FIXED_NOREPLACE;
+            at = mmap((void *)(uintptr_t)CART_BASE, maplen,
+                      PROT_READ | PROT_WRITE,
+                      MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE,
+                      -1, 0);
 #endif
-            void *at = mmap((void *)(uintptr_t)CART_BASE, maplen,
-                            PROT_READ | PROT_WRITE, flags, -1, 0);
+#if defined(ASCENSION_ANDROID)
+            /* Android API 26 includes devices whose Linux kernel predates
+             * MAP_FIXED_NOREPLACE. If that first call is unsupported, retry
+             * with a non-destructive address hint and still require the exact
+             * cart address. */
+            if (at == MAP_FAILED) {
+                at = mmap((void *)(uintptr_t)CART_BASE, maplen,
+                          PROT_READ | PROT_WRITE,
+                          MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+            }
+#elif !defined(MAP_FIXED_NOREPLACE)
+            at = mmap((void *)(uintptr_t)CART_BASE, maplen,
+                      PROT_READ | PROT_WRITE,
+                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+#endif
             if (at != MAP_FAILED && at == (void *)(uintptr_t)CART_BASE) {
                 mappedLen = maplen;
                 return romdataFinishCartMap(tok, img, sideTotal, cgTotal);
             }
             if (at != MAP_FAILED)
                 munmap(at, maplen);
+
+#if defined(ASCENSION_ANDROID)
+            sysLogPrintf(LOG_ERROR,
+                         "romdataInit: Android cannot reserve required cart "
+                         "address 0x%08X; refusing unsafe heap fallback",
+                         CART_BASE);
+            free(img);
+            romSize = 0;
+            return -1;
+#else
             sysLogPrintf(LOG_WARNING, "romdataInit: could not map 0x%08X "
                          "(ASLR/kernel refused the fixed address); using heap "
                          "copy — direct ROM reads will fail", CART_BASE);
+#endif
 #endif
         }
 

@@ -25,6 +25,8 @@ import org.libsdl.app.SDLActivity;
  * gyro, system bars, lifecycle and back navigation.
  */
 public final class GameActivity extends SDLActivity implements SensorEventListener {
+    public static final String EXTRA_SELFTEST = "ascension.selftest";
+
     private static final float GYRO_YAW_GAIN = 82.0f;
     private static final float GYRO_PITCH_GAIN = 70.0f;
     private static final long BUTTON_PULSE_MS = 90L;
@@ -39,6 +41,16 @@ public final class GameActivity extends SDLActivity implements SensorEventListen
     @Override
     protected String[] getLibraries() {
         return new String[] { "SDL2", "ascension" };
+    }
+
+    @Override
+    protected String[] getArguments() {
+        if (BuildConfig.DEBUG
+                && getIntent() != null
+                && getIntent().getBooleanExtra(EXTRA_SELFTEST, false)) {
+            return new String[] { "--android-selftest" };
+        }
+        return super.getArguments();
     }
 
     @Override

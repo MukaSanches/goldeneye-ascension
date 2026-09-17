@@ -54,6 +54,18 @@ public final class LauncherActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // CI/runtime probe only. Release builds can never enter this path.
+        if (BuildConfig.DEBUG
+                && getIntent() != null
+                && getIntent().getBooleanExtra(GameActivity.EXTRA_SELFTEST, false)) {
+            Intent probe = new Intent(this, GameActivity.class);
+            probe.putExtra(GameActivity.EXTRA_SELFTEST, true);
+            startActivity(probe);
+            finish();
+            return;
+        }
+
         showImporter();
 
         File stored = getStoredRom();

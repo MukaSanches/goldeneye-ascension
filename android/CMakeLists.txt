@@ -60,6 +60,7 @@ add_compile_definitions(
   BUGFIX_R0
   BYTEMATCH
   PLATFORM_64BIT=1
+  ASCENSION_ANDROID=1
 )
 
 # Clang supports Microsoft's anonymous tagged struct extension, which preserves
@@ -124,6 +125,7 @@ set(SRC_ANDROID
   "${ASCENSION_ROOT}/android/src/system_android.c"
   "${ASCENSION_ROOT}/android/src/crash_android.c"
   "${ASCENSION_ROOT}/android/src/dram_android.c"
+  "${ASCENSION_ROOT}/android/src/runtime_selftest.c"
   "${ASCENSION_ROOT}/android/src/mobile_input.c"
   "${ASCENSION_ROOT}/android/src/mobile_input_merge.c")
 
