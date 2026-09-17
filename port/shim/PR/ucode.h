@@ -17,23 +17,28 @@
  * D38's prototype catalogue was originally gated to x86-64 because that was
  * the first 64-bit host port. Android V1 is AArch64 and has the same ABI
  * requirement for pointer-returning functions, but it must not inherit the
- * x86/Windows net-order prototypes: Android is LP64 and Bionic declares
- * ntohl(uint32_t), whereas unsigned long is 64-bit there.
+ * legacy Windows/x86 net-order declarations: Android is LP64 and Bionic
+ * declares ntohl(uint32_t), whereas unsigned long is 64-bit there.
  *
- * Bridge only the catalogue gate. Rename the two legacy net-order declarations
- * while pc_protos.h is parsed, then publish the ABI-correct AArch64 prototypes.
- * No game/platform translation unit is otherwise compiled as x86-64.
+ * pc_protos.h already skips those two declarations when a Winsock declaration
+ * is known. Reuse that guard strictly as a private include-time sentinel on
+ * AArch64, then immediately remove it and publish the Bionic-compatible
+ * signatures. No Windows header or Windows behavior is exposed to Android.
  */
 #    if defined(__aarch64__) && !defined(__x86_64__)
 #        define ASCENSION_PC_PROTOS_ARM64_BRIDGE 1
 #        define __x86_64__ 1
-#        define ntohs ascension_pc_protos_ntohs_legacy
-#        define ntohl ascension_pc_protos_ntohl_legacy
+#        if !defined(_WINSOCK2_H)
+#            define ASCENSION_PC_PROTOS_NETORDER_SENTINEL 1
+#            define _WINSOCK2_H 1
+#        endif
 #    endif
 #    include "pc_protos.h"
 #    if defined(ASCENSION_PC_PROTOS_ARM64_BRIDGE)
-#        undef ntohl
-#        undef ntohs
+#        if defined(ASCENSION_PC_PROTOS_NETORDER_SENTINEL)
+#            undef _WINSOCK2_H
+#            undef ASCENSION_PC_PROTOS_NETORDER_SENTINEL
+#        endif
 #        undef __x86_64__
 #        undef ASCENSION_PC_PROTOS_ARM64_BRIDGE
 unsigned short ntohs(unsigned short);
