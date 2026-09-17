@@ -193,7 +193,34 @@ jobs:
             unzip -l "$APK" "lib/arm64-v8a/$name" | grep -q "lib/arm64-v8a/$name"
           done
 
+          APK_NATIVE_DIR="$(mktemp -d)"
+          so_count=0
+          while IFS= read -r so_path; do
+            so_count=$((so_count + 1))
+            so_file="$APK_NATIVE_DIR/$so_count.so"
+            unzip -p "$APK" "$so_path" > "$so_file"
+            file "$so_file" | grep -q 'ARM aarch64'
+            readelf -h "$so_file" | grep -q 'Machine:.*AArch64'
+
+            load_count=0
+            while IFS= read -r align; do
+              load_count=$((load_count + 1))
+              align_value=$((align))
+              if (( align_value < 0x4000 || align_value % 0x4000 != 0 )); then
+                echo "APK ELF LOAD alignment is not 16 KiB compatible: $so_path ($align)" >&2
+                exit 1
+              fi
+            done < <(readelf -lW "$so_file" | awk '/ LOAD / { print $NF }')
+            if (( load_count == 0 )); then
+              echo "No ELF LOAD segments found: $so_path" >&2
+              exit 1
+            fi
+          done < <(unzip -Z1 "$APK" | grep -E '^lib/arm64-v8a/.*[.]so$')
+          test "$so_count" -ge 3
+          rm -rf "$APK_NATIVE_DIR"
+
           ASCENSION_SO="android/app/src/main/jniLibs/arm64-v8a/libascension.so"
+          nm -D "$ASCENSION_SO" | grep -Eq '[[:space:]]T[[:space:]]SDL_main$'
           JNI_SYMBOLS="$(readelf -Ws "$ASCENSION_SO" | awk '/Java_com_muka_ascension_NativeInput_/ { print $8 }' | sort -u)"
           test "$(printf '%s\n' "$JNI_SYMBOLS" | sed '/^$/d' | wc -l)" -eq 6
           for method in setMove setLook addGyro setButton setTouchActive reset; do
