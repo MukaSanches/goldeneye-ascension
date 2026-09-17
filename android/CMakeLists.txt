@@ -135,58 +135,90 @@ list(REMOVE_ITEM SRC_GAME
   "${ASCENSION_ROOT}/src/game/decompress.c"
   "${ASCENSION_ROOT}/src/game/zlib.c")
 
-# Clang currently has an open frontend bug for references to names declared
-# through `#pragma weak alias = target` in the same C translation unit: it can
-# report a spurious "reference ... is ambiguous" error (LLVM #56760). lv.c
-# uses four such aliases only as alternate names for these exact variables.
-# Generate an Android-only derived translation unit that rewrites those four
-# reads to their aliasees. This is semantically identical, leaves the shared
-# desktop source untouched, and deliberately fails configuration if upstream
-# changes any expected statement so the workaround can never drift silently.
-set(LV_SOURCE "${ASCENSION_ROOT}/src/game/lv.c")
-set(LV_ANDROID_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/generated/lv_android.c")
-file(READ "${LV_SOURCE}" LV_ANDROID_TEXT)
-
+# Build-time Android compatibility rewrites. They are exact and fail closed:
+# if the upstream source changes, configuration aborts instead of silently
+# applying a stale patch. Shared PC/N64 source remains byte-for-byte untouched.
 function(ascension_android_replace_required var needle replacement label)
   string(FIND "${${var}}" "${needle}" _ascension_android_match)
   if(_ascension_android_match EQUAL -1)
-    message(FATAL_ERROR "Android Clang workaround drifted: missing ${label} in src/game/lv.c")
+    message(FATAL_ERROR "Android compatibility rewrite drifted: missing ${label}")
   endif()
   string(REPLACE "${needle}" "${replacement}" _ascension_android_rewritten "${${var}}")
   set(${var} "${_ascension_android_rewritten}" PARENT_SCOPE)
 endfunction()
 
+# Clang currently has an open frontend bug for references to names declared
+# through `#pragma weak alias = target` in the same C translation unit (LLVM
+# #56760): it can report a spurious "reference ... is ambiguous" error. lv.c
+# uses these aliases only as alternate names for the exact variables below.
+set(LV_SOURCE "${ASCENSION_ROOT}/src/game/lv.c")
+set(LV_ANDROID_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/generated/lv_android.c")
+file(READ "${LV_SOURCE}" LV_ANDROID_TEXT)
 ascension_android_replace_required(
   LV_ANDROID_TEXT
   "g_DebugPortalsInputBuffer = g_DebugPortalsInputBufferSource1;"
   "g_DebugPortalsInputBuffer = g_DebugPortalsInputBuffer1;"
-  "portal source alias 1")
+  "lv portal source alias 1")
 ascension_android_replace_required(
   LV_ANDROID_TEXT
   "g_DebugPortalsInputBuffer1 = g_DebugPortalsInputBufferSource2;"
   "g_DebugPortalsInputBuffer1 = g_DebugPortalsInputBuffer2;"
-  "portal source alias 2")
+  "lv portal source alias 2")
 ascension_android_replace_required(
   LV_ANDROID_TEXT
   "temp_v1 = g_DebugPortalsInputBufferSource4;"
   "temp_v1 = g_DebugPortalsInputBuffer4;"
-  "portal source alias 4")
+  "lv portal source alias 4")
 ascension_android_replace_required(
   LV_ANDROID_TEXT
   "g_DebugPortalsInputBuffer2 = g_DebugPortalsInputBufferSource3;"
   "g_DebugPortalsInputBuffer2 = g_DebugPortalsInputBuffer3;"
-  "portal source alias 3")
+  "lv portal source alias 3")
 file(WRITE "${LV_ANDROID_SOURCE}" "${LV_ANDROID_TEXT}")
 list(REMOVE_ITEM SRC_GAME "${LV_SOURCE}")
 list(APPEND SRC_GAME "${LV_ANDROID_SOURCE}")
 
-# One decomp-era call in gunfire.c intentionally passes a localized string as
-# sprintf's format. Android Clang promotes -Wformat-security to an error. Keep
-# the diagnostic visible but non-fatal for this translation unit only while
-# the ARM64 port is brought up; do not weaken format-security project-wide.
-set_source_files_properties(
-  "${ASCENSION_ROOT}/src/game/gunfire.c"
-  PROPERTIES COMPILE_OPTIONS "-Wno-error=format-security")
+# Localized text here is data, never a printf format. Use an explicit "%s"
+# in the Android-derived translation units so Clang's format-security checks
+# remain fully enabled and user-controlled '%' sequences cannot be interpreted.
+set(GUNFIRE_SOURCE "${ASCENSION_ROOT}/src/game/gunfire.c")
+set(GUNFIRE_ANDROID_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/generated/gunfire_android.c")
+file(READ "${GUNFIRE_SOURCE}" GUNFIRE_ANDROID_TEXT)
+ascension_android_replace_required(
+  GUNFIRE_ANDROID_TEXT
+  "sprintf(buffer, langGet(getStringID(LGUN, GUN_STR_DB_DIEDONCE_LF)));"
+  "sprintf(buffer, \"%s\", langGet(getStringID(LGUN, GUN_STR_DB_DIEDONCE_LF)));"
+  "gunfire localized death text format")
+file(WRITE "${GUNFIRE_ANDROID_SOURCE}" "${GUNFIRE_ANDROID_TEXT}")
+list(REMOVE_ITEM SRC_GAME "${GUNFIRE_SOURCE}")
+list(APPEND SRC_GAME "${GUNFIRE_ANDROID_SOURCE}")
+
+set(MPMENU_SOURCE "${ASCENSION_ROOT}/src/game/mpmenu.c")
+set(MPMENU_ANDROID_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/generated/mpmenu_android.c")
+file(READ "${MPMENU_SOURCE}" MPMENU_ANDROID_TEXT)
+ascension_android_replace_required(
+  MPMENU_ANDROID_TEXT
+  "sprintf(buffer, langGet(getStringID(LMPMENU, MPMENU_STR_11_RANK1ST)));"
+  "sprintf(buffer, \"%s\", langGet(getStringID(LMPMENU, MPMENU_STR_11_RANK1ST)));"
+  "mpmenu rank 1 text format")
+ascension_android_replace_required(
+  MPMENU_ANDROID_TEXT
+  "sprintf(buffer, langGet(getStringID(LMPMENU, MPMENU_STR_12_RANK2ND)));"
+  "sprintf(buffer, \"%s\", langGet(getStringID(LMPMENU, MPMENU_STR_12_RANK2ND)));"
+  "mpmenu rank 2 text format")
+ascension_android_replace_required(
+  MPMENU_ANDROID_TEXT
+  "sprintf(buffer, langGet(getStringID(LMPMENU, MPMENU_STR_13_RANK3RD)));"
+  "sprintf(buffer, \"%s\", langGet(getStringID(LMPMENU, MPMENU_STR_13_RANK3RD)));"
+  "mpmenu rank 3 text format")
+ascension_android_replace_required(
+  MPMENU_ANDROID_TEXT
+  "sprintf(buffer, langGet(getStringID(LMPMENU, MPMENU_STR_14_RANK4TH)));"
+  "sprintf(buffer, \"%s\", langGet(getStringID(LMPMENU, MPMENU_STR_14_RANK4TH)));"
+  "mpmenu rank 4 text format")
+file(WRITE "${MPMENU_ANDROID_SOURCE}" "${MPMENU_ANDROID_TEXT}")
+list(REMOVE_ITEM SRC_GAME "${MPMENU_SOURCE}")
+list(APPEND SRC_GAME "${MPMENU_ANDROID_SOURCE}")
 
 file(GLOB SRC_LIBAUDIO "${ASCENSION_ROOT}/src/libultra/audio/*.c")
 file(GLOB SRC_LIBULTRARE_AUDIO "${ASCENSION_ROOT}/src/libultrare/audio/*.c")
