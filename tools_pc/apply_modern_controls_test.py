@@ -40,9 +40,49 @@ def main() -> int:
             "Ascension controls include",
         )
 
-    old = '''        if ((mb & SDL_BUTTON(SDL_BUTTON_LEFT)) || actHeld(ks, IA_FIRE))\n            button |= GE_CONT_G;\n        int aimHeld = (mb & SDL_BUTTON(SDL_BUTTON_RIGHT)) || actHeld(ks, IA_AIM);\n        if (aimHeld)\n            button |= GE_CONT_R;\n'''
-    new = '''        /* Ascension Modern Controls v1: dedicated crouch is translated into\n         * GoldenEye's native 1.1 aim+stick-down gesture. This deliberately\n         * keeps bondview2.c as the gameplay authority, so weapon crouch\n         * restrictions and the original crouch state machine remain intact. */\n        int dedicatedCrouch = !menuMode && ascensionControlsDedicatedCrouchHeld();\n\n        /* In Modern, Left Ctrl is a crouch key. Do not also emit the legacy\n         * keyboard-fire binding on the same poll. LMB remains fire. Hybrid's\n         * crouch key is C, therefore legacy Left Ctrl fire is unaffected. */\n        if ((mb & SDL_BUTTON(SDL_BUTTON_LEFT)) ||\n            (actHeld(ks, IA_FIRE) && !dedicatedCrouch))\n            button |= GE_CONT_G;\n\n        int aimHeld = (mb & SDL_BUTTON(SDL_BUTTON_RIGHT)) ||\n                      actHeld(ks, IA_AIM) || dedicatedCrouch;\n        if (aimHeld)\n            button |= GE_CONT_R;\n\n        if (dedicatedCrouch)\n            sy = -STICK_MAX;\n'''
+    old = '''        if ((mb & SDL_BUTTON(SDL_BUTTON_LEFT)) || actHeld(ks, IA_FIRE))
+            button |= GE_CONT_G;
+        int aimHeld = (mb & SDL_BUTTON(SDL_BUTTON_RIGHT)) || actHeld(ks, IA_AIM);
+        if (aimHeld)
+            button |= GE_CONT_R;
+'''
+    new = '''        /* Ascension Modern Controls v1: dedicated crouch is translated into
+         * GoldenEye's native 1.1 aim+stick-down gesture. This deliberately
+         * keeps bondview2.c as the gameplay authority, so weapon crouch
+         * restrictions and the original crouch state machine remain intact. */
+        int dedicatedCrouch = !menuMode && ascensionControlsDedicatedCrouchHeld();
+
+        /* In Modern, Left Ctrl is a crouch key. Do not also emit the legacy
+         * keyboard-fire binding on the same poll. LMB remains fire. Hybrid's
+         * crouch key is C, therefore legacy Left Ctrl fire is unaffected. */
+        if ((mb & SDL_BUTTON(SDL_BUTTON_LEFT)) ||
+            (actHeld(ks, IA_FIRE) && !dedicatedCrouch))
+            button |= GE_CONT_G;
+
+        int aimHeld = (mb & SDL_BUTTON(SDL_BUTTON_RIGHT)) ||
+                      actHeld(ks, IA_AIM) || dedicatedCrouch;
+        if (aimHeld)
+            button |= GE_CONT_R;
+
+        if (dedicatedCrouch)
+            sy = -STICK_MAX;
+'''
     text = replace_once(text, old, new, "dedicated crouch native-input bridge")
+
+    old = '''                if (fabs(dyLook) >= AIM_MOVE_THRESH) {
+                    int m = 61 + (int)gy; if (m > 60 + aimBand) m = 60 + aimBand;
+                    sy += (dyLook > 0) ? m : -m;   /* +stick_y = look down */
+                }
+'''
+    new = '''                /* Dedicated crouch owns stick-Y while held: preserve the
+                 * native aim+stick-down gesture even if the mouse moves
+                 * vertically. Mouse-X remains available for horizontal aim. */
+                if (!dedicatedCrouch && fabs(dyLook) >= AIM_MOVE_THRESH) {
+                    int m = 61 + (int)gy; if (m > 60 + aimBand) m = 60 + aimBand;
+                    sy += (dyLook > 0) ? m : -m;   /* +stick_y = look down */
+                }
+'''
+    text = replace_once(text, old, new, "dedicated crouch mouse-Y isolation")
 
     if text == original:
         print("No changes needed.")
