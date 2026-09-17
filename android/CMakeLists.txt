@@ -147,6 +147,20 @@ function(ascension_android_replace_required var needle replacement label)
   set(${var} "${_ascension_android_rewritten}" PARENT_SCOPE)
 endfunction()
 
+# The D60 crash diagnostic passed an address expression as snprintf's size.
+# Correct it in the Android-derived TU while preserving shared source history.
+set(PORT_LIBULTRA_SOURCE "${ASCENSION_ROOT}/port/src/libultra.c")
+set(PORT_LIBULTRA_ANDROID_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/generated/libultra_android.c")
+file(READ "${PORT_LIBULTRA_SOURCE}" PORT_LIBULTRA_ANDROID_TEXT)
+ascension_android_replace_required(
+  PORT_LIBULTRA_ANDROID_TEXT
+  "snprintf(wp, win + sizeof(win) - (wp - win),"
+  "snprintf(wp, sizeof(win) - (size_t)(wp - win),"
+  "libultra stack-window snprintf size")
+file(WRITE "${PORT_LIBULTRA_ANDROID_SOURCE}" "${PORT_LIBULTRA_ANDROID_TEXT}")
+list(REMOVE_ITEM SRC_PORT "${PORT_LIBULTRA_SOURCE}")
+list(APPEND SRC_PORT "${PORT_LIBULTRA_ANDROID_SOURCE}")
+
 # Clang currently has an open frontend bug for references to names declared
 # through `#pragma weak alias = target` in the same C translation unit (LLVM
 # #56760): it can report a spurious "reference ... is ambiguous" error. lv.c
