@@ -40,6 +40,15 @@
 #include "game/file.h"   /* save_data */
 #include "game/ob.h"     /* FILELOADMETHOD (for _fileNameLoadToBank below) */
 
+/* Android's Bionic owns the standard string/memory ABI and its FORTIFY
+ * overload set. Include the host header once here so every Android TU gets the
+ * real prototypes regardless of include order. Do not redeclare memcpy,
+ * strcpy, strncpy or strcat below: a hand-written declaration cannot be valid
+ * both before and after Bionic's overloadable Fortify wrappers. */
+#if defined(__ANDROID__)
+#include <string.h>
+#endif
+
 #pragma push_macro("assert")
 #undef assert
 void assert();
@@ -323,11 +332,7 @@ void * memaAlloc();
 void memaFree();
 s32 memaGetLongestFree();
 int memcmp();
-#if defined(__ANDROID__)
-/* Bionic's FORTIFY wrappers are overloadable. Match that attribute instead of
- * shadowing the fortified declaration with an old K&R prototype. */
-void *memcpy(void *, const void *, size_t) __attribute__((overloadable));
-#else
+#if !defined(__ANDROID__)
 void * memcpy();
 #endif
 u32 modelFindNextProjectileHitCandidate();
@@ -410,21 +415,15 @@ bool stanTileHasZeroArea();
 void stop_recording_ramrom();
 void store_favorite_weapon_current_player();
 void store_osgetcount();
-#if defined(__ANDROID__)
-char *strcat(char *, const char *) __attribute__((overloadable));
-#else
+#if !defined(__ANDROID__)
 char * strcat();
 #endif
 int strcmp();
-#if defined(__ANDROID__)
-char *strcpy(char *, const char *) __attribute__((overloadable));
-#else
+#if !defined(__ANDROID__)
 char * strcpy();
 #endif
 size_t strlen();
-#if defined(__ANDROID__)
-char *strncpy(char *, const char *, size_t) __attribute__((overloadable));
-#else
+#if !defined(__ANDROID__)
 char * strncpy();
 #endif
 long int strtol();
