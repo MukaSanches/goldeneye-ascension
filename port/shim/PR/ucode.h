@@ -15,7 +15,18 @@
 
 #if defined(PORT)
 #    include "include/PR/ucode.h"
-#    include "pc_protos.h"
+#    if defined(__ANDROID__) && defined(__aarch64__) && !defined(__cplusplus)
+/* frontGetPlayersFavoriteWeaponInHand is a decomp 32-bit artifact: the source
+ * spells the return type as int even though it forwards a langGet() text
+ * pointer. Hide only that stale catalogue declaration on Android, then publish
+ * the pointer-width-correct ABI used by the generated front_android.c TU. */
+#        define frontGetPlayersFavoriteWeaponInHand ascension_legacy_frontGetPlayersFavoriteWeaponInHand
+#        include "pc_protos.h"
+#        undef frontGetPlayersFavoriteWeaponInHand
+u8 *frontGetPlayersFavoriteWeaponInHand(int player, int hand);
+#    else
+#        include "pc_protos.h"
+#    endif
 #else
 #    include <PR/ucode.h>
 #endif

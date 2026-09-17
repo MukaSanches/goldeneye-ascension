@@ -161,6 +161,22 @@ file(WRITE "${PORT_LIBULTRA_ANDROID_SOURCE}" "${PORT_LIBULTRA_ANDROID_TEXT}")
 list(REMOVE_ITEM SRC_PORT "${PORT_LIBULTRA_SOURCE}")
 list(APPEND SRC_PORT "${PORT_LIBULTRA_ANDROID_SOURCE}")
 
+# frontGetPlayersFavoriteWeaponInHand is another 32-bit decomp artifact: it is
+# spelled as int even though it forwards a langGet-backed text pointer. That is
+# harmless on N64's 32-bit ABI but truncates the pointer on AArch64. Keep the
+# shared decomp untouched and compile an Android-derived TU with the true width.
+set(FRONT_SOURCE "${ASCENSION_ROOT}/src/game/front.c")
+set(FRONT_ANDROID_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/generated/front_android.c")
+file(READ "${FRONT_SOURCE}" FRONT_ANDROID_TEXT)
+ascension_android_replace_required(
+  FRONT_ANDROID_TEXT
+  "int frontGetPlayersFavoriteWeaponInHand(int player,int hand) {"
+  "u8 *frontGetPlayersFavoriteWeaponInHand(int player,int hand) {"
+  "front favorite-weapon text pointer return")
+file(WRITE "${FRONT_ANDROID_SOURCE}" "${FRONT_ANDROID_TEXT}")
+list(REMOVE_ITEM SRC_GAME "${FRONT_SOURCE}")
+list(APPEND SRC_GAME "${FRONT_ANDROID_SOURCE}")
+
 # Clang currently has an open frontend bug for references to names declared
 # through `#pragma weak alias = target` in the same C translation unit (LLVM
 # #56760): it can report a spurious "reference ... is ambiguous" error. lv.c
