@@ -38,8 +38,14 @@ public final class LauncherActivity extends Activity {
     private static final String ROM_DIR = "data";
     private static final String ROM_NAME = "ge007.ntsc-final.z64";
     private static final String CONVERTER_ASSET = "ascension_converter.zip";
-    private static final long MIN_REASONABLE_ROM_BYTES = 8L * 1024L * 1024L;
+    private static final long EXPECTED_ROM_BYTES = 12_582_912L;
     private static final long MAX_REASONABLE_ROM_BYTES = 64L * 1024L * 1024L;
+    private static final byte[] EXPECTED_ROM_SHA1 = new byte[] {
+            (byte) 0xab, (byte) 0xe0, (byte) 0x1e, (byte) 0x4a, (byte) 0xeb,
+            (byte) 0x03, (byte) 0x3b, (byte) 0x6c, (byte) 0x08, (byte) 0x36,
+            (byte) 0x81, (byte) 0x9f, (byte) 0x54, (byte) 0x9c, (byte) 0x79,
+            (byte) 0x1b, (byte) 0x26, (byte) 0xcf, (byte) 0xde, (byte) 0x83
+    };
 
     private Button pickButton;
     private ProgressBar progress;
@@ -162,8 +168,8 @@ public final class LauncherActivity extends Activity {
                 out.getFD().sync();
             }
 
-            if (total < MIN_REASONABLE_ROM_BYTES || !isValidGoldenEyeRom(temp)) {
-                throw new IOException("A ROM não corresponde ao GoldenEye 007 NTSC-U esperado pelo Ascension.");
+            if (total != EXPECTED_ROM_BYTES || !isValidGoldenEyeRom(temp)) {
+                throw new IOException("A ROM não é a revisão NTSC-U exata esperada pelo Ascension (SHA-1 incompatível).");
             }
 
             //noinspection ResultOfMethodCallIgnored
@@ -240,7 +246,7 @@ public final class LauncherActivity extends Activity {
     }
 
     private boolean isValidGoldenEyeRom(File file) {
-        if (!file.isFile() || file.length() < 0x40) {
+        if (!file.isFile() || file.length() != EXPECTED_ROM_BYTES) {
             return false;
         }
 
@@ -258,11 +264,27 @@ public final class LauncherActivity extends Activity {
 
         byte[] magic = new byte[] { (byte) 0x80, 0x37, 0x12, 0x40 };
         byte[] name = new byte[] { (byte) 'G', (byte) 'O', (byte) 'L', (byte) 'D', (byte) 'E', (byte) 'N', (byte) 'E', (byte) 'Y', (byte) 'E' };
-        return Arrays.equals(Arrays.copyOfRange(header, 0, 4), magic)
-                && Arrays.equals(Arrays.copyOfRange(header, 0x20, 0x29), name)
-                && header[0x3C] == (byte) 'G'
-                && header[0x3D] == (byte) 'E'
-                && header[0x3E] == (byte) 'E';
+        if (!Arrays.equals(Arrays.copyOfRange(header, 0, 4), magic)
+                || !Arrays.equals(Arrays.copyOfRange(header, 0x20, 0x29), name)
+                || header[0x3C] != (byte) 'G'
+                || header[0x3D] != (byte) 'E'
+                || header[0x3E] != (byte) 'E') {
+            return false;
+        }
+
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-1");
+            byte[] buffer = new byte[128 * 1024];
+            try (FileInputStream in = new FileInputStream(file)) {
+                int read;
+                while ((read = in.read(buffer)) != -1) {
+                    digest.update(buffer, 0, read);
+                }
+            }
+            return Arrays.equals(digest.digest(), EXPECTED_ROM_SHA1);
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private File getStoredRom() {

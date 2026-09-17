@@ -1,34 +1,75 @@
 """First-run generation of host-layout sidecars from the user's own ROM.
 
 The heavy conversion algorithms remain the repository's d43_emit.py and
- d69_emit.py. Android extracts their read-only metadata workspace into HOME,
+d69_emit.py. Android extracts their read-only metadata workspace into HOME,
 then this module executes them exactly as the desktop tooling does.
 """
 from __future__ import annotations
 
+import csv
 import os
 import runpy
+import shutil
 import sys
 
 REGION = "ntsc-final"
-_REQUIRED = (
-    "data/pcmodels-ntsc-final/pcmodels.bin",
-    "data/pcmodels-ntsc-final/manifest.csv",
-    "data/pccg-ntsc-final/pccg.bin",
-    "data/pccg-ntsc-final/manifest.csv",
-)
+GENERATOR_VERSION = "android-v1-sidecars-1"
+_MARKER = "data/.ascension_sidecars.version"
 
 
-def _required_ready(home: str) -> bool:
-    for rel in _REQUIRED:
-        path = os.path.join(home, rel)
-        if not os.path.isfile(path) or os.path.getsize(path) <= 0:
-            return False
-    return True
+def _artifact_valid(home: str, directory: str, bin_name: str) -> bool:
+    out_dir = os.path.join(home, "data", directory)
+    bin_path = os.path.join(out_dir, bin_name)
+    manifest_path = os.path.join(out_dir, "manifest.csv")
+    if not os.path.isfile(bin_path) or not os.path.isfile(manifest_path):
+        return False
+
+    bin_size = os.path.getsize(bin_path)
+    if bin_size <= 0 or os.path.getsize(manifest_path) <= 0:
+        return False
+
+    try:
+        with open(manifest_path, newline="", encoding="utf-8") as f:
+            rows = csv.DictReader(f)
+            if rows.fieldnames != ["name", "offset", "size"]:
+                return False
+            count = 0
+            previous_end = 0
+            for row in rows:
+                name = row.get("name", "")
+                offset = int(row.get("offset", "-1"), 10)
+                size = int(row.get("size", "0"), 10)
+                if not name or offset < previous_end or size <= 0:
+                    return False
+                end = offset + size
+                if end > bin_size:
+                    return False
+                previous_end = end
+                count += 1
+            return count > 0
+    except (OSError, ValueError, TypeError):
+        return False
+
+
+def _outputs_valid(home: str) -> bool:
+    return (
+        _artifact_valid(home, "pcmodels-ntsc-final", "pcmodels.bin")
+        and _artifact_valid(home, "pccg-ntsc-final", "pccg.bin")
+    )
+
+
+def _marker_valid(home: str) -> bool:
+    marker = os.path.join(home, _MARKER)
+    try:
+        with open(marker, encoding="utf-8") as f:
+            return f.read().strip() == GENERATOR_VERSION
+    except OSError:
+        return False
 
 
 def ready(home: str) -> bool:
-    return _required_ready(os.path.abspath(home))
+    home = os.path.abspath(home)
+    return _marker_valid(home) and _outputs_valid(home)
 
 
 def _run_tool(home: str, filename: str) -> None:
@@ -48,14 +89,35 @@ def _run_tool(home: str, filename: str) -> None:
         sys.argv = old_argv
 
 
+def _clear_generated(home: str) -> None:
+    for directory in ("pcmodels-ntsc-final", "pccg-ntsc-final"):
+        shutil.rmtree(os.path.join(home, "data", directory), ignore_errors=True)
+    try:
+        os.remove(os.path.join(home, _MARKER))
+    except FileNotFoundError:
+        pass
+
+
+def _write_marker(home: str) -> None:
+    marker = os.path.join(home, _MARKER)
+    os.makedirs(os.path.dirname(marker), exist_ok=True)
+    temp = marker + ".tmp"
+    with open(temp, "w", encoding="utf-8") as f:
+        f.write(GENERATOR_VERSION + "\n")
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(temp, marker)
+
+
 def generate(home: str) -> str:
     home = os.path.abspath(home)
     rom = os.path.join(home, "data", f"ge007.{REGION}.z64")
     if not os.path.isfile(rom) or os.path.getsize(rom) <= 0:
         raise RuntimeError("user ROM is missing from app-private storage")
-    if _required_ready(home):
+    if ready(home):
         return "ready"
 
+    _clear_generated(home)
     old_cwd = os.getcwd()
     try:
         os.chdir(home)
@@ -64,9 +126,11 @@ def generate(home: str) -> str:
     finally:
         os.chdir(old_cwd)
 
-    if not _required_ready(home):
-        missing = [rel for rel in _REQUIRED
-                   if not os.path.isfile(os.path.join(home, rel))
-                   or os.path.getsize(os.path.join(home, rel)) <= 0]
-        raise RuntimeError("sidecar generation incomplete: " + ", ".join(missing))
+    if not _outputs_valid(home):
+        _clear_generated(home)
+        raise RuntimeError("sidecar generation incomplete or structurally invalid")
+
+    _write_marker(home)
+    if not ready(home):
+        raise RuntimeError("sidecar generation marker validation failed")
     return "generated"
