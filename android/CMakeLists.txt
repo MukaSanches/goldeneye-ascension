@@ -124,7 +124,8 @@ set(SRC_ANDROID
   "${ASCENSION_ROOT}/android/src/system_android.c"
   "${ASCENSION_ROOT}/android/src/crash_android.c"
   "${ASCENSION_ROOT}/android/src/dram_android.c"
-  "${ASCENSION_ROOT}/android/src/mobile_input.c")
+  "${ASCENSION_ROOT}/android/src/mobile_input.c"
+  "${ASCENSION_ROOT}/android/src/mobile_input_merge.c")
 
 set(SRC_ROMASSETS "${ASCENSION_ROOT}/port/src/romassets_${ASSET_REGION}.s")
 set(SRC_DRAM_SYMS "${ASCENSION_ROOT}/port/src/dram_syms.s")
@@ -197,8 +198,11 @@ target_link_libraries(ascension PRIVATE
   m)
 
 # Android 15+ / Play 16 KiB-page compatibility. Modern NDK linkers honor this
-# alignment while remaining valid on 4 KiB devices.
-target_link_options(ascension PRIVATE "-Wl,-z,max-page-size=16384")
+# alignment while remaining valid on 4 KiB devices. The input wrapper keeps
+# touch/gyro Android-only without modifying the shared desktop input source.
+target_link_options(ascension PRIVATE
+  "-Wl,-z,max-page-size=16384"
+  "-Wl,--wrap=inputComputePad")
 
 # Export only the JNI/SDL entry surface by default; game internals stay local.
 set_target_properties(ascension PROPERTIES
