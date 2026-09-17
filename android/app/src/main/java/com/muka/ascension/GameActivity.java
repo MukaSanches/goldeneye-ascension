@@ -45,7 +45,7 @@ public final class GameActivity extends SDLActivity implements SensorEventListen
 
     @Override
     protected String[] getArguments() {
-        if (BuildConfig.DEBUG
+        if (isDebuggable()
                 && getIntent() != null
                 && getIntent().getBooleanExtra(EXTRA_SELFTEST, false)) {
             return new String[] { "--android-selftest" };
@@ -268,6 +268,11 @@ public final class GameActivity extends SDLActivity implements SensorEventListen
                     (OnBackInvokedCallback) backCallback33);
             backCallback33 = null;
         }
+    }
+
+    private boolean isDebuggable() {
+        return (getApplicationInfo().flags
+                & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
     }
 
     private static float clamp(float value, float lo, float hi) {

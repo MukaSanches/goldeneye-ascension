@@ -56,7 +56,7 @@ public final class LauncherActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         // CI/runtime probe only. Release builds can never enter this path.
-        if (BuildConfig.DEBUG
+        if (isDebuggable()
                 && getIntent() != null
                 && getIntent().getBooleanExtra(GameActivity.EXTRA_SELFTEST, false)) {
             Intent probe = new Intent(this, GameActivity.class);
@@ -346,6 +346,11 @@ public final class LauncherActivity extends Activity {
         Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
         intent.setData(Uri.parse("package:" + getPackageName()));
         startActivity(intent);
+    }
+
+    private boolean isDebuggable() {
+        return (getApplicationInfo().flags
+                & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
     }
 
     private int dp(int value) {
