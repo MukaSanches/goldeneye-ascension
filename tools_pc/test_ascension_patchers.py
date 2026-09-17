@@ -117,6 +117,8 @@ def verify_modern_controls_bridge(root: Path) -> int:
             "(actHeld(ks, IA_FIRE) && !dedicatedCrouch)",
         "native aim bridge": "actHeld(ks, IA_AIM) || dedicatedCrouch;",
         "native stick-down crouch gesture": "if (dedicatedCrouch)\n            sy = -STICK_MAX;",
+        "dedicated crouch preserves stick-Y during mouse look":
+            "if (!dedicatedCrouch && fabs(dyLook) >= AIM_MOVE_THRESH)",
     }
     for label, needle in required.items():
         if needle not in source:
