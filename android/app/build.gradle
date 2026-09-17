@@ -69,7 +69,7 @@ chaquopy {
 // metadata. Generate a deterministic asset at build time instead of shipping
 // pre-generated game sidecars or the whole decomp tree in the APK.
 def converterAssetDir = layout.buildDirectory.dir('generated/ascensionConverterAssets')
-tasks.register('prepareAscensionConverterAsset', Zip) {
+def converterTask = tasks.register('prepareAscensionConverterAsset', Zip) {
     archiveFileName = 'ascension_converter.zip'
     destinationDirectory = converterAssetDir
     reproducibleFileOrder = true
@@ -86,12 +86,57 @@ tasks.register('prepareAscensionConverterAsset', Zip) {
         into 'assets/obseg'
     }
     from(rootProject.file('../assets')) {
-        include { details -> details.file.name.toLowerCase().endsWith('modelfileheader.inc.c') }
+        // Ant-style include is deliberate: Gradle's closure include did not
+        // descend through this generated asset tree on CI and silently produced
+        // a ZIP with zero model headers.
+        include '**/modelFileHeader.inc.c'
         into 'assets'
+    }
+}
+
+// Fail closed: every model metadata header present in the repository must be in
+// the converter ZIP. This makes a partial runtime converter asset impossible to
+// publish as a green APK.
+def verifyConverterTask = tasks.register('verifyAscensionConverterAsset') {
+    dependsOn converterTask
+    doLast {
+        File archive = converterTask.get().archiveFile.get().asFile
+        if (!archive.isFile() || archive.length() == 0L) {
+            throw new GradleException("Ascension converter asset was not generated")
+        }
+
+        Set<File> sourceHeaders = fileTree(rootProject.file('../assets')) {
+            include '**/modelFileHeader.inc.c'
+        }.files
+        if (sourceHeaders.isEmpty()) {
+            throw new GradleException("No source modelFileHeader.inc.c files were found")
+        }
+
+        def archiveTree = zipTree(archive)
+        Set<File> zippedHeaders = archiveTree.matching {
+            include 'assets/**/modelFileHeader.inc.c'
+        }.files
+        if (zippedHeaders.size() != sourceHeaders.size()) {
+            throw new GradleException(
+                "Incomplete converter metadata: source=${sourceHeaders.size()}, zip=${zippedHeaders.size()}")
+        }
+
+        [
+            'tools_pc/d43_emit.py',
+            'tools_pc/d69_emit.py',
+            'scripts/filelist.u.csv',
+            'assets/obseg/file_resource_table.inc.c'
+        ].each { requiredPath ->
+            if (archiveTree.matching { include requiredPath }.files.size() != 1) {
+                throw new GradleException("Missing converter asset entry: ${requiredPath}")
+            }
+        }
+
+        println "Ascension converter asset verified: ${zippedHeaders.size()} model headers"
     }
 }
 
 android.sourceSets.main.assets.srcDir(converterAssetDir)
 tasks.named('preBuild').configure {
-    dependsOn tasks.named('prepareAscensionConverterAsset')
+    dependsOn verifyConverterTask
 }
