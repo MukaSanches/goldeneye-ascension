@@ -13,6 +13,9 @@ jobs:
     name: Build libascension.so (ARM64)
     runs-on: ubuntu-22.04
     timeout-minutes: 45
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
     steps:
       - name: Checkout Ascension Android branch
         uses: actions/checkout@v4
@@ -26,14 +29,12 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Install Android NDK and CMake
         shell: bash
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "ndk;30.0.16248370" "cmake;3.22.1" "platforms;android-37"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "ndk;30.0.16248370" "cmake;3.22.1" "platforms;android-37"
 
       - name: Fetch pinned SDL2
         shell: bash
