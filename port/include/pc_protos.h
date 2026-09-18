@@ -56,10 +56,12 @@ void assert();
 
 /* D38: host byte-order functions replacing the CharArrayTo16/32 macros that
  * src/bondconstants.h used to define (neutralized in port/shim/bondconstants.h).
- * Windows x64 uses Winsock's unsigned-long spelling; Android AArch64 is LP64
- * and Bionic declares ntohl(uint32_t), so keep the ABI-specific signatures
- * distinct instead of pretending AArch64 is x86-64. */
-#if defined(__aarch64__)
+ * On Android, use Bionic's canonical declarations directly. This avoids
+ * ABI-dependent hand declarations drifting between AArch64 and x86_64.
+ * Keep the legacy host fallback only for non-Android port builds. */
+#if defined(__ANDROID__)
+#include <arpa/inet.h>
+#elif defined(__aarch64__)
 unsigned short ntohs(unsigned short);
 unsigned int ntohl(unsigned int);
 #elif !defined(__WINSOCK_H) && !defined(_WINSOCK2_H)
