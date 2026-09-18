@@ -10,8 +10,15 @@ endif()
 if(NOT ANDROID)
   message(FATAL_ERROR "android/CMakeLists.txt is Android-only")
 endif()
+option(ASCENSION_RUNTIME_SMOKE_X86_64
+  "Allow x86_64 only for the ROM-free Android runtime smoke test" OFF)
+
 if(NOT ANDROID_ABI STREQUAL "arm64-v8a")
-  message(FATAL_ERROR "Ascension Android V1 supports arm64-v8a only")
+  if(NOT (ASCENSION_RUNTIME_SMOKE_X86_64 AND ANDROID_ABI STREQUAL "x86_64"))
+    message(FATAL_ERROR
+      "Ascension Android V1 production builds support arm64-v8a only; "
+      "x86_64 is reserved for the CI runtime smoke harness")
+  endif()
 endif()
 
 set(CMAKE_C_STANDARD 11)
@@ -26,7 +33,11 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(ROMID "ntsc-final")
 set(VERSION_IS_PAL 0)
 set(ASSET_REGION "u")
-set(TARGET_PLATFORM "arm64-android")
+if(ANDROID_ABI STREQUAL "arm64-v8a")
+  set(TARGET_PLATFORM "arm64-android")
+else()
+  set(TARGET_PLATFORM "x86_64-android-smoke")
+endif()
 execute_process(
   COMMAND git rev-parse --short HEAD
   WORKING_DIRECTORY "${ASCENSION_ROOT}"

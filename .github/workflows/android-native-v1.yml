@@ -155,6 +155,7 @@ jobs:
             -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE="$ANDROID_HOME/ndk/${NDK_VERSION}/build/cmake/android.toolchain.cmake" \
             -DANDROID_ABI=x86_64 \
+            -DASCENSION_RUNTIME_SMOKE_X86_64=ON \
             -DANDROID_PLATFORM=android-26 \
             -DANDROID_STL=c++_shared \
             -DASCENSION_SDL2_SOURCE_DIR="$GITHUB_WORKSPACE/third_party/SDL" \
