@@ -131,6 +131,33 @@ def verify_modern_controls_bridge(root: Path) -> int:
     return 0
 
 
+def verify_f10_control_rows(root: Path) -> int:
+    overlay_path = root / "port" / "src" / "optionsoverlay.c"
+    if not overlay_path.is_file():
+        print("FAIL: missing port/src/optionsoverlay.c after patcher pack", file=sys.stderr)
+        return 1
+
+    source = overlay_path.read_text(encoding="utf-8")
+    keys = [
+        ' .key="Input.ControlPreset"',
+        ' .key="Input.DedicatedCrouch"',
+        ' .key="Input.MouseAimSpeed"',
+    ]
+    for key in keys:
+        count = source.count(key)
+        if count != 1:
+            print(f"FAIL: F10 control row {key.strip()} occurs {count} time(s), expected 1", file=sys.stderr)
+            return 1
+
+    positions = [source.index(key) for key in keys]
+    if positions != sorted(positions):
+        print("FAIL: F10 control rows are out of order", file=sys.stderr)
+        return 1
+
+    print("PASS: F10 control rows are unique and ordered")
+    return 0
+
+
 def main() -> int:
     if not (ROOT / PACK_REL).is_file():
         print(f"FAIL: missing {PACK_REL}", file=sys.stderr)
@@ -149,6 +176,8 @@ def main() -> int:
         if verify_backups(sandbox) != 0:
             return 1
         if verify_modern_controls_bridge(sandbox) != 0:
+            return 1
+        if verify_f10_control_rows(sandbox) != 0:
             return 1
 
         after_first = snapshot(sandbox)
@@ -181,6 +210,7 @@ def main() -> int:
     print("PASS: Ascension patcher pack is idempotent")
     print("PASS: backups are stable across repeated application")
     print("PASS: Modern Controls bridge safety contract is preserved")
+    print("PASS: F10 control rows remain unique and ordered")
     print("PASS: real checkout was not modified")
     return 0
 
