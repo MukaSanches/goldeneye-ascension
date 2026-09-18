@@ -145,6 +145,60 @@ jobs:
             fi
           done | tee native-package-verification.log
 
+      - name: Configure x86_64 runtime core
+        shell: bash
+        run: |
+          set -o pipefail
+          "$ANDROID_HOME/cmake/${CMAKE_VERSION}/bin/cmake" \
+            -S android \
+            -B build-android-x86_64 \
+            -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_HOME/ndk/${NDK_VERSION}/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=x86_64 \
+            -DANDROID_PLATFORM=android-26 \
+            -DANDROID_STL=c++_shared \
+            -DASCENSION_SDL2_SOURCE_DIR="$GITHUB_WORKSPACE/third_party/SDL" \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            2>&1 | tee native-x86_64-configure.log
+
+      - name: Compile x86_64 runtime core
+        shell: bash
+        run: |
+          set -o pipefail
+          "$ANDROID_HOME/cmake/${CMAKE_VERSION}/bin/cmake" --build build-android-x86_64 --target ascension -j2 \
+            2>&1 | tee native-x86_64-build.log
+
+      - name: Stage x86_64 runtime libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          JNI_DIR="android/app/src/main/jniLibs/x86_64"
+          mkdir -p "$JNI_DIR"
+
+          ASCENSION_SO="build-android-x86_64/libascension.so"
+          SDL_SO="build-android-x86_64/sdl2/libSDL2.so"
+          CXX_SO="$ANDROID_HOME/ndk/${NDK_VERSION}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/x86_64-linux-android/libc++_shared.so"
+
+          test -f "$ASCENSION_SO"
+          test -f "$SDL_SO"
+          test -f "$CXX_SO"
+
+          cp "$ASCENSION_SO" "$JNI_DIR/libascension.so"
+          cp "$SDL_SO" "$JNI_DIR/libSDL2.so"
+          cp "$CXX_SO" "$JNI_DIR/libc++_shared.so"
+
+          for so in "$JNI_DIR"/*.so; do
+            echo "== $so =="
+            file "$so" | grep -q 'x86-64'
+            readelf -h "$so" | grep -Eq 'Machine:.*X86-64'
+            if readelf -lW "$so" | awk '/ LOAD / { if ($NF != "0x4000" && $NF != "0x10000") bad=1 } END { exit bad }'; then
+              :
+            else
+              echo "x86_64 ELF segment alignment is not 16 KiB compatible: $so" >&2
+              exit 1
+            fi
+          done | tee native-x86_64-package-verification.log
+
       - name: Build debug APK
         id: apk_build
         continue-on-error: true
@@ -194,7 +248,29 @@ jobs:
             unzip -l "$APK" "lib/arm64-v8a/$name" | grep -q "lib/arm64-v8a/$name"
           done
 
-          APK_NATIVE_DIR="$(mktemp -d)"
+          for name in libascension.so libSDL2.so libc++_shared.so; do
+            unzip -l "$APK" "lib/x86_64/$name" | grep -q "lib/x86_64/$name"
+          done
+
+          APK_X86_DIR="$(mktemp -d)"
+          x86_count=0
+          while IFS= read -r so_path; do
+            x86_count=$((x86_count + 1))
+            so_file="$APK_X86_DIR/$x86_count.so"
+            unzip -p "$APK" "$so_path" > "$so_file"
+            file "$so_file" | grep -q 'x86-64'
+            readelf -h "$so_file" | grep -Eq 'Machine:.*X86-64'
+            load_count=0
+            while IFS= read -r align; do
+              load_count=$((load_count + 1))
+              align_value=$((align))
+              if (( align_value < 0x4000 || align_value % 0x4000 != 0 )); then
+                echo "APK x86_64 ELF LOAD alignment is not 16 KiB compatible: $so_path ($align)" >&2
+                exit 1
+              fi
+            done < <(readelf -lW "$so_file" | awk '/ LOAD / { print $NF }')
+            test "$load_count" -gt 0
+          done < <(unzip -Z1 "$APK" | grep -E '^lib/x86_64/.*[.]so          APK_NATIVE_DIR="$(mktemp -d)"
           so_count=0
           while IFS= read -r so_path; do
             so_count=$((so_count + 1))
@@ -371,6 +447,149 @@ jobs:
               adb shell dumpsys activity top > smoke-activity-top.txt || true
               exit 1
             fi
+
+      - name: Upload Android runtime diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ascension-android-runtime-smoke
+          path: |
+            smoke-sdk.txt
+            smoke-abis.txt
+            smoke-page-size.txt
+            smoke-install.txt
+            smoke-activity.txt
+            smoke-activity-top.txt
+            smoke-logcat.txt
+          if-no-files-found: warn
+          retention-days: 14
+)
+          test "$x86_count" -ge 3
+          rm -rf "$APK_X86_DIR"
+
+          APK_NATIVE_DIR="$(mktemp -d)"
+          so_count=0
+          while IFS= read -r so_path; do
+            so_count=$((so_count + 1))
+            so_file="$APK_NATIVE_DIR/$so_count.so"
+            unzip -p "$APK" "$so_path" > "$so_file"
+            file "$so_file" | grep -q 'ARM aarch64'
+            readelf -h "$so_file" | grep -q 'Machine:.*AArch64'
+
+            load_count=0
+            while IFS= read -r align; do
+              load_count=$((load_count + 1))
+              align_value=$((align))
+              if (( align_value < 0x4000 || align_value % 0x4000 != 0 )); then
+                echo "APK ELF LOAD alignment is not 16 KiB compatible: $so_path ($align)" >&2
+                exit 1
+              fi
+            done < <(readelf -lW "$so_file" | awk '/ LOAD / { print $NF }')
+            if (( load_count == 0 )); then
+              echo "No ELF LOAD segments found: $so_path" >&2
+              exit 1
+            fi
+          done < <(unzip -Z1 "$APK" | grep -E '^lib/arm64-v8a/.*[.]so$')
+          test "$so_count" -ge 3
+          rm -rf "$APK_NATIVE_DIR"
+
+          ASCENSION_SO="android/app/src/main/jniLibs/arm64-v8a/libascension.so"
+          nm -D "$ASCENSION_SO" | grep -Eq '[[:space:]]T[[:space:]]SDL_main$'
+          JNI_SYMBOLS="$(readelf -Ws "$ASCENSION_SO" | awk '/Java_com_muka_ascension_NativeInput_/ { print $8 }' | sort -u)"
+          test "$(printf '%s\n' "$JNI_SYMBOLS" | sed '/^$/d' | wc -l)" -eq 6
+          for method in setMove setLook addGyro setButton setTouchActive reset; do
+            printf '%s\n' "$JNI_SYMBOLS" | grep -qx "Java_com_muka_ascension_NativeInput_$method"
+          done
+          if readelf -Ws "$ASCENSION_SO" | grep -q 'Java_com_mukasanches_ascension_NativeInput_'; then
+            echo "Stale NativeInput JNI package prefix found" >&2
+            exit 1
+          fi
+
+          : > apk-dex-strings.txt
+          while IFS= read -r dex; do
+            unzip -p "$APK" "$dex" | strings >> apk-dex-strings.txt
+          done < <(unzip -Z1 "$APK" | grep -E '^classes([0-9]+)?[.]dex$')
+          for cls in GameActivity MobileControlsView NativeInput; do
+            grep -q "Lcom/muka/ascension/$cls;" apk-dex-strings.txt
+          done
+
+          CONVERTER_ZIP="$(mktemp)"
+          unzip -p "$APK" assets/ascension_converter.zip > "$CONVERTER_ZIP"
+          test "$(unzip -Z1 "$CONVERTER_ZIP" | grep -ci 'modelfileheader[.]inc[.]c$')" -eq 80
+          rm -f "$CONVERTER_ZIP"
+
+          if unzip -l "$APK" | grep -qE '(^|[[:space:]])[^[:space:]]*\.(z64|n64|v64)([[:space:]]|$)'; then
+            echo "Forbidden ROM payload found inside APK" >&2
+            exit 1
+          fi
+
+      - name: Upload installable debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: goldeneye-ascension-android-v1-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload native libraries
+        uses: actions/upload-artifact@v4
+        with:
+          name: ascension-android-arm64-native
+          path: |
+            android/app/src/main/jniLibs/arm64-v8a/libascension.so
+            android/app/src/main/jniLibs/arm64-v8a/libSDL2.so
+            android/app/src/main/jniLibs/arm64-v8a/libc++_shared.so
+          if-no-files-found: error
+          retention-days: 14
+
+
+  runtime-smoke:
+    name: Android 15 runtime smoke (no ROM)
+    needs: native-arm64
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout runtime harness
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Download installable APK
+        uses: actions/download-artifact@v4
+        with:
+          name: goldeneye-ascension-android-v1-debug-apk
+          path: runtime-apk
+
+      - name: Enable KVM
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          test -e /dev/kvm
+
+      - name: Boot Android 15 and run native self-test
+        uses: ReactiveCircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis_ps16k
+          arch: x86_64
+          disable-animations: true
+          force-avd-creation: true
+          emulator-options: >-
+            -no-window
+            -gpu swiftshader_indirect
+            -noaudio
+            -no-boot-anim
+            -camera-back none
+            -camera-front none
+            -no-snapshot-load
+            -no-snapshot-save
+          script: bash .github/scripts/android-runtime-smoke.sh
 
       - name: Upload Android runtime diagnostics
         if: always()
