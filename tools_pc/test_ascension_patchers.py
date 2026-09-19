@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ROM-free regression test for the Ascension patcher pack.
 
-The test runs entirely in a temporary copy of the repository. It verifies three
+The test runs entirely in a temporary copy of the repository. It verifies five
 properties that make the low-risk pack safe to iterate on:
 
 1. Applying the complete pack twice is idempotent: the second run changes no
@@ -11,6 +11,10 @@ properties that make the low-risk pack safe to iterate on:
 3. The Modern Controls bridge produced by the pack stays opt-in, menu-safe,
    and uses GoldenEye's native crouch gesture rather than replacing gameplay
    logic.
+4. Classic, Hybrid, and Modern retain their intended dedicated-crouch
+   semantics, including Classic's original behavior and Hybrid's legacy fire.
+5. The F10 control rows remain unique and ordered so repeated patching cannot
+   duplicate or scramble the Ascension control settings.
 
 Backups are intentionally checked against the state captured by each patcher,
 not against the state before the *whole* pack. Later patchers may legitimately
