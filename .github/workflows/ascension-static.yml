@@ -32,3 +32,6 @@ jobs:
 
       - name: Test reversible patcher pack
         run: python3 tools_pc/test_ascension_patchers.py
+
+      - name: Test PT-BR controls contract
+        run: python3 tools_pc/test_ptbr_controls_contract.py
