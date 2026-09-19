@@ -131,6 +131,30 @@ def verify_modern_controls_bridge(root: Path) -> int:
     return 0
 
 
+def verify_control_preset_semantics(root: Path) -> int:
+    controls_path = root / "port" / "src" / "ascension_controls.c"
+    if not controls_path.is_file():
+        print("FAIL: missing port/src/ascension_controls.c after patcher pack", file=sys.stderr)
+        return 1
+
+    source = controls_path.read_text(encoding="utf-8")
+    required = {
+        "Classic disables dedicated crouch":
+            "if (!s_dedicatedCrouch || s_controlPreset == 0)\n        return 0;",
+        "Hybrid has its own C-only branch":
+            "if (s_controlPreset == 1)\n        return ks[SDL_SCANCODE_C] != 0;",
+        "Modern accepts both Ctrl keys and C":
+            "return ks[SDL_SCANCODE_LCTRL] || ks[SDL_SCANCODE_RCTRL] ||\n           ks[SDL_SCANCODE_C];",
+    }
+    for label, needle in required.items():
+        if needle not in source:
+            print(f"FAIL: control preset contract changed: {label}", file=sys.stderr)
+            return 1
+
+    print("PASS: Classic/Hybrid/Modern dedicated-crouch semantics are preserved")
+    return 0
+
+
 def verify_f10_control_rows(root: Path) -> int:
     overlay_path = root / "port" / "src" / "optionsoverlay.c"
     if not overlay_path.is_file():
@@ -177,6 +201,8 @@ def main() -> int:
             return 1
         if verify_modern_controls_bridge(sandbox) != 0:
             return 1
+        if verify_control_preset_semantics(sandbox) != 0:
+            return 1
         if verify_f10_control_rows(sandbox) != 0:
             return 1
 
@@ -210,6 +236,7 @@ def main() -> int:
     print("PASS: Ascension patcher pack is idempotent")
     print("PASS: backups are stable across repeated application")
     print("PASS: Modern Controls bridge safety contract is preserved")
+    print("PASS: Classic/Hybrid/Modern control preset semantics are preserved")
     print("PASS: F10 control rows remain unique and ordered")
     print("PASS: real checkout was not modified")
     return 0
