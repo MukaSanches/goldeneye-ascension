@@ -15,6 +15,7 @@ required = {
     "Hybrid value": '{ "HYBRID", "HIBRIDO" }',
     "Modern value": '{ "MODERN", "MODERNO" }',
     "PT-BR selector": '{ "PORTUGUESE (BRAZIL)", "PORTUGUES (BRASIL)" }',
+    "Ascension language scope": '{ "Ascension interface language.", "Idioma da interface do Ascension." }',
 }
 
 for label, needle in required.items():
