@@ -117,7 +117,7 @@ static const struct LocaleEntry kPtBr[] = {
 
     /* Gameplay rows */
     { "Language", "Idioma" },
-    { "Interface and in-game text language.", "Idioma da interface e dos textos do jogo." },
+    { "Ascension interface language.", "Idioma da interface do Ascension." },
     { "Screen shake", "Tremor da tela" },
     { "Camera shake. Safe range 0-3.", "Tremor da camera. Faixa segura 0-3." },
     { "Skip intro", "Pular introducao" },
