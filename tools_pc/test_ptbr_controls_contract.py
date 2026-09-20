@@ -9,6 +9,7 @@ source = LOCALE.read_text(encoding="utf-8")
 
 required = {
     "control preset": '{ "Control preset", "Preset de controles" }',
+    "control preset description": '{ "Classic, Hybrid or Modern PC controls.", "Controles de PC Classico, Hibrido ou Moderno." }',
     "dedicated crouch": '{ "Dedicated crouch", "Agachar dedicado" }',
     "mouse aim speed": '{ "Mouse aim speed", "Velocidade ao mirar" }',
     "Classic value": '{ "CLASSIC", "CLASSICO" }',
