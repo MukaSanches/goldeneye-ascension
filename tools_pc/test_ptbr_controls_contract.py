@@ -12,6 +12,7 @@ required = {
     "control preset description": '{ "Classic, Hybrid or Modern PC controls.", "Controles de PC Classico, Hibrido ou Moderno." }',
     "dedicated crouch": '{ "Dedicated crouch", "Agachar dedicado" }',
     "dedicated crouch description": '{ "Enable the Ascension crouch shortcut for Hybrid/Modern.", "Ativa o atalho de agachar do Ascension em Hibrido/Moderno." }',
+    "mouse wheel weapons": '{ "Mouse wheel weapons", "Armas na roda do mouse" }',
     "mouse aim speed": '{ "Mouse aim speed", "Velocidade ao mirar" }',
     "Classic value": '{ "CLASSIC", "CLASSICO" }',
     "Hybrid value": '{ "HYBRID", "HIBRIDO" }',
