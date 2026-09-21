@@ -15,6 +15,7 @@ required = {
     "mouse wheel weapons": '{ "Mouse wheel weapons", "Armas na roda do mouse" }',
     "mouse wheel weapons description": '{ "Use the mouse wheel to cycle weapons.", "Use a roda do mouse para alternar armas." }',
     "mouse aim speed": '{ "Mouse aim speed", "Velocidade ao mirar" }',
+    "mouse aim speed description": '{ "Aim sensitivity. Range 1-100.", "Sensibilidade da mira. Faixa 1-100." }',
     "Classic value": '{ "CLASSIC", "CLASSICO" }',
     "Hybrid value": '{ "HYBRID", "HIBRIDO" }',
     "Modern value": '{ "MODERN", "MODERNO" }',
