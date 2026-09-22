@@ -18,6 +18,7 @@ required = {
     "mouse aim speed description": '{ "Aim sensitivity. Range 1-100.", "Sensibilidade da mira. Faixa 1-100." }',
     "mouse turn speed": '{ "Mouse turn speed", "Velocidade ao virar" }',
     "mouse turn speed description": '{ "Turn sensitivity. Range 1-100.", "Sensibilidade ao virar. Faixa 1-100." }',
+    "mouse invert Y": '{ "Mouse invert Y", "Inverter Y do mouse" }',
     "Classic value": '{ "CLASSIC", "CLASSICO" }',
     "Hybrid value": '{ "HYBRID", "HIBRIDO" }',
     "Modern value": '{ "MODERN", "MODERNO" }',
