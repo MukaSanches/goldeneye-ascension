@@ -27,6 +27,7 @@ required = {
     "raw mouse input": '{ "Raw mouse input", "Entrada bruta do mouse" }',
     "raw mouse input description": '{ "Bypass OS pointer acceleration for aiming.", "Ignora a aceleracao do ponteiro do sistema ao mirar." }',
     "mouse smoothing": '{ "Mouse smoothing %", "Suavizacao do mouse %" }',
+    "mouse smoothing description": '{ "Low-pass mouse smoothing. 0 keeps raw motion.", "Suavizacao do movimento do mouse. 0 mantem movimento bruto." }',
     "Classic value": '{ "CLASSIC", "CLASSICO" }',
     "Hybrid value": '{ "HYBRID", "HIBRIDO" }',
     "Modern value": '{ "MODERN", "MODERNO" }',
