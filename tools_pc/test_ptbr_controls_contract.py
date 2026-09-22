@@ -24,6 +24,7 @@ required = {
     "mouse capture description": '{ "Choose how mouse lock activates.", "Escolhe como o mouse fica preso ao jogo." }',
     "mouse input": '{ "Mouse input", "Entrada do mouse" }',
     "mouse input description": '{ "Enable or disable mouse input without changing keyboard/gamepad.", "Ativa ou desativa o mouse sem alterar teclado ou controle." }',
+    "raw mouse input": '{ "Raw mouse input", "Entrada bruta do mouse" }',
     "Classic value": '{ "CLASSIC", "CLASSICO" }',
     "Hybrid value": '{ "HYBRID", "HIBRIDO" }',
     "Modern value": '{ "MODERN", "MODERNO" }',
