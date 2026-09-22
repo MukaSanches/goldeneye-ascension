@@ -21,6 +21,7 @@ required = {
     "mouse invert Y": '{ "Mouse invert Y", "Inverter Y do mouse" }',
     "mouse invert Y description": '{ "Reverse vertical mouse look.", "Inverte o eixo vertical do mouse." }',
     "mouse capture": '{ "Mouse capture", "Captura do mouse" }',
+    "mouse capture description": '{ "Choose how mouse lock activates.", "Escolhe como o mouse fica preso ao jogo." }',
     "Classic value": '{ "CLASSIC", "CLASSICO" }',
     "Hybrid value": '{ "HYBRID", "HIBRIDO" }',
     "Modern value": '{ "MODERN", "MODERNO" }',
