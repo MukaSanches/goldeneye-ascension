@@ -26,6 +26,7 @@ required = {
     "mouse input description": '{ "Enable or disable mouse input without changing keyboard/gamepad.", "Ativa ou desativa o mouse sem alterar teclado ou controle." }',
     "raw mouse input": '{ "Raw mouse input", "Entrada bruta do mouse" }',
     "raw mouse input description": '{ "Bypass OS pointer acceleration for aiming.", "Ignora a aceleracao do ponteiro do sistema ao mirar." }',
+    "mouse smoothing": '{ "Mouse smoothing %", "Suavizacao do mouse %" }',
     "Classic value": '{ "CLASSIC", "CLASSICO" }',
     "Hybrid value": '{ "HYBRID", "HIBRIDO" }',
     "Modern value": '{ "MODERN", "MODERNO" }',
