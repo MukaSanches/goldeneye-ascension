@@ -41,6 +41,7 @@ required = {
     "gamepad deadzone": '{ "Gamepad deadzone", "Zona morta do controle" }',
     "gamepad deadzone description": '{ "Left-stick deadzone. Lower is more responsive.", "Zona morta do analogico esquerdo. Menor responde mais rapido." }',
     "trigger threshold": '{ "Trigger threshold %", "Limite dos gatilhos %" }',
+    "trigger threshold description": '{ "Trigger press point for fire/aim.", "Ponto de acionamento dos gatilhos para atirar/mirar." }',
     "Classic value": '{ "CLASSIC", "CLASSICO" }',
     "Hybrid value": '{ "HYBRID", "HIBRIDO" }',
     "Modern value": '{ "MODERN", "MODERNO" }',
