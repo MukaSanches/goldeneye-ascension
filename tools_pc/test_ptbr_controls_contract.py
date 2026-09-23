@@ -37,6 +37,7 @@ required = {
     "menu pointer speed": '{ "Menu pointer speed %", "Velocidade do ponteiro %" }',
     "menu pointer speed description": '{ "Mouse pointer speed in menus and briefings.", "Velocidade do ponteiro nos menus e briefings." }',
     "direct menu pointer": '{ "Direct menu pointer", "Ponteiro direto nos menus" }',
+    "direct menu pointer description": '{ "Use the modern 1:1 menu-pointer controller.", "Usa o ponteiro moderno 1:1 nos menus." }',
     "Classic value": '{ "CLASSIC", "CLASSICO" }',
     "Hybrid value": '{ "HYBRID", "HIBRIDO" }',
     "Modern value": '{ "MODERN", "MODERNO" }',
