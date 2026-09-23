@@ -32,6 +32,7 @@ required = {
     "mouse Y scale description": '{ "Vertical mouse sensitivity relative to horizontal.", "Sensibilidade vertical do mouse em relacao a horizontal." }',
     "aim response band": '{ "Aim response band", "Faixa de resposta da mira" }',
     "aim response band description": '{ "Fine aim response range above GoldenEye\'s native gate.", "Faixa de resposta fina da mira acima do limite nativo do GoldenEye." }',
+    "hipfire pitch": '{ "Hipfire pitch %", "Mira vertical sem ADS %" }',
     "Classic value": '{ "CLASSIC", "CLASSICO" }',
     "Hybrid value": '{ "HYBRID", "HIBRIDO" }',
     "Modern value": '{ "MODERN", "MODERNO" }',
