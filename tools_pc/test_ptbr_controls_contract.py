@@ -40,6 +40,7 @@ required = {
     "direct menu pointer description": '{ "Use the modern 1:1 menu-pointer controller.", "Usa o ponteiro moderno 1:1 nos menus." }',
     "gamepad deadzone": '{ "Gamepad deadzone", "Zona morta do controle" }',
     "gamepad deadzone description": '{ "Left-stick deadzone. Lower is more responsive.", "Zona morta do analogico esquerdo. Menor responde mais rapido." }',
+    "trigger threshold": '{ "Trigger threshold %", "Limite dos gatilhos %" }',
     "Classic value": '{ "CLASSIC", "CLASSICO" }',
     "Hybrid value": '{ "HYBRID", "HIBRIDO" }',
     "Modern value": '{ "MODERN", "MODERNO" }',
