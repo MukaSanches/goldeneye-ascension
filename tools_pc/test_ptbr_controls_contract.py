@@ -35,6 +35,7 @@ required = {
     "hipfire pitch": '{ "Hipfire pitch %", "Mira vertical sem ADS %" }',
     "hipfire pitch description": '{ "Vertical look response outside aim mode.", "Resposta vertical fora do modo de mira." }',
     "menu pointer speed": '{ "Menu pointer speed %", "Velocidade do ponteiro %" }',
+    "menu pointer speed description": '{ "Mouse pointer speed in menus and briefings.", "Velocidade do ponteiro nos menus e briefings." }',
     "Classic value": '{ "CLASSIC", "CLASSICO" }',
     "Hybrid value": '{ "HYBRID", "HIBRIDO" }',
     "Modern value": '{ "MODERN", "MODERNO" }',
